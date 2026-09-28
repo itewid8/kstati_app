@@ -1,0 +1,20 @@
+node_modules/
+.expo/
+mobile/android/
+mobile/ios/
+dist/
+*.log
+.env
+.DS_Store
+server/logs/
+
+# Секреты и личные данные — никогда не в git
+.env.*
+!.env.example
+deploy.env
+server/.data/
+*.jsonl
+*.keystore
+*.jks
+# Отчёты проверки безопасности
+CLAUDE-SECURITY-*/

@@ -1,0 +1,71 @@
+/**
+ * Вход: почта с паролем (регистрация и сброс — по коду из письма) и VK ID.
+ * Успешный вход кладёт токен в хранилище (signIn), дальше данные приходят синхронизацией.
+ */
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+import { API_URL } from './config';
+import { errorText, request } from './net';
+import { useStore, type Me } from './store';
+
+export type AuthResult = { ok: true } | { ok: false; error: string };
+type Session = { token: string; me: Me };
+
+const done = (s: Session): AuthResult => {
+  useStore.getState().signIn(s.token, s.me);
+  return { ok: true };
+};
+const failed = (e: unknown): AuthResult => ({ ok: false, error: errorText(e) });
+
+/** Код на почту. devCode приходит только с сервера на Mac без настроенной почты */
+export async function sendCode(email: string, purpose: 'register' | 'reset'): Promise<{ ok: true; devCode?: string } | { ok: false; error: string }> {
+  try {
+    const r = await request<{ devCode?: string }>('/auth/email/code', { body: { email, purpose } });
+    return { ok: true, devCode: r.devCode };
+  } catch (e) {
+    return { ok: false, error: errorText(e) };
+  }
+}
+
+export async function register(p: { email: string; code: string; name: string; password: string }): Promise<AuthResult> {
+  try {
+    return done(await request<Session>('/auth/register', { body: p }));
+  } catch (e) {
+    return failed(e);
+  }
+}
+
+export async function login(email: string, password: string): Promise<AuthResult> {
+  try {
+    return done(await request<Session>('/auth/login', { body: { email, password } }));
+  } catch (e) {
+    return failed(e);
+  }
+}
+
+export async function resetPassword(p: { email: string; code: string; password: string }): Promise<AuthResult> {
+  try {
+    return done(await request<Session>('/auth/reset', { body: p }));
+  } catch (e) {
+    return failed(e);
+  }
+}
+
+/**
+ * VK ID: открываем страницу входа VK во встроенном браузере. Сервер после входа возвращает
+ * в приложение по адресу kstati://auth?ticket=…, билет меняем на токен.
+ */
+export async function loginWithVk(): Promise<AuthResult | { ok: false; error: '' }> {
+  const redirect = Linking.createURL('auth');
+  const url = `${API_URL}/auth/vk/start?redirect=${encodeURIComponent(redirect)}`;
+  const res = await WebBrowser.openAuthSessionAsync(url, redirect);
+  if (res.type !== 'success') return { ok: false, error: '' }; // закрыли окно — молча
+  const params = new URL(res.url.replace(/^[\w+.-]+:\/\/?/, 'https://x/')).searchParams;
+  const ticket = params.get('ticket');
+  if (!ticket) return { ok: false, error: params.get('error') === 'cancelled' ? '' : 'Не удалось войти через VK. Попробуйте ещё раз.' };
+  try {
+    return done(await request<Session>('/auth/vk/finish', { body: { ticket } }));
+  } catch (e) {
+    return failed(e);
+  }
+}

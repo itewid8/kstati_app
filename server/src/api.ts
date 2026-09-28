@@ -1,0 +1,361 @@
+/**
+ * Данные приложения: синхронизация и изменения.
+ *
+ * POST /sync — телефон присылает, какие ревизии групп и людей у него есть;
+ *   сервер отвечает списком групп и людей и полностью отдаёт дела/«Смотреть» только тех групп
+ *   и хотелки только тех людей, где ревизия поменялась. Данных у пары мало — так проще и надёжнее.
+ * POST /ops — пачка изменений по порядку (офлайн-очередь телефона). id записей придумывает телефон,
+ *   поэтому повтор той же операции безопасен.
+ * Все права проверяются здесь: телефону доверять нельзя.
+ */
+import { randomInt } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { HttpError, meView, requireUser } from './auth.js';
+import { grev, publicUser, urev, type Group, type Item, type Store, type User, type Wish } from './store/index.js';
+import { CATEGORIES } from './types.js';
+
+const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
+const nickKey = (n: string) => `nick#${n.toLowerCase().replace(/ё/g, 'е')}`;
+
+const canManage = (g: Group, uid: string) => g.ownerId === uid || g.adminIds.includes(uid);
+const canRemove = (g: Group, uid: string, target: string) => {
+  if (target === uid || target === g.ownerId) return false;
+  if (g.ownerId === uid) return true;
+  return g.adminIds.includes(uid) && !g.adminIds.includes(target);
+};
+
+const Id = z.string().min(1).max(64);
+const Date10 = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
+const Time5 = z.string().regex(/^\d{2}:\d{2}$/).nullable();
+const Stamp = z.string().max(40).nullable();
+
+const TaskIn = z.object({
+  id: Id,
+  groupId: Id,
+  title: z.string().trim().min(1).max(200),
+  date: Date10,
+  time: Time5,
+  note: z.string().max(2000).optional(),
+  doneAt: Stamp,
+});
+const WatchIn = z.object({
+  id: Id,
+  groupId: Id,
+  title: z.string().trim().min(1).max(200),
+  kind: z.string().max(20).nullable(),
+  genres: z.array(z.string().max(20)).max(5),
+  origin: z.string().max(20).nullable(),
+  year: z.number().int().min(1880).max(2100).nullable(),
+  watchedAt: Stamp,
+});
+const WishIn = z.object({
+  id: Id,
+  title: z.string().trim().min(1).max(200),
+  note: z.string().max(1000),
+  link: z.string().max(1000),
+  receivedAt: Stamp,
+});
+
+const Op = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('task.put'), task: TaskIn }),
+  z.object({ op: z.literal('watch.put'), watch: WatchIn }),
+  z.object({ op: z.literal('item.delete'), groupId: Id, id: Id }),
+  z.object({ op: z.literal('wish.put'), wish: WishIn }),
+  z.object({ op: z.literal('wish.delete'), id: Id }),
+  z.object({ op: z.literal('group.create'), group: z.object({ id: Id, name: z.string().trim().min(1).max(40), category: z.enum(CATEGORIES as [string, ...string[]]) }) }),
+  z.object({ op: z.literal('group.update'), id: Id, name: z.string().trim().min(1).max(40).optional(), category: z.enum(CATEGORIES as [string, ...string[]]).optional() }),
+  z.object({ op: z.literal('group.join'), code: z.string().trim().min(4).max(12) }),
+  z.object({ op: z.literal('group.leave'), id: Id }),
+  z.object({ op: z.literal('group.admin'), id: Id, userId: Id, admin: z.boolean() }),
+  z.object({ op: z.literal('group.remove'), id: Id, userId: Id }),
+  z.object({
+    op: z.literal('profile'),
+    name: z.string().trim().min(1).max(40).optional(),
+    nick: z.string().trim().max(20).nullable().optional(),
+    gender: z.enum(['m', 'f']).nullable().optional(),
+  }),
+]);
+export type OpIn = z.infer<typeof Op>;
+
+export class Data {
+  constructor(private store: Store) {}
+
+  private async memberGroup(user: User, groupId: string): Promise<Group> {
+    const g = await this.store.getGroup(groupId);
+    if (!g || !g.memberIds.includes(user.id)) throw new HttpError(403, 'not_member', 'Нет доступа к группе');
+    return g;
+  }
+
+  private async newInviteCode(groupId: string): Promise<string> {
+    const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (let i = 0; i < 10; i++) {
+      const code = Array.from({ length: 6 }, () => abc[randomInt(abc.length)]).join('');
+      if (await this.store.claimKey(`invite#${code}`, groupId)) return code;
+    }
+    throw new Error('Не удалось придумать код приглашения');
+  }
+
+  /** Удалить участника из группы; последний ушёл — группа удаляется целиком */
+  private async dropMember(g: Group, userId: string, removeTheirItems: boolean) {
+    g.memberIds = g.memberIds.filter((m) => m !== userId);
+    g.adminIds = g.adminIds.filter((m) => m !== userId);
+    await this.store.removeMembership(userId, g.id);
+    if (!g.memberIds.length) {
+      await this.store.deleteKey(`invite#${g.inviteCode}`);
+      await this.store.deleteGroup(g.id);
+      return;
+    }
+    if (g.ownerId === userId) g.ownerId = g.adminIds[0] ?? g.memberIds[0];
+    g.adminIds = g.adminIds.filter((m) => m !== g.ownerId);
+    if (removeTheirItems) {
+      for (const it of await this.store.listItems(g.id)) {
+        const author = it.type === 'task' ? it.createdBy : it.addedBy;
+        if (author === userId) await this.store.deleteItem(g.id, it.id);
+      }
+    }
+    await this.store.putGroup(g);
+    await this.store.incr(grev(g.id));
+  }
+
+  async apply(user: User, op: OpIn): Promise<unknown> {
+    const now = new Date().toISOString();
+    const s = this.store;
+    switch (op.op) {
+      case 'task.put': {
+        await this.memberGroup(user, op.task.groupId);
+        const old = await s.getItem(op.task.groupId, op.task.id);
+        if (old && old.type !== 'task') throw new HttpError(409, 'conflict');
+        const task: Item = {
+          type: 'task',
+          ...op.task,
+          note: op.task.note ?? '',
+          createdBy: old?.type === 'task' ? old.createdBy : user.id,
+          createdAt: old?.createdAt ?? now,
+          updatedAt: now,
+        };
+        await s.putItem(task);
+        await s.incr(grev(op.task.groupId));
+        return {};
+      }
+      case 'watch.put': {
+        await this.memberGroup(user, op.watch.groupId);
+        const old = await s.getItem(op.watch.groupId, op.watch.id);
+        if (old && old.type !== 'watch') throw new HttpError(409, 'conflict');
+        const item: Item = {
+          type: 'watch',
+          ...op.watch,
+          addedBy: old?.type === 'watch' ? old.addedBy : user.id,
+          createdAt: old?.createdAt ?? now,
+          updatedAt: now,
+        };
+        await s.putItem(item);
+        await s.incr(grev(op.watch.groupId));
+        return {};
+      }
+      case 'item.delete': {
+        await this.memberGroup(user, op.groupId);
+        await s.deleteItem(op.groupId, op.id);
+        await s.incr(grev(op.groupId));
+        return {};
+      }
+      case 'wish.put': {
+        const old = await s.getWish(user.id, op.wish.id);
+        const w: Wish = { ...op.wish, ownerId: user.id, createdAt: old?.createdAt ?? now, updatedAt: now };
+        await s.putWish(w);
+        await s.incr(urev(user.id));
+        return {};
+      }
+      case 'wish.delete': {
+        await s.deleteWish(user.id, op.id);
+        await s.incr(urev(user.id));
+        return {};
+      }
+      case 'group.create': {
+        const exists = await s.getGroup(op.group.id);
+        if (exists) {
+          if (!exists.memberIds.includes(user.id)) throw new HttpError(409, 'conflict');
+          return { group: exists };
+        }
+        const g: Group = {
+          id: op.group.id,
+          name: op.group.name,
+          category: op.group.category as Group['category'],
+          inviteCode: await this.newInviteCode(op.group.id),
+          ownerId: user.id,
+          adminIds: [],
+          memberIds: [user.id],
+          createdAt: now,
+        };
+        await s.putGroup(g);
+        await s.addMembership(user.id, g.id);
+        await s.incr(grev(g.id));
+        return { group: g };
+      }
+      case 'group.update': {
+        const g = await this.memberGroup(user, op.id);
+        if (!canManage(g, user.id)) throw new HttpError(403, 'forbidden', 'Менять группу могут создатель и админы');
+        if (op.name) g.name = op.name;
+        if (op.category) g.category = op.category as Group['category'];
+        await s.putGroup(g);
+        await s.incr(grev(g.id));
+        return {};
+      }
+      case 'group.join': {
+        const gid = await s.getKey(`invite#${op.code.toUpperCase()}`);
+        const g = gid ? await s.getGroup(gid) : null;
+        if (!g) throw new HttpError(404, 'bad_code', 'Такого кода нет — проверьте его у того, кто пригласил');
+        if (!g.memberIds.includes(user.id)) {
+          if (g.memberIds.length >= 50) throw new HttpError(409, 'group_full', 'В группе уже 50 человек');
+          g.memberIds.push(user.id);
+          await s.putGroup(g);
+          await s.addMembership(user.id, g.id);
+          await s.incr(grev(g.id));
+        }
+        return { group: g };
+      }
+      case 'group.leave': {
+        const g = await s.getGroup(op.id);
+        if (g?.memberIds.includes(user.id)) await this.dropMember(g, user.id, false);
+        else await s.removeMembership(user.id, op.id);
+        return {};
+      }
+      case 'group.admin': {
+        const g = await this.memberGroup(user, op.id);
+        if (g.ownerId !== user.id) throw new HttpError(403, 'forbidden', 'Назначать админов может только создатель');
+        if (!g.memberIds.includes(op.userId) || op.userId === g.ownerId) throw new HttpError(400, 'bad_member');
+        g.adminIds = g.adminIds.filter((a) => a !== op.userId);
+        if (op.admin) g.adminIds.push(op.userId);
+        await s.putGroup(g);
+        await s.incr(grev(g.id));
+        return {};
+      }
+      case 'group.remove': {
+        const g = await this.memberGroup(user, op.id);
+        if (!g.memberIds.includes(op.userId)) return {};
+        if (!canRemove(g, user.id, op.userId)) throw new HttpError(403, 'forbidden', 'Нет прав исключить этого участника');
+        await this.dropMember(g, op.userId, true);
+        return {};
+      }
+      case 'profile': {
+        if (op.nick !== undefined) {
+          const nick = op.nick?.replace(/^@/, '') || null;
+          const oldNick = user.nick;
+          if (nick && nickKey(nick) !== (oldNick ? nickKey(oldNick) : '')) {
+            if (!NICK_RULE.test(nick)) throw new HttpError(400, 'bad_nick', 'От 3 до 20 символов: буквы, цифры, «_» и «.»');
+            if (!(await s.claimKey(nickKey(nick), user.id))) throw new HttpError(409, 'nick_taken', 'Этот никнейм занят');
+            if (oldNick) await s.deleteKey(nickKey(oldNick));
+          } else if (!nick && oldNick) await s.deleteKey(nickKey(oldNick));
+          user.nick = nick ?? undefined;
+        }
+        if (op.name) user.name = op.name;
+        if (op.gender !== undefined) user.gender = op.gender ?? undefined;
+        await s.putUser(user);
+        await s.incr(urev(user.id));
+        return { me: meView(user) };
+      }
+    }
+  }
+
+  /** Всё, что телефону нужно знать; содержимое — только там, где ревизия поменялась */
+  async sync(user: User, known: { groups: Record<string, number>; owners: Record<string, number> }) {
+    const s = this.store;
+    const groups = await s.getGroups(await s.listMemberships(user.id));
+    const mine = groups.filter((g) => g.memberIds.includes(user.id));
+    const peopleIds = [...new Set([user.id, ...mine.flatMap((g) => g.memberIds)])];
+    const [users, counters] = await Promise.all([
+      s.getUsers(peopleIds),
+      s.getCounters([...mine.map((g) => grev(g.id)), ...peopleIds.map(urev)]),
+    ]);
+    const revs = {
+      groups: Object.fromEntries(mine.map((g) => [g.id, counters[grev(g.id)] ?? 0])),
+      owners: Object.fromEntries(peopleIds.map((id) => [id, counters[urev(id)] ?? 0])),
+    };
+    const changedGroups = mine.filter((g) => known.groups[g.id] !== revs.groups[g.id]);
+    const changedOwners = peopleIds.filter((id) => known.owners[id] !== revs.owners[id]);
+    const [itemLists, wishLists] = await Promise.all([
+      Promise.all(changedGroups.map((g) => s.listItems(g.id))),
+      Promise.all(changedOwners.map((id) => s.listWishes(id))),
+    ]);
+    return {
+      me: meView(user),
+      groups: mine,
+      users: users.map(publicUser),
+      revs,
+      items: Object.fromEntries(changedGroups.map((g, i) => [g.id, itemLists[i]])),
+      wishes: Object.fromEntries(changedOwners.map((id, i) => [id, wishLists[i]])),
+    };
+  }
+
+  /** Удалить аккаунт: выйти из всех групп (его записи в группах удаляются), стереть хотелки и ключи */
+  async deleteAccount(user: User) {
+    const s = this.store;
+    for (const gid of await s.listMemberships(user.id)) {
+      const g = await s.getGroup(gid);
+      if (g) await this.dropMember(g, user.id, true);
+      else await s.removeMembership(user.id, gid);
+    }
+    for (const w of await s.listWishes(user.id)) await s.deleteWish(user.id, w.id);
+    if (user.email) await s.deleteKey(`email#${user.email}`);
+    if (user.vkId) await s.deleteKey(`vk#${user.vkId}`);
+    if (user.nick) await s.deleteKey(nickKey(user.nick));
+    await s.deleteUser(user.id);
+  }
+
+  /** Люди из всех моих групп и сами группы — для голосового контекста */
+  async circle(user: User) {
+    const s = this.store;
+    const groups = (await s.getGroups(await s.listMemberships(user.id))).filter((g) => g.memberIds.includes(user.id));
+    const ids = [...new Set(groups.flatMap((g) => g.memberIds))].filter((id) => id !== user.id);
+    const people = await s.getUsers(ids);
+    return { groups, people };
+  }
+}
+
+export function registerData(app: FastifyInstance, store: Store, data: Data) {
+  app.post('/sync', async (req) => {
+    const user = await requireUser(req, store);
+    const known = z
+      .object({ groups: z.record(z.number()).default({}), owners: z.record(z.number()).default({}) })
+      .parse(req.body ?? {});
+    return data.sync(user, known);
+  });
+
+  /** Пачка изменений. Ошибка одной операции не мешает остальным */
+  app.post('/ops', async (req) => {
+    const user = await requireUser(req, store);
+    const { ops } = z.object({ ops: z.array(z.unknown()).max(200) }).parse(req.body);
+    const results: unknown[] = [];
+    for (const raw of ops) {
+      const parsed = Op.safeParse(raw);
+      if (!parsed.success) {
+        results.push({ ok: false, error: 'bad_request', message: parsed.error.issues[0]?.message });
+        continue;
+      }
+      try {
+        // Профиль мог поменяться предыдущей операцией
+        const fresh = (await store.getUser(user.id)) ?? user;
+        results.push({ ok: true, ...((await data.apply(fresh, parsed.data)) as object) });
+      } catch (e) {
+        if (e instanceof HttpError) results.push({ ok: false, error: e.code, message: e.message });
+        else throw e;
+      }
+    }
+    return { results };
+  });
+
+  app.get('/nick/check', async (req) => {
+    const user = await requireUser(req, store);
+    const { nick } = z.object({ nick: z.string().max(40) }).parse(req.query);
+    const n = nick.trim().replace(/^@/, '');
+    if (!NICK_RULE.test(n)) return { status: 'invalid' };
+    const owner = await store.getKey(nickKey(n));
+    return { status: !owner ? 'free' : owner === user.id ? 'same' : 'taken' };
+  });
+
+  app.delete('/me', async (req) => {
+    const user = await requireUser(req, store);
+    await data.deleteAccount(user);
+    return { ok: true };
+  });
+}

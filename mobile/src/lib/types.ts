@@ -1,0 +1,211 @@
+export type ID = string;
+
+export type User = {
+  id: ID;
+  name: string;
+  /** Уникальный никнейм без @: буквы (кириллица, латиница), цифры, «_» и «.» */
+  nick?: string;
+  /** Пол — для правильных слов: «её дела», «добавила» */
+  gender?: Gender;
+};
+
+export type Gender = 'm' | 'f';
+
+/** «его» / «её» / «его или её» */
+export const hisHer = (u?: Pick<User, 'gender'> | null) => (u?.gender === 'f' ? 'её' : u?.gender === 'm' ? 'его' : 'его или её');
+/** Окончание прошедшего времени: «добавил» / «добавила» / «добавил(а)» */
+export const pastEnd = (u?: Pick<User, 'gender'> | null) => (u?.gender === 'f' ? 'а' : u?.gender === 'm' ? '' : '(а)');
+
+export type ThemePref = 'system' | 'light' | 'dark';
+
+export const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
+
+/** Категория группы: по ней ассистент понимает «мы», «наши друзья», «родители» */
+export type GroupCategory = 'couple' | 'family' | 'parents' | 'friends' | 'other';
+export const CATEGORY_LABEL: Record<GroupCategory, string> = {
+  couple: 'Пара',
+  family: 'Семья',
+  parents: 'Родители',
+  friends: 'Друзья',
+  other: 'Другое',
+};
+export const CATEGORIES: GroupCategory[] = ['couple', 'family', 'parents', 'friends', 'other'];
+
+export type Group = {
+  id: ID;
+  name: string;
+  category: GroupCategory;
+  inviteCode: string;
+  memberIds: ID[];
+  /** Создатель: назначает и снимает админов */
+  ownerId: ID;
+  /** Админы: те же права, что у создателя (приглашать, переименовывать), кроме назначения админов */
+  adminIds: ID[];
+};
+
+export const canManageGroup = (g: Group, userId: ID) => g.ownerId === userId || g.adminIds.includes(userId);
+
+/**
+ * Кого может исключить userId: создатель — любого, кроме себя; админ — только обычных участников
+ * (не создателя и не других админов).
+ */
+export const canRemoveMember = (g: Group, userId: ID, targetId: ID) => {
+  if (targetId === userId || targetId === g.ownerId) return false;
+  if (g.ownerId === userId) return true;
+  return g.adminIds.includes(userId) && !g.adminIds.includes(targetId);
+};
+
+export type ReminderRule = 'week' | 'days3' | 'dayBefore' | 'sameDay' | 'h1' | 'h2' | 'h3' | 'h6';
+
+export type Task = {
+  id: ID;
+  groupId: ID;
+  title: string;
+  date: string | null; // YYYY-MM-DD
+  time: string | null; // HH:MM
+  /** Описание — видно только в карточке дела */
+  note?: string;
+  createdBy: ID;
+  doneAt: string | null;
+  createdAt: string;
+};
+
+/** Личное правило для дела: undefined — как обычно, [] — не напоминать */
+export type TaskReminderOverride = ReminderRule[];
+
+export type Wish = {
+  id: ID;
+  /** Хотелки принадлежат человеку, а не группе: во всех его группах видны одни и те же */
+  ownerId: ID;
+  title: string;
+  note: string;
+  link: string;
+  /** Отметка «подарили» — ставит владелец */
+  receivedAt: string | null;
+  createdAt: string;
+};
+
+export type Kind = 'movie' | 'series' | 'cartoon' | 'show' | 'standup';
+export type Genre =
+  | 'comedy'
+  | 'drama'
+  | 'action'
+  | 'thriller'
+  | 'horror'
+  | 'scifi'
+  | 'detective'
+  | 'romance'
+  | 'adventure'
+  | 'documentary';
+export type Origin = 'ru' | 'foreign';
+export type Freshness = 'new' | 'old';
+
+export type WatchItem = {
+  id: ID;
+  groupId: ID;
+  title: string;
+  kind: Kind | null;
+  genres: Genre[];
+  origin: Origin | null;
+  year: number | null;
+  addedBy: ID;
+  watchedAt: string | null;
+  createdAt: string;
+};
+
+export type WatchFilters = {
+  kind: Kind[];
+  genre: Genre[];
+  origin: Origin[];
+  fresh: Freshness[];
+};
+
+export const emptyFilters: WatchFilters = { kind: [], genre: [], origin: [], fresh: [] };
+
+export type ReminderSettings = {
+  enabled: boolean;
+  rules: ReminderRule[];
+  dayTime: string; // для «за неделю», «за 3 дня», «накануне»
+  sameDayTime: string; // «в день события»
+};
+
+export const KIND_LABEL: Record<Kind, string> = {
+  movie: 'фильм',
+  series: 'сериал',
+  cartoon: 'мультфильм',
+  show: 'шоу',
+  standup: 'стендап',
+};
+
+export const GENRE_LABEL: Record<Genre, string> = {
+  comedy: 'комедия',
+  drama: 'драма',
+  action: 'боевик',
+  thriller: 'триллер',
+  horror: 'ужасы',
+  scifi: 'фантастика',
+  detective: 'детектив',
+  romance: 'мелодрама',
+  adventure: 'приключения',
+  documentary: 'документальное',
+};
+
+export const ORIGIN_LABEL: Record<Origin, string> = { ru: 'наше', foreign: 'зарубежное' };
+export const FRESH_LABEL: Record<Freshness, string> = { new: 'новое', old: 'не новое' };
+
+export const RULE_LABEL: Record<ReminderRule, string> = {
+  week: 'За неделю',
+  days3: 'За 3 дня',
+  dayBefore: 'Накануне',
+  sameDay: 'В день события',
+  h1: 'За 1 час',
+  h2: 'За 2 часа',
+  h3: 'За 3 часа',
+  h6: 'За 6 часов',
+};
+
+export const ALL_RULES: ReminderRule[] = ['week', 'days3', 'dayBefore', 'sameDay', 'h1', 'h2', 'h3', 'h6'];
+
+/* Черновики для карточки подтверждения */
+export type TaskDraft = { title: string; date: string | null; time: string | null; note?: string; reminder?: TaskReminderOverride };
+export type WishDraft = { title: string; note: string; link: string };
+export type WatchDraft = {
+  title: string;
+  kind: Kind | null;
+  genres: Genre[];
+  origin: Origin | null;
+  year: number | null;
+};
+
+export type DraftItem =
+  | { key: string; type: 'task'; id?: ID; force?: boolean; data: TaskDraft }
+  | { key: string; type: 'wish'; id?: ID; force?: boolean; data: WishDraft }
+  | { key: string; type: 'watch'; id?: ID; force?: boolean; data: WatchDraft };
+
+export type ItemType = DraftItem['type'];
+
+/* Голосовые изменения существующих записей */
+export type ChangeAction = 'update' | 'mark' | 'unmark' | 'delete';
+
+export type ChangePatch = Partial<TaskDraft> & Partial<WishDraft> & Partial<WatchDraft>;
+
+export type ChangeDraft = {
+  key: string;
+  action: ChangeAction;
+  type: ItemType;
+  /** Подходящие записи, лучшие первыми (до 3). Если их несколько, человек выбирает. */
+  candidates: ID[];
+  chosen: ID;
+  /** Для update: только изменяемые поля */
+  patch?: ChangePatch;
+};
+
+/* Вопросы о планах: «какие у нас планы на выходные» */
+export type PlansScope =
+  | { kind: 'us' } // «мы», «у нас» — группа категории «Пара»
+  | { kind: 'current' } // не сказано — текущая группа
+  | { kind: 'category'; category: GroupCategory } // «наши друзья» — все группы категории
+  | { kind: 'groups'; names: string[] } // «в Футболе» — по названию
+  | { kind: 'people'; names: string[] }; // «у нас с Кариной» — самая маленькая общая группа
+
+export type PlansQuery = { scope: PlansScope; from: string; to: string; query: string };
