@@ -1,0 +1,82 @@
+# Выкладка сервера «Кстати» в Yandex Cloud без Docker на Mac.
+# При каждом push в main, если менялась папка server/, GitHub сам:
+#   1) собирает образ из server/Dockerfile,
+#   2) загружает его в Yandex Container Registry,
+#   3) выкатывает новую ревизию Serverless Container,
+#   4) проверяет /health.
+# Можно запустить и вручную: GitHub → Actions → «Выкладка сервера» → Run workflow.
+#
+# Настройки (GitHub → Settings → Secrets and variables → Actions):
+#   Secrets:   YC_SA_JSON_KEY — ключ сервисного аккаунта kstati-deployer (JSON целиком)
+#   Variables: FOLDER_ID, REGISTRY_ID, SA_ID, LOCKBOX_ID, CONTAINER_NAME, PUBLIC_URL,
+#              YDB_DOCAPI_ENDPOINT, YANDEX_MODEL, APP_SCHEME, VK_CLIENT_ID, MAIL_FROM, VOICE_DAILY_LIMIT
+# Секреты самого сервера (JWT, ключи Яндекса) лежат в Lockbox — в GitHub их нет.
+name: Выкладка сервера
+
+on:
+  push:
+    branches: [main]
+    paths: ['server/**', '.github/workflows/deploy-server.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: server
+    env:
+      IMAGE: cr.yandex/${{ vars.REGISTRY_ID }}/kstati-server:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Вход в Container Registry
+        run: echo '${{ secrets.YC_SA_JSON_KEY }}' | docker login --username json_key --password-stdin cr.yandex
+
+      - name: Сборка и загрузка образа
+        run: |
+          docker build --platform linux/amd64 -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Установка yc
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          echo "$HOME/yc/bin" >> "$GITHUB_PATH"
+
+      - name: Вход в Yandex Cloud
+        run: |
+          echo '${{ secrets.YC_SA_JSON_KEY }}' > "$RUNNER_TEMP/key.json"
+          yc config set service-account-key "$RUNNER_TEMP/key.json"
+          yc config set folder-id "${{ vars.FOLDER_ID }}"
+          rm "$RUNNER_TEMP/key.json"
+
+      - name: Новая ревизия контейнера
+        run: |
+          yc serverless container revision deploy \
+            --container-name "${{ vars.CONTAINER_NAME }}" \
+            --image "$IMAGE" \
+            --service-account-id "${{ vars.SA_ID }}" \
+            --memory 512MB \
+            --cores 1 \
+            --core-fraction 100 \
+            --concurrency 8 \
+            --execution-timeout 60s \
+            --environment "NODE_ENV=production,LOG_DIR=stdout,YANDEX_FOLDER_ID=${{ vars.FOLDER_ID }},YANDEX_MODEL=${{ vars.YANDEX_MODEL }},PUBLIC_URL=${{ vars.PUBLIC_URL }},APP_SCHEME=${{ vars.APP_SCHEME }},YDB_DOCAPI_ENDPOINT=${{ vars.YDB_DOCAPI_ENDPOINT }},VK_CLIENT_ID=${{ vars.VK_CLIENT_ID }},MAIL_FROM=${{ vars.MAIL_FROM }},VOICE_DAILY_LIMIT=${{ vars.VOICE_DAILY_LIMIT }}" \
+            --secret "environment-variable=JWT_SECRET,id=${{ vars.LOCKBOX_ID }},key=JWT_SECRET" \
+            --secret "environment-variable=YANDEX_API_KEY,id=${{ vars.LOCKBOX_ID }},key=YANDEX_API_KEY" \
+            --secret "environment-variable=AWS_ACCESS_KEY_ID,id=${{ vars.LOCKBOX_ID }},key=AWS_ACCESS_KEY_ID" \
+            --secret "environment-variable=AWS_SECRET_ACCESS_KEY,id=${{ vars.LOCKBOX_ID }},key=AWS_SECRET_ACCESS_KEY"
+
+      - name: Проверка /health
+        run: |
+          for i in 1 2 3 4 5; do
+            curl -fsS "${{ vars.PUBLIC_URL }}/health" && echo && echo "✓ Сервер отвечает" && exit 0
+            sleep 5
+          done
+          echo "✗ /health не отвечает" && exit 1

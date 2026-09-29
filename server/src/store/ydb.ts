@@ -34,7 +34,8 @@ export class YdbStore implements Store {
   private t: { kv: string; members: string; items: string; wishes: string };
 
   constructor(private cfg: YdbConfig) {
-    const p = cfg.prefix ?? '';
+    // Имена таблиц: не короче 3 символов (требование Document API), поэтому с приставкой: kstati_kv, kstati_items…
+    const p = cfg.prefix ?? 'kstati_';
     this.t = { kv: `${p}kv`, members: `${p}members`, items: `${p}items`, wishes: `${p}wishes` };
   }
 
@@ -62,6 +63,8 @@ export class YdbStore implements Store {
         const j = JSON.parse(text);
         type = String(j.__type ?? type).split('#').pop()!;
         message = j.message ?? j.Message ?? message;
+        // «1 validation error(s) found.» — подробности бывают в соседних полях ответа
+        if (/validation error/i.test(message)) message = `${message} ${text.slice(0, 500)}`;
       } catch {
         /* не JSON */
       }
