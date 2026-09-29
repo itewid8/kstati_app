@@ -3,7 +3,8 @@
  *   Почта: регистрация по коду из письма + пароль; вход по паролю; «забыли пароль» — код из письма и новый пароль.
  *   VK ID: OAuth 2.1 с PKCE. Приложение открывает /auth/vk/start в браузере, VK возвращает человека
  *     на /auth/vk/callback, сервер обменивает код, создаёт сессию и отправляет в приложение
- *     kstati://auth?ticket=…; приложение меняет билет на токен через /auth/vk/finish.
+ *     kstati://auth?state=…&ticket=…; приложение меняет билет на токен через /auth/vk/finish,
+ *     предъявляя code_verifier, SHA-256 от которого оно передало в /auth/vk/start.
  *   Токен — JWT (HS256) на 90 дней, в заголовке Authorization: Bearer …
  */
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
@@ -131,7 +132,10 @@ const pkce = () => {
   return { verifier, challenge };
 };
 
-type VkState = { verifier: string; redirect: string };
+/** verifier — наш PKCE с VK; appChallenge и appState — PKCE и state приложения, начавшего вход */
+type VkState = { verifier: string; redirect: string; appChallenge: string; appState: string };
+/** Билет для /auth/vk/finish: отдаст токен только тому, у кого code_verifier к appChallenge */
+type VkTicket = { userId: string; appChallenge: string };
 
 async function vkExchange(code: string, verifier: string, deviceId: string, state: string) {
   const redirectUri = `${config.publicUrl}/auth/vk/callback`;
@@ -219,11 +223,20 @@ export function registerAuth(app: FastifyInstance, store: Store) {
   /** VK ID, шаг 1: браузер уходит на страницу входа VK */
   app.get('/auth/vk/start', async (req, reply: FastifyReply) => {
     if (!config.vkClientId) throw new HttpError(503, 'vk_disabled', 'Вход через VK ещё не настроен');
-    const { redirect } = z.object({ redirect: z.string().max(300) }).parse(req.query);
-    if (!redirect.startsWith(`${config.appScheme}://`) && !/^exp\+[\w-]+:\/\//.test(redirect)) throw new HttpError(400, 'bad_redirect');
+    // Билет уходит в приложение по kstati://, который может перехватить чужое приложение, поэтому вход
+    // привязан к приложению, начавшему его (PKCE, RFC 7636, S256): без его code_verifier билет бесполезен
+    const { redirect, code_challenge, state: appState } = z
+      .object({
+        redirect: z.string().max(300),
+        code_challenge: z.string().regex(/^[\w-]{43}$/),
+        code_challenge_method: z.literal('S256'),
+        state: z.string().regex(/^[\w-]{16,128}$/),
+      })
+      .parse(req.query);
+    if (!redirect.startsWith(`${config.appScheme}://`) && (config.isProd || !/^exp\+[\w-]+:\/\//.test(redirect))) throw new HttpError(400, 'bad_redirect');
     const state = randomBytes(24).toString('base64url');
     const { verifier, challenge } = pkce();
-    await store.putTemp(`vk#${state}`, { verifier, redirect } satisfies VkState, 10 * 60);
+    await store.putTemp(`vk#${state}`, { verifier, redirect, appChallenge: code_challenge, appState } satisfies VkState, 10 * 60);
     const url = new URL('https://id.vk.com/authorize');
     url.search = new URLSearchParams({
       response_type: 'code',
@@ -243,7 +256,9 @@ export function registerAuth(app: FastifyInstance, store: Store) {
     const st = q.state ? await store.getTemp<VkState>(`vk#${q.state}`) : null;
     if (!st) return reply.code(400).type('text/html; charset=utf-8').send('<p>Ссылка устарела. Вернитесь в приложение и попробуйте ещё раз.</p>');
     await store.deleteTemp(`vk#${q.state}`);
-    const back = (params: Record<string, string>) => reply.redirect(`${st.redirect}${st.redirect.includes('?') ? '&' : '?'}${new URLSearchParams(params)}`);
+    // state приложения возвращается ему же: так оно отличит ответ на свой вход от подброшенной ссылки
+    const back = (params: Record<string, string>) =>
+      reply.redirect(`${st.redirect}${st.redirect.includes('?') ? '&' : '?'}${new URLSearchParams({ state: st.appState, ...params })}`);
     if (!q.code || !q.device_id) return back({ error: q.error ?? 'cancelled' });
     try {
       const vk = await vkExchange(q.code, st.verifier, q.device_id, q.state!);
@@ -262,7 +277,7 @@ export function registerAuth(app: FastifyInstance, store: Store) {
       }
       await store.putUser(user);
       const ticket = randomBytes(24).toString('base64url');
-      await store.putTemp(`ticket#${ticket}`, user.id, 120);
+      await store.putTemp(`ticket#${ticket}`, { userId: user.id, appChallenge: st.appChallenge } satisfies VkTicket, 120);
       return back({ ticket });
     } catch (e) {
       req.log.error(e);
@@ -270,13 +285,17 @@ export function registerAuth(app: FastifyInstance, store: Store) {
     }
   });
 
-  /** VK ID, шаг 3: приложение меняет одноразовый билет на токен */
+  /** VK ID, шаг 3: приложение меняет одноразовый билет на токен, предъявляя code_verifier, с которым начинало вход */
   app.post('/auth/vk/finish', async (req) => {
-    const { ticket } = z.object({ ticket: z.string().max(100) }).parse(req.body);
-    const userId = await store.getTemp<string>(`ticket#${ticket}`);
-    if (!userId) throw new HttpError(400, 'ticket_expired', 'Попробуйте войти ещё раз');
+    const { ticket, code_verifier } = z.object({ ticket: z.string().max(100), code_verifier: z.string().min(43).max(128) }).parse(req.body);
+    const rec = await store.getTemp<VkTicket>(`ticket#${ticket}`);
+    if (!rec?.userId || !rec.appChallenge) throw new HttpError(400, 'ticket_expired', 'Попробуйте войти ещё раз');
+    // Билет одноразовый при любом исходе — перебирать verifier к одному билету нельзя
     await store.deleteTemp(`ticket#${ticket}`);
-    const user = await store.getUser(userId);
+    const got = Buffer.from(createHash('sha256').update(code_verifier).digest('base64url'));
+    const want = Buffer.from(rec.appChallenge);
+    if (got.length !== want.length || !timingSafeEqual(got, want)) throw new HttpError(400, 'ticket_expired', 'Попробуйте войти ещё раз');
+    const user = await store.getUser(rec.userId);
     if (!user) throw new HttpError(400, 'ticket_expired');
     return issue(user);
   });
