@@ -5,7 +5,7 @@
  *     на /auth/vk/callback, сервер обменивает код, создаёт сессию и отправляет в приложение
  *     kstati://auth?state=…&ticket=…; приложение меняет билет на токен через /auth/vk/finish,
  *     предъявляя code_verifier, SHA-256 от которого оно передало в /auth/vk/start.
- *   Токен — JWT (HS256) на 90 дней, в заголовке Authorization: Bearer …
+ *   Токен — JWT (HS256) на 90 дней, в заголовке X-Kstati-Token (или Authorization: Bearer … локально)
  */
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -72,8 +72,12 @@ export class HttpError extends Error {
 
 /** Кто делает запрос. Нет или неверный токен — 401 */
 export async function requireUser(req: FastifyRequest, store: Store): Promise<User> {
+  // Яндекс Serverless Containers забирает заголовок Authorization себе (ждёт там IAM-токен и отвечает 403),
+  // поэтому приложение шлёт токен в X-Kstati-Token. Authorization: Bearer оставлен для локальной отладки и curl.
+  const x = req.headers['x-kstati-token'];
   const h = req.headers.authorization ?? '';
-  const id = h.startsWith('Bearer ') ? verifyToken(h.slice(7)) : null;
+  const token = (Array.isArray(x) ? x[0] : x) || (h.startsWith('Bearer ') ? h.slice(7) : '');
+  const id = token ? verifyToken(token) : null;
   const user = id ? await store.getUser(id) : null;
   if (!user) throw new HttpError(401, 'unauthorized');
   return user;
