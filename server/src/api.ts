@@ -24,6 +24,8 @@ const canRemove = (g: Group, uid: string, target: string) => {
   if (g.ownerId === uid) return true;
   return g.adminIds.includes(uid) && !g.adminIds.includes(target);
 };
+/** Группа глазами участника: код приглашения видят только создатель и админы, остальным — пустая строка */
+const groupView = (g: Group, uid: string): Group => (canManage(g, uid) ? g : { ...g, inviteCode: '' });
 
 const Id = z.string().min(1).max(64);
 const Date10 = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
@@ -87,17 +89,22 @@ export class Data {
     return g;
   }
 
-  private async newInviteCode(groupId: string): Promise<string> {
+  /** avoid — прежний код группы: он тоже указывает на неё, claimKey его «займёт», а он вот-вот будет удалён */
+  private async newInviteCode(groupId: string, avoid?: string): Promise<string> {
     const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     for (let i = 0; i < 10; i++) {
       const code = Array.from({ length: 6 }, () => abc[randomInt(abc.length)]).join('');
-      if (await this.store.claimKey(`invite#${code}`, groupId)) return code;
+      if (code !== avoid && (await this.store.claimKey(`invite#${code}`, groupId))) return code;
     }
     throw new Error('Не удалось придумать код приглашения');
   }
 
-  /** Удалить участника из группы; последний ушёл — группа удаляется целиком */
-  private async dropMember(g: Group, userId: string, removeTheirItems: boolean) {
+  /**
+   * Удалить участника из группы; последний ушёл — группа удаляется целиком.
+   * rotateInvite — исключили не по своей воле: старый код он знает, поэтому группе выдаётся новый,
+   * а старый перестаёт работать (иначе исключённый сразу вернётся через group.join)
+   */
+  private async dropMember(g: Group, userId: string, removeTheirItems: boolean, rotateInvite = false) {
     g.memberIds = g.memberIds.filter((m) => m !== userId);
     g.adminIds = g.adminIds.filter((m) => m !== userId);
     await this.store.removeMembership(userId, g.id);
@@ -113,6 +120,11 @@ export class Data {
         const author = it.type === 'task' ? it.createdBy : it.addedBy;
         if (author === userId) await this.store.deleteItem(g.id, it.id);
       }
+    }
+    if (rotateInvite) {
+      const oldCode = g.inviteCode;
+      g.inviteCode = await this.newInviteCode(g.id, oldCode);
+      await this.store.deleteKey(`invite#${oldCode}`);
     }
     await this.store.putGroup(g);
     await this.store.incr(grev(g.id));
@@ -175,7 +187,7 @@ export class Data {
         const exists = await s.getGroup(op.group.id);
         if (exists) {
           if (!exists.memberIds.includes(user.id)) throw new HttpError(409, 'conflict');
-          return { group: exists };
+          return { group: groupView(exists, user.id) };
         }
         const g: Group = {
           id: op.group.id,
@@ -212,7 +224,7 @@ export class Data {
           await s.addMembership(user.id, g.id);
           await s.incr(grev(g.id));
         }
-        return { group: g };
+        return { group: groupView(g, user.id) };
       }
       case 'group.leave': {
         const g = await s.getGroup(op.id);
@@ -234,7 +246,7 @@ export class Data {
         const g = await this.memberGroup(user, op.id);
         if (!g.memberIds.includes(op.userId)) return {};
         if (!canRemove(g, user.id, op.userId)) throw new HttpError(403, 'forbidden', 'Нет прав исключить этого участника');
-        await this.dropMember(g, op.userId, true);
+        await this.dropMember(g, op.userId, true, true);
         return {};
       }
       case 'profile': {
@@ -279,7 +291,7 @@ export class Data {
     ]);
     return {
       me: meView(user),
-      groups: mine,
+      groups: mine.map((g) => groupView(g, user.id)),
       users: users.map(publicUser),
       revs,
       items: Object.fromEntries(changedGroups.map((g, i) => [g.id, itemLists[i]])),

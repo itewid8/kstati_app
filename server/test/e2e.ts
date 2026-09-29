@@ -5,6 +5,7 @@
  *   npm test
  */
 import assert from 'node:assert/strict';
+import { createHash, randomBytes } from 'node:crypto';
 import { buildApp } from '../src/app.js';
 import { config } from '../src/config.js';
 import { MemoryStore } from '../src/store/memory.js';
@@ -13,6 +14,16 @@ import { YdbStore } from '../src/store/ydb.js';
 import { startFakeDocApi } from './fake-docapi.js';
 
 config.voiceDailyLimit = 3;
+
+// VK ID подменён: обмен кода и данные человека отвечают без сети, остальные запросы (Document API) идут как есть
+config.vkClientId = 'test-vk';
+const realFetch = globalThis.fetch;
+globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+  const url = input instanceof Request ? input.url : String(input);
+  if (url === 'https://id.vk.com/oauth2/auth') return Response.json({ access_token: 'vk-token', user_id: 777 });
+  if (url === 'https://id.vk.com/oauth2/user_info') return Response.json({ user: { user_id: 777, first_name: 'Вика', sex: 1 } });
+  return realFetch(input, init);
+}) as typeof fetch;
 
 async function scenario(name: string, store: Store) {
   const parsed: string[] = [];
@@ -70,6 +81,32 @@ async function scenario(name: string, store: Store) {
   const ghost = await ok('POST', '/auth/email/code', { email: 'nobody@example.ru', purpose: 'reset' });
   assert.equal(ghost.devCode, undefined);
 
+  /* ---------- VK ID: билет меняется на токен только с code_verifier приложения, начавшего вход ---------- */
+  const vkStart = (q: Record<string, string>) => app.inject({ method: 'GET', url: `/auth/vk/start?${new URLSearchParams(q)}` });
+  const vkFlow = async (verifier: string, appState: string) => {
+    const code_challenge = createHash('sha256').update(verifier).digest('base64url');
+    const start = await vkStart({ redirect: 'kstati://auth', code_challenge, code_challenge_method: 'S256', state: appState });
+    assert.equal(start.statusCode, 302, start.body);
+    const vkState = new URL(String(start.headers.location)).searchParams.get('state')!;
+    const cb = await app.inject({ method: 'GET', url: `/auth/vk/callback?${new URLSearchParams({ state: vkState, code: 'c', device_id: 'd' })}` });
+    assert.equal(cb.statusCode, 302);
+    const back = new URL(String(cb.headers.location).replace(/^kstati:\/\//, 'https://x/')).searchParams;
+    assert.equal(back.get('state'), appState, 'приложение получает свой state обратно');
+    assert.ok(back.get('ticket'));
+    return back.get('ticket')!;
+  };
+  assert.equal((await vkStart({ redirect: 'kstati://auth' })).statusCode, 400, 'без code_challenge вход не начинается');
+  const vkVerifier = randomBytes(32).toString('base64url');
+  const vkAppState = randomBytes(16).toString('base64url');
+  // Перехваченный билет без verifier или с чужим verifier токен не даёт — и сгорает
+  const stolen = await vkFlow(vkVerifier, vkAppState);
+  assert.equal((await call('POST', '/auth/vk/finish', { ticket: stolen })).status, 400, 'без code_verifier');
+  assert.equal((await call('POST', '/auth/vk/finish', { ticket: stolen, code_verifier: randomBytes(32).toString('base64url') })).status, 400, 'чужой code_verifier');
+  assert.equal((await call('POST', '/auth/vk/finish', { ticket: stolen, code_verifier: vkVerifier })).status, 400, 'билет одноразовый');
+  const vk = await ok('POST', '/auth/vk/finish', { ticket: await vkFlow(vkVerifier, vkAppState), code_verifier: vkVerifier });
+  assert.equal(vk.me.vk, true);
+  assert.equal((await ok('GET', '/me', undefined, vk.token)).name, 'Вика');
+
   /* ---------- группа, приглашение, права ---------- */
   const [created] = await ops(T1, { op: 'group.create', group: { id: 'g1', name: 'Семья', category: 'couple' } });
   assert.equal(created.ok, true);
@@ -79,6 +116,11 @@ async function scenario(name: string, store: Store) {
   const [joined] = await ops(T2, { op: 'group.join', code: code.toLowerCase() });
   assert.equal(joined.ok, true);
   assert.deepEqual(joined.group.memberIds.sort(), [sasha.me.id, masha.me.id].sort());
+  // Код приглашения видят только создатель и админы
+  assert.equal(joined.group.inviteCode, '', 'обычному участнику код не отдаётся при вступлении');
+  assert.equal((await ok('POST', '/sync', {}, T2)).groups[0].inviteCode, '', 'и в синхронизации');
+  assert.equal((await ops(T2, { op: 'group.create', group: { id: 'g1', name: 'Семья', category: 'couple' } }))[0].group.inviteCode, '', 'и при повторном создании');
+  assert.equal((await ok('POST', '/sync', {}, T1)).groups[0].inviteCode, code, 'создатель код видит');
   assert.equal((await ops(T2, { op: 'group.join', code: 'ZZZZZZ' }))[0].error, 'bad_code');
 
   // Маша не админ — переименовать нельзя; Саша делает её админом — можно
@@ -103,6 +145,7 @@ async function scenario(name: string, store: Store) {
   const s1 = await ok('POST', '/sync', {}, T2);
   assert.equal(s1.groups.length, 1);
   assert.equal(s1.groups[0].name, 'Наше');
+  assert.equal(s1.groups[0].inviteCode, code, 'админ код видит');
   assert.deepEqual(s1.items.g1.map((i: any) => i.id).sort(), ['m1', 't1', 't3']);
   assert.equal(s1.items.g1.find((i: any) => i.id === 't1').createdBy, sasha.me.id);
   assert.deepEqual(s1.wishes[sasha.me.id].map((w: any) => w.title), ['Наушники'], 'хотелки Саши видны Маше');
@@ -151,11 +194,22 @@ async function scenario(name: string, store: Store) {
   const s5 = await ok('POST', '/sync', {}, T2);
   assert.equal(s5.groups.length, 0);
   assert.deepEqual(s5.wishes[masha.me.id].map((w: any) => w.title), ['Кофемолка'], 'свои хотелки у Маши на месте');
+  // После исключения у группы новый код, старый не работает — сама Маша вернуться не может
+  const code2 = s4.groups[0].inviteCode as string;
+  assert.match(code2, /^[A-Z0-9]{6}$/);
+  assert.notEqual(code2, code, 'код группы сменился');
+  assert.equal((await ops(T2, { op: 'group.join', code }))[0].error, 'bad_code', 'по старому коду не вернуться');
+  assert.equal(await store.getKey(`invite#${code}`), null);
+  assert.equal(await store.getKey(`invite#${code2}`), 'g1');
+  assert.equal((await ok('POST', '/sync', {}, T2)).groups.length, 0);
 
   /* ---------- выход последнего и удаление аккаунта ---------- */
   await ops(T2, { op: 'group.create', group: { id: 'g2', name: 'Друзья', category: 'friends' } });
   const g2 = (await ok('POST', '/sync', {}, T2)).groups[0];
   await ops(T1, { op: 'group.join', code: g2.inviteCode });
+  // Сам вышел — код не меняется, можно вернуться по нему же
+  assert.equal((await ops(T1, { op: 'group.leave', id: 'g2' }))[0].ok, true);
+  assert.equal((await ops(T1, { op: 'group.join', code: g2.inviteCode }))[0].ok, true);
   await ok('DELETE', '/me', undefined, T2);
   assert.equal((await call('GET', '/me', undefined, T2)).status, 401);
   const s6 = await ok('POST', '/sync', {}, T1);
@@ -177,3 +231,35 @@ await ydb.ensureTables(() => {});
 await scenario('YDB (поддельный Document API)', ydb);
 fake.server.close();
 console.log(`  операций Document API: ${fake.calls.length} (${[...new Set(fake.calls)].join(', ')})`);
+
+/* ---------- VK ID: куда сервер может вернуть билет ---------- */
+// Схему exp+… (dev-клиент Expo) может объявить любое приложение, поэтому в продакшене — только схема приложения
+{
+  const saved = { isProd: config.isProd, vkClientId: config.vkClientId };
+  config.vkClientId ||= 'test-vk';
+  const app = await buildApp({ store: new MemoryStore() });
+  // PKCE и state приложения передаём на случай, если /auth/vk/start их требует; иначе они игнорируются
+  const start = async (redirect: string) => {
+    const q = new URLSearchParams({ redirect, code_challenge: 'A'.repeat(43), code_challenge_method: 'S256', state: 'B'.repeat(22) });
+    const r = await app.inject({ method: 'GET', url: `/auth/vk/start?${q}` });
+    return r.statusCode === 400 ? JSON.parse(r.body).error : r.statusCode;
+  };
+  const own = `${config.appScheme}://auth`;
+  try {
+    for (const isProd of [false, true]) {
+      config.isProd = isProd;
+      assert.equal(await start(own), 302, `схема приложения, isProd=${isProd}`);
+      assert.equal(await start(`${config.appScheme}evil://auth`), 'bad_redirect', `похожая схема, isProd=${isProd}`);
+      assert.equal(await start('https://evil.example/'), 'bad_redirect', `чужой сайт, isProd=${isProd}`);
+    }
+    config.isProd = false;
+    assert.equal(await start('exp+want-watch-plans://auth'), 302, 'dev-клиент Expo вне продакшена');
+    config.isProd = true;
+    assert.equal(await start('exp+want-watch-plans://auth'), 'bad_redirect', 'в продакшене exp+… не принимается');
+    assert.equal(await start('exp+evil://x'), 'bad_redirect', 'в продакшене exp+… не принимается');
+  } finally {
+    Object.assign(config, saved);
+    await app.close();
+  }
+  console.log('✓ VK ID: адрес возврата проверяется');
+}
