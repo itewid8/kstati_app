@@ -63,6 +63,7 @@
         }
       ],
       "./plugins/withRecordWidget",
+      "./plugins/withIpv4First",
       "expo-web-browser"
     ],
     "icon": "./assets/icon.png"

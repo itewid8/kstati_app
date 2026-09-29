@@ -31,13 +31,15 @@ export async function request<T = any>(
       method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
       headers: {
         ...(opts.body !== undefined && { 'Content-Type': 'application/json' }),
-        ...(opts.token && { Authorization: `Bearer ${opts.token}` }),
+        // Не Authorization: его перехватывает Яндекс Облако (см. server/src/auth.ts)
+        ...(opts.token && { 'X-Kstati-Token': opts.token }),
       },
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       signal: ctrl.signal,
     });
   } catch (e) {
-    throw new NetError((e as Error).name === 'AbortError' ? 'timeout' : String((e as Error).message ?? e));
+    // expo/fetch при отмене по таймеру пишет «Fetch request has been canceled», а не AbortError
+    throw new NetError(ctrl.signal.aborted || (e as Error).name === 'AbortError' ? 'timeout' : String((e as Error).message ?? e));
   } finally {
     clearTimeout(timer);
   }
