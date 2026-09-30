@@ -62,7 +62,9 @@ export function occurrences(task: Pick<Task, 'date' | 'repeat' | 'skipDates'>, f
   const fromNo = dayNo(from);
   for (; n <= end && out.length < limit; n++) {
     const iso = isoOf(n);
-    if (!fits(r, task.date, iso)) continue;
+    // Дата дела — всегда первый раз серии, даже если не подходит под правило (как в Google Календаре):
+    // «с сегодня, каждую субботу» в среду — сегодня и дальше по субботам
+    if (n !== start && !fits(r, task.date, iso)) continue;
     seen++;
     if (r.count && seen > r.count) break;
     if (n >= fromNo && !skip.has(iso)) out.push(iso);
@@ -101,6 +103,21 @@ export function listInstances(tasks: Task[], today: string): Task[] {
     if (next) out.push(instance(t, next));
     return out;
   });
+}
+
+/**
+ * Дату серии поменяли — правило, взятое из старой даты («каждую среду», «каждое 30 число», «каждый год 30 сентября»),
+ * переезжает на новую. Правило, настроенное вручную (несколько дней, другие числа), не трогаем.
+ */
+export function shiftRepeat(r: Repeat | null | undefined, oldDate: string | null, newDate: string | null): Repeat | null {
+  if (!r || !oldDate || !newDate || oldDate === newDate) return r ?? null;
+  const [, om, od] = parts(oldDate);
+  const [, nm, nd] = parts(newDate);
+  const one = (list: number[] | undefined, v: number) => !list?.length || (list.length === 1 && list[0] === v);
+  if (r.freq === 'week' && one(r.weekdays, weekdayOf(oldDate))) return { ...r, weekdays: [weekdayOf(newDate)] };
+  if (r.freq === 'month' && one(r.monthDays, od)) return { ...r, monthDays: [nd] };
+  if (r.freq === 'year' && one(r.months, om) && one(r.monthDays, od)) return { ...r, months: [nm], monthDays: [nd] };
+  return r;
 }
 
 /** Ключ для списков React: у повторов — id и дата */

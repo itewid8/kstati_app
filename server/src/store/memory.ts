@@ -4,7 +4,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Activity, Group, Item, Store, User, Wish } from './types.js';
+import type { Activity, Group, Item, Prefs, Store, User, Wish } from './types.js';
 
 type Dump = {
   users: Record<string, User>;
@@ -16,9 +16,10 @@ type Dump = {
   counters: Record<string, number>;
   temp: Record<string, { v: unknown; exp: number }>;
   activity: Record<string, Activity[]>;
+  prefs: Record<string, Prefs>;
 };
 
-const empty = (): Dump => ({ users: {}, keys: {}, groups: {}, members: {}, items: {}, wishes: {}, counters: {}, temp: {}, activity: {} });
+const empty = (): Dump => ({ users: {}, keys: {}, groups: {}, members: {}, items: {}, wishes: {}, counters: {}, temp: {}, activity: {}, prefs: {} });
 const clone = <T>(x: T): T => (x === undefined ? x : JSON.parse(JSON.stringify(x)));
 
 export class MemoryStore implements Store {
@@ -148,6 +149,18 @@ export class MemoryStore implements Store {
     const cur = this.d.counters[counter] ?? 0;
     if (cur >= limit) return null;
     return this.incr(counter);
+  }
+
+  async getPrefs(userId: string) {
+    return clone(this.d.prefs[userId]) ?? null;
+  }
+  async putPrefs(userId: string, p: Prefs) {
+    this.d.prefs[userId] = clone(p);
+    this.save();
+  }
+  async deletePrefs(userId: string) {
+    delete this.d.prefs[userId];
+    this.save();
   }
 
   async addActivity(a: Activity) {

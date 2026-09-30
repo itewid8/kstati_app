@@ -12,7 +12,8 @@
     "eval": "tsx eval/run.ts",
     "typecheck": "tsc --noEmit",
     "stats": "tsx scripts/stats.ts",
-    "tables": "tsx scripts/ydb-tables.ts"
+    "tables": "tsx scripts/ydb-tables.ts",
+    "inspect": "tsx scripts/inspect.ts"
   },
   "dependencies": {
     "fastify": "^5.0.0",

@@ -273,7 +273,9 @@ export function mockParse(raw: string, ctx: { me: User; people: User[]; now?: Da
   const title = rep ? stripRepeat(taskTitle(rest).replace(/(^|\s)кажд\S*(?=\s|$)/gi, ' ').trim()) : taskTitle(rest);
   if (title.length < 4 || /^(.)\1*$/i.test(title)) return { type: 'unknown' };
   // «Баня каждую субботу» — повтор; первый раз — ближайший подходящий день
-  const first = rep ? firstDate(rep, date, toISODate(now)) : date;
+  // «Каждую среду» — с сегодняшнего дня, если он подходит; дата из фразы — только если начало названо явно
+  const explicit = /(начиная|(^|\s)с\s+(завтра|понедельник|вторник|сред|четверг|пятниц|суббот|воскресен|\d)|завтра|послезавтра|через\s)/.test(text);
+  const first = rep ? firstDate(rep, explicit ? date : null, toISODate(now)) : date;
   return { type: 'items', items: [{ key: uid(), type: 'task', data: { title, date: first, time, ...(rep && { repeat: rep }) } }] };
 }
 

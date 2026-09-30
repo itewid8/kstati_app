@@ -82,6 +82,16 @@ export type Wish = {
   updatedAt: string;
 };
 
+/**
+ * Личные настройки человека, общие для всех его телефонов: напоминания по умолчанию
+ * и личные напоминания для отдельных дел (id дела → список, [] — не напоминать).
+ */
+export type Prefs = {
+  reminders: { enabled: boolean; timed: string[]; allDay: string[] } | null;
+  overrides: Record<string, string[]>;
+  updatedAt: string;
+};
+
 /** Что произошло — для ленты активности */
 export type ActivityKind =
   | 'task.add'
@@ -162,6 +172,11 @@ export interface Store {
   getCounters(counters: string[]): Promise<Record<string, number>>;
   /** +1, если значение меньше limit. null — лимит исчерпан */
   incrUpTo(counter: string, limit: number): Promise<number | null>;
+
+  /** Личные настройки (напоминания) — одна запись на человека */
+  getPrefs(userId: string): Promise<Prefs | null>;
+  putPrefs(userId: string, p: Prefs): Promise<void>;
+  deletePrefs(userId: string): Promise<void>;
 
   /** Лента активности: добавить запись и прочитать новые (свежие первыми) */
   addActivity(a: Activity): Promise<void>;

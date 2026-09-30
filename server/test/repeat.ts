@@ -80,6 +80,11 @@ r = normalize([{ intent: 'delete', target: ['t3'], query: 'ужин' }] as any, 
 assert.equal(r.type, 'changes');
 assert.equal(r.changes[0].action, 'update');
 assert.equal(r.changes[0].patch.repeat, null);
+// «Каждую пятницу» в пятницу — начиная с сегодня; «с понедельника каждый день» — с понедельника
+r = normalize(add('Футбол', '2026-10-02', '18:00') as any, ctx, 'Футбол каждую пятницу в 6 вечера');
+assert.equal(r.items[0].data.date, '2026-09-25');
+r = normalize(add('Зарядка', '2026-09-28') as any, ctx, 'Зарядка каждый день с понедельника');
+assert.equal(r.items[0].data.date, '2026-09-28');
 // Обычное дело без повтора не трогаем
 r = normalize(add('Баня', '2026-09-26') as any, ctx, 'В субботу баня');
 assert.equal(r.items[0].data.repeat, undefined);

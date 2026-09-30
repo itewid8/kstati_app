@@ -175,6 +175,16 @@ async function scenario(name: string, store: Store) {
   assert.deepEqual(t5.skipDates, ['2026-10-10']);
   assert.deepEqual(t5.reminders, ['d1@20:00', 'm60']);
 
+  /* ---------- личные напоминания: хранятся у человека, видны только ему ---------- */
+  assert.equal((await ok('POST', '/sync', {}, T1)).prefs, null, 'пока не присылали — null');
+  await ops(T1, { op: 'prefs', reminders: { enabled: true, timed: ['m60'], allDay: ['d1@20:00'] }, overrides: { t1: ['m15'], t5: [] } });
+  await ops(T1, { op: 'prefs', overrides: { t1: null, t3: ['d0@09:00'] } });
+  const pr = (await ok('POST', '/sync', {}, T1)).prefs;
+  assert.deepEqual(pr.reminders, { enabled: true, timed: ['m60'], allDay: ['d1@20:00'] });
+  assert.deepEqual(pr.overrides, { t5: [], t3: ['d0@09:00'] }, 'null убирает личные, [] — «не напоминать»');
+  assert.equal((await ok('POST', '/sync', {}, T2)).prefs, null, 'у Маши свои настройки');
+  assert.equal((await ops(T1, { op: 'prefs', overrides: { t1: ['за час'] } }))[0].ok, false);
+
   /* ---------- лента активности ---------- */
   const feed2 = (await ok('GET', '/activity', undefined, T2)).events as any[];
   const kinds2 = feed2.map((e) => `${e.kind}:${e.title ?? ''}${e.date && e.kind !== 'task.add' ? '@' + e.date : ''}`);

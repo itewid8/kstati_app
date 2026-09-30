@@ -11,7 +11,7 @@
  * Сам объект лежит в атрибуте v (JSON-строка), счётчик — в n, срок жизни временной записи — в exp.
  */
 import { signV4 } from '../sigv4.js';
-import type { Activity, Group, Item, Store, User, Wish } from './types.js';
+import type { Activity, Group, Item, Prefs, Store, User, Wish } from './types.js';
 
 type AV = { S?: string; N?: string };
 type Row = Record<string, AV>;
@@ -218,6 +218,18 @@ export class YdbStore implements Store {
   }
   async deleteWish(ownerId: string, id: string) {
     await this.call('DeleteItem', { TableName: this.t.wishes, Key: { ownerId: S(ownerId), id: S(id) } });
+  }
+
+  /* ---------- личные настройки ---------- */
+
+  async getPrefs(userId: string) {
+    return this.parse<Prefs>(await this.kvGet(`prefs#${userId}`));
+  }
+  async putPrefs(userId: string, p: Prefs) {
+    await this.kvPutJson(`prefs#${userId}`, p);
+  }
+  async deletePrefs(userId: string) {
+    await this.kvDelete(`prefs#${userId}`);
   }
 
   /* ---------- лента активности ---------- */

@@ -11,7 +11,7 @@
 import { AppState } from 'react-native';
 import { ApiError, NetError, request, type Op, type OpResult } from './net';
 import { DEMO, syncHooks, useStore, type Me, type Revs } from './store';
-import type { Activity, Group, ID, Task, User, WatchItem, Wish } from './types';
+import type { Activity, Group, ID, ReminderSettings, Task, TaskReminderOverride, User, WatchItem, Wish } from './types';
 
 type ServerItem = (Task & { type: 'task'; updatedAt?: string }) | (WatchItem & { type: 'watch'; updatedAt?: string });
 type SyncResponse = {
@@ -21,7 +21,25 @@ type SyncResponse = {
   revs: Revs;
   items: Record<ID, ServerItem[]>;
   wishes: Record<ID, (Wish & { updatedAt?: string })[]>;
+  /** Личные напоминания с сервера; null — ещё ни разу не сохраняли */
+  prefs: { reminders: ReminderSettings | null; overrides: Record<ID, TaskReminderOverride> } | null;
 };
+
+/** Изменения личных напоминаний → операция prefs (только то, что поменялось) */
+function prefsOp(
+  before: { reminders: ReminderSettings; overrides: Record<ID, TaskReminderOverride> },
+  after: { reminders: ReminderSettings; overrides: Record<ID, TaskReminderOverride> },
+): Op | null {
+  const op: Extract<Op, { op: 'prefs' }> = { op: 'prefs' };
+  if (before.reminders !== after.reminders) op.reminders = after.reminders;
+  if (before.overrides !== after.overrides) {
+    const changed: Record<string, string[] | null> = {};
+    for (const [id, v] of Object.entries(after.overrides)) if (before.overrides[id] !== v) changed[id] = v;
+    for (const id of Object.keys(before.overrides)) if (!(id in after.overrides)) changed[id] = null;
+    if (Object.keys(changed).length) op.overrides = changed;
+  }
+  return op.reminders || op.overrides ? op : null;
+}
 
 /* ---------- правки в хранилище → операции ---------- */
 
@@ -75,6 +93,8 @@ useStore.subscribe((s, p) => {
       (w) => ({ op: 'wish.delete', id: w.id }),
     ),
   ];
+  const prefs = prefsOp(p, s);
+  if (prefs) ops.push(prefs);
   // Записи групп, из которых ушли (выход, исключение) — удалять на сервере не нужно, это делает сервер
   const alive = new Set(s.groups.map((g) => g.id));
   const filtered = ops.filter((o) => o.op !== 'item.delete' || alive.has(o.groupId));
@@ -154,9 +174,16 @@ async function pull(token: string) {
   const groups = [...res.groups, ...localOnly];
   const currentGroupId = groups.some((g) => g.id === s.currentGroupId) ? s.currentGroupId : (groups[0]?.id ?? null);
 
+  // Личные напоминания: если сервер их ещё не знает — отправляем свои; если знает и у нас нет неотправленных правок — берём с сервера
+  const pendingPrefs = s.outbox.some((o) => o.op === 'prefs');
+  let prefsState: Partial<{ reminders: ReminderSettings; overrides: Record<ID, TaskReminderOverride> }> = {};
+  if (res.prefs && !pendingPrefs) prefsState = { overrides: res.prefs.overrides ?? {}, ...(res.prefs.reminders && { reminders: res.prefs.reminders }) };
+  const uploadPrefs = res.prefs === null && !pendingPrefs;
+
   applyingRemote = true;
   try {
     useStore.setState({
+      ...prefsState,
       me: { ...s.me, ...res.me },
       users: res.users,
       groups,
@@ -169,6 +196,10 @@ async function pull(token: string) {
     });
   } finally {
     applyingRemote = false;
+  }
+  if (uploadPrefs) {
+    const cur = useStore.getState();
+    cur.queue([{ op: 'prefs', reminders: cur.reminders, overrides: Object.fromEntries(Object.entries(cur.overrides)) }]);
   }
 }
 

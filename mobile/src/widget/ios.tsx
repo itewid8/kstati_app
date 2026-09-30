@@ -18,6 +18,7 @@ export type IosWidgetProps = {
   muted: string;
   mic: string;
   onMic: string;
+  showMic: boolean;
 };
 
 const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment) => {
@@ -25,7 +26,7 @@ const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment)
   const family = environment.widgetFamily;
 
   if (family === 'accessoryCircular') {
-    return <Image systemName="mic.fill" size={22} modifiers={[widgetURL('kstati://record')]} />;
+    return <Image systemName="mic.fill" size={20} modifiers={[widgetURL('kstati://record')]} />;
   }
 
   if (family === 'accessoryRectangular') {
@@ -42,14 +43,14 @@ const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment)
   }
 
   const rows = props.rows.slice(0, family === 'systemSmall' ? 2 : 3);
-  const micButton = (
+  const micButton = props.showMic ? (
     <Image
       systemName="mic.fill"
-      size={family === 'systemSmall' ? 20 : 24}
+      size={family === 'systemSmall' ? 16 : 18}
       color={props.onMic}
-      modifiers={[frame({ width: family === 'systemSmall' ? 44 : 56, height: family === 'systemSmall' ? 44 : 56 }), background(props.mic), clipShape('circle')]}
+      modifiers={[frame({ width: family === 'systemSmall' ? 36 : 44, height: family === 'systemSmall' ? 36 : 44 }), background(props.mic), clipShape('circle')]}
     />
-  );
+  ) : null;
 
   const list = (
     <VStack alignment="leading" spacing={6}>
