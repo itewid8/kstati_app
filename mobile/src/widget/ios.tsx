@@ -13,17 +13,28 @@ import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 export type IosWidgetProps = {
   rows: { title: string; when: string }[];
-  bg: string;
-  text: string;
-  muted: string;
-  mic: string;
-  onMic: string;
-  showMic: boolean;
+  /** Цвета для светлой и тёмной темы телефона: [фон, текст, приглушённый, микрофон, значок на микрофоне] */
+  light: string[];
+  dark: string[];
 };
 
-const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment) => {
+/** Настройки виджета («Изменить виджет» на iPhone) — см. ios.configuration в app.json */
+export type IosWidgetConfig = { mic: boolean; text: 'auto' | 'light' | 'dark' };
+
+const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment<IosWidgetConfig>) => {
   'widget';
   const family = environment.widgetFamily;
+  const cfg = environment.configuration;
+  const showMic = cfg?.mic !== false;
+  const themeDark = environment.colorScheme !== 'light';
+  const bgSet = themeDark ? props.dark : props.light;
+  // Цвет текста: как в теме или принудительно светлый/тёмный
+  const textSet = cfg?.text === 'light' ? props.dark : cfg?.text === 'dark' ? props.light : bgSet;
+  const bg = bgSet[0];
+  const text = textSet[1];
+  const muted = textSet[2];
+  const mic = textSet[3];
+  const onMic = textSet[4];
 
   if (family === 'accessoryCircular') {
     return <Image systemName="mic.fill" size={20} modifiers={[widgetURL('kstati://record')]} />;
@@ -35,38 +46,40 @@ const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment)
         {props.rows.length === 0 ? <Text modifiers={[font({ size: 14 })]}>Дел нет</Text> : null}
         {props.rows.slice(0, 2).map((r, i) => (
           <Text key={i} modifiers={[font({ size: 14 }), lineLimit(1)]}>
-            {`${r.when}  ${r.title}`}
+            {r.when ? `${r.when}  ${r.title}` : r.title}
           </Text>
         ))}
       </VStack>
     );
   }
 
-  const rows = props.rows.slice(0, family === 'systemSmall' ? 2 : 3);
-  const micButton = props.showMic ? (
+  const small = family === 'systemSmall';
+  const rows = props.rows.slice(0, small ? 3 : 4);
+  const micButton = showMic ? (
     <Image
       systemName="mic.fill"
-      size={family === 'systemSmall' ? 16 : 18}
-      color={props.onMic}
-      modifiers={[frame({ width: family === 'systemSmall' ? 36 : 44, height: family === 'systemSmall' ? 36 : 44 }), background(props.mic), clipShape('circle')]}
+      size={small ? 16 : 18}
+      color={onMic}
+      modifiers={[frame({ width: small ? 36 : 40, height: small ? 36 : 40 }), background(mic), clipShape('circle')]}
     />
   ) : null;
 
+  // Время слева, название сразу за ним
   const list = (
-    <VStack alignment="leading" spacing={6}>
-      {rows.length === 0 ? <Text modifiers={[font({ size: 14 }), foregroundStyle(props.muted)]}>Дел нет</Text> : null}
+    <VStack alignment="leading" spacing={5}>
+      {rows.length === 0 ? <Text modifiers={[font({ size: 14 }), foregroundStyle(muted)]}>Дел нет</Text> : null}
       {rows.map((r, i) => (
-        <VStack key={i} alignment="leading" spacing={0}>
-          <Text modifiers={[font({ size: 14 }), foregroundStyle(props.text), lineLimit(1)]}>{r.title}</Text>
-          <Text modifiers={[font({ size: 12, design: 'monospaced' }), foregroundStyle(props.muted), lineLimit(1)]}>{r.when}</Text>
-        </VStack>
+        <HStack key={i} spacing={6}>
+          {r.when ? <Text modifiers={[font({ size: 12, design: 'monospaced' }), foregroundStyle(muted), lineLimit(1)]}>{r.when}</Text> : null}
+          <Text modifiers={[font({ size: 14 }), foregroundStyle(text), lineLimit(1)]}>{r.title}</Text>
+        </HStack>
       ))}
     </VStack>
   );
 
-  if (family === 'systemSmall') {
+  if (small) {
     return (
-      <VStack alignment="leading" modifiers={[widgetURL('kstati://record'), containerBackground(props.bg, 'widget')]}>
+      <VStack alignment="leading" modifiers={[widgetURL('kstati://record'), containerBackground(bg, 'widget')]}>
         {list}
         <Spacer />
         <HStack>
@@ -78,7 +91,7 @@ const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment)
   }
 
   return (
-    <HStack modifiers={[widgetURL('kstati://record'), containerBackground(props.bg, 'widget'), padding({ horizontal: 4 })]}>
+    <HStack modifiers={[widgetURL('kstati://record'), containerBackground(bg, 'widget'), padding({ horizontal: 4 })]}>
       {list}
       <Spacer />
       {micButton}

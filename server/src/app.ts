@@ -9,6 +9,7 @@ import { HttpError, registerAuth, requireUser } from './auth.js';
 import { config } from './config.js';
 import { writeLog } from './log.js';
 import { parseText } from './parse.js';
+import { normalizeTimes } from './spoken.js';
 import type { Store, User } from './store/index.js';
 import type { Context } from './types.js';
 import { recognize, YandexError } from './yandex.js';
@@ -134,7 +135,8 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     try {
       const conv = await toOgg(audio);
       audioSec = conv.seconds;
-      transcript = await stt(conv.ogg);
+      // Время через пробел («в 18 0 0») показываем и разбираем как «18:00»
+      transcript = normalizeTimes(await stt(conv.ogg));
       t1 = Date.now();
       if (!transcript) {
         await writeLog({ source: 'voice', userId: user.id, audioSec, audioBytes: audio.length, transcript: '', result: 'unknown', sttMs: t1 - t0 });

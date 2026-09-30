@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import { normalize } from '../src/parse.js';
 import { changesRepeat, firstDate, spokenRepeat, stripRepeat } from '../src/repeat.js';
+import { normalizeTimes } from '../src/spoken.js';
 const T = '2026-09-25'; // пятница
 const cases: [string, object | null, string?][] = [
   ['Баня каждую субботу', { freq: 'week', every: 1, weekdays: [6] }, '2026-09-26'],
@@ -85,6 +86,21 @@ r = normalize(add('Футбол', '2026-10-02', '18:00') as any, ctx, 'Футб�
 assert.equal(r.items[0].data.date, '2026-09-25');
 r = normalize(add('Зарядка', '2026-09-28') as any, ctx, 'Зарядка каждый день с понедельника');
 assert.equal(r.items[0].data.date, '2026-09-28');
+// Время, записанное распознаванием через пробел
+{
+  assert.equal(normalizeTimes('Добавь сегодня в 18 0 0 футбол'), 'Добавь сегодня в 18:00 футбол');
+  assert.equal(normalizeTimes('ужин в 19 30'), 'ужин в 19:30');
+  assert.equal(normalizeTimes('встреча 18 00'), 'встреча 18:00');
+  assert.equal(normalizeTimes('на 15 30 числа'), 'на 15 30 числа', 'числа — не время');
+  assert.equal(normalizeTimes('за 8 30 минут'), 'за 8 30 минут');
+  assert.equal(normalizeTimes('купить 2 00 рублей'), 'купить 2 00 рублей');
+}
+// Модель приняла дело со временем за передачу в «Смотреть»
+r = normalize([{ intent: 'add', type: 'watch', title: 'Футбол', kind: 'show' }] as any, ctx, 'Добавь сегодня в 18:00 футбол');
+assert.equal(r.items[0].type, 'task', JSON.stringify(r));
+assert.equal(r.items[0].data.time, '18:00');
+r = normalize([{ intent: 'add', type: 'watch', title: 'Дюна', kind: 'movie' }] as any, ctx, 'Посмотреть Дюну в субботу');
+assert.equal(r.items[0].type, 'watch', 'со словом «посмотреть» — это «Смотреть»');
 // Обычное дело без повтора не трогаем
 r = normalize(add('Баня', '2026-09-26') as any, ctx, 'В субботу баня');
 assert.equal(r.items[0].data.repeat, undefined);

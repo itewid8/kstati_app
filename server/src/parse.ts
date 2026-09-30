@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { buildMessages } from './prompt.js';
 import { changesRepeat, firstDate, spokenRepeat, stopsRepeat, stripRepeat } from './repeat.js';
-import { changeTarget, hasChangeVerb, isUnmark, nearestWeekday, plainWeekday, spokenKind, spokenPeriod, spokenTime } from './spoken.js';
+import { changeTarget, hasChangeVerb, isUnmark, nearestWeekday, normalizeTimes, plainWeekday, spokenKind, spokenPeriod, spokenTime } from './spoken.js';
 import { addUsage, complete, NO_USAGE, type Usage } from './yandex.js';
 import {
   GENRES,
@@ -163,8 +163,14 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     const title = cap(str(a.title));
     if (!title) continue;
     const key = randomUUID();
+    // «Добавь сегодня в 18:00 футбол» — модель может принять за передачу в «Смотреть».
+    // Есть дата или время и нет слов про фильм/сериал/«посмотреть» — это дело
+    const looksLikeTask =
+      a.type === 'watch' &&
+      (spokenTime(transcript) !== null || spokenPeriod(transcript, ctx.today) !== null) &&
+      !/(фильм|сериал|мульт|кино|посмотр|смотреть|глянуть|шоу|стендап|передач)/i.test(transcript);
     if (a.type === 'wish') items.push({ key, type: 'wish', data: { title, note: str(a.note), link: str(a.link) } });
-    else if (a.type === 'watch') {
+    else if (a.type === 'watch' && !looksLikeTask) {
       const year = typeof a.year === 'number' && a.year > 1880 && a.year < 2100 ? Math.round(a.year) : null;
       items.push({
         key,
@@ -178,7 +184,7 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
         },
       });
     } else {
-      const t = time(a.time);
+      const t = time(a.time) ?? (looksLikeTask ? spokenTime(transcript) : null);
       // Время без даты — значит, сегодня
       items.push({ key, type: 'task', data: { title, date: date(a.date) ?? (t ? ctx.today : null), time: t, note: str(a.note) } });
     }
@@ -278,8 +284,10 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
 export type ParseOutput = { result: ParseResult; raw: string; usage: Usage; attempts: number };
 
 /** Полный разбор: модель → проверка схемы (один повтор) → нормализация */
-export async function parseText(text: string, ctx: Context, model?: string): Promise<ParseOutput> {
-  if (!text.trim()) return { result: { type: 'unknown' }, raw: '', usage: NO_USAGE, attempts: 0 };
+export async function parseText(input: string, ctx: Context, model?: string): Promise<ParseOutput> {
+  if (!input.trim()) return { result: { type: 'unknown' }, raw: '', usage: NO_USAGE, attempts: 0 };
+  // «в 18 0 0» → «в 18:00»: время, записанное распознаванием через пробел
+  const text = normalizeTimes(input);
   const messages = buildMessages(text, ctx);
   let raw = '';
   let usage = NO_USAGE;
