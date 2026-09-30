@@ -1,6 +1,8 @@
+import * as Haptics from 'expo-haptics';
 import { Mic, X } from '@/components/icons';
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Pressable, StyleSheet, View, type GestureResponderEvent } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '@/lib/store';
 import { cancelRecording, holdEnd, holdStart, MAX_MS, recordingStartedAt, toggleRecording, useVoiceLevel } from '@/lib/voice';
@@ -50,8 +52,12 @@ export function BottomBar({ state, navigation }: Props) {
   );
 }
 
-/** Насколько увести палец влево, чтобы отменить запись в режиме удержания */
-const CANCEL_DX = 90;
+/**
+ * Где крестик относительно микрофона: половина кнопки (32) + отступ боковой колонки (12) + половина крестика (20).
+ * Кнопка едет за пальцем не дальше крестика; наехала на него — запись отменяется.
+ */
+const CROSS_DX = MIC_SIZE / 2 + 12 + 20;
+const CANCEL_DX = CROSS_DX - 12;
 
 function MicCluster() {
   const c = useColors();
@@ -60,7 +66,6 @@ function MicCluster() {
   const hold = useStore((s) => s.micMode) === 'hold';
   // Удержание: кнопка едет за пальцем влево; дальше CANCEL_DX — запись отменяется
   const drag = useRef(new Animated.Value(0)).current;
-  const startX = useRef(0);
   const cancelled = useRef(false);
   const [armed, setArmed] = useState(false);
 
@@ -69,34 +74,38 @@ function MicCluster() {
     setArmed(false);
   };
 
-  // Режим удержания — сырые касания: нажали — запись, повели влево — отмена, отпустили — отправка
-  const holdHandlers = {
-    onTouchStart: (e: GestureResponderEvent) => {
-      if (phase === 'processing') return;
-      startX.current = e.nativeEvent.pageX;
-      cancelled.current = false;
-      holdStart();
-    },
-    onTouchMove: (e: GestureResponderEvent) => {
-      if (cancelled.current) return;
-      const dx = Math.min(0, e.nativeEvent.pageX - startX.current);
-      drag.setValue(Math.max(dx, -CANCEL_DX - 20));
-      setArmed(dx < -CANCEL_DX / 2);
-      if (dx < -CANCEL_DX) {
-        cancelled.current = true;
-        cancelRecording();
-        resetDrag();
-      }
-    },
-    onTouchEnd: () => {
-      resetDrag();
-      if (!cancelled.current) holdEnd();
-    },
-    onTouchCancel: () => {
-      resetDrag();
-      if (!cancelled.current) holdEnd();
-    },
-  };
+  // Режим удержания — жест из gesture-handler (сырые касания на Android перехватывались):
+  // палец на кнопке — запись, повели влево дальше CANCEL_DX — отмена, отпустили — отправка
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .minDistance(0)
+        .shouldCancelWhenOutside(false)
+        .onBegin(() => {
+          cancelled.current = useStore.getState().voice === 'processing';
+          if (!cancelled.current) holdStart();
+        })
+        .onUpdate((e) => {
+          if (cancelled.current) return;
+          const dx = Math.min(0, e.translationX);
+          drag.setValue(Math.max(dx, -CROSS_DX));
+          setArmed(dx < -CANCEL_DX / 2);
+          if (dx < -CANCEL_DX) {
+            cancelled.current = true;
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+            cancelRecording();
+            resetDrag();
+          }
+        })
+        .onFinalize(() => {
+          resetDrag();
+          if (!cancelled.current) holdEnd();
+          cancelled.current = true;
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const button = (
     <View style={[styles.mic, { backgroundColor: phase === 'processing' ? c.surface : c.primary, borderColor: c.border }]}>
@@ -125,12 +134,9 @@ function MicCluster() {
         ) : null}
       </View>
       {hold ? (
-        <Animated.View
-          {...holdHandlers}
-          style={{ transform: [{ translateX: drag }, { scale: recording ? 1.12 : 1 }] }}
-        >
-          {button}
-        </Animated.View>
+        <GestureDetector gesture={pan}>
+          <Animated.View style={{ transform: [{ translateX: drag }, { scale: recording ? 1.12 : 1 }] }}>{button}</Animated.View>
+        </GestureDetector>
       ) : (
         <Pressable
           onPress={toggleRecording}

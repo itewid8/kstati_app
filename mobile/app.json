@@ -64,7 +64,52 @@
       ],
       "./plugins/withRecordWidget",
       "./plugins/withIpv4First",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "ru.wwp.app.widgets",
+          "groupIdentifier": "group.ru.wwp.app",
+          "widgets": [
+            {
+              "name": "KstatiWidget",
+              "displayName": "Кстати",
+              "description": "Ближайшие дела и микрофон",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "accessoryCircular",
+                  "accessoryRectangular"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/geist/400Regular/Geist_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/geist-mono/400Regular/GeistMono_400Regular.ttf"
+          ],
+          "widgets": [
+            {
+              "name": "Kstati",
+              "label": "Кстати",
+              "description": "Ближайшие дела и микрофон",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
+      "./plugins/withoutPushEntitlement"
     ],
     "icon": "./assets/icon.png"
   }
