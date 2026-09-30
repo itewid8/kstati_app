@@ -21,9 +21,11 @@ export type ThemePref = 'system' | 'light' | 'dark';
 /** Кнопка микрофона: tap — нажать, чтобы начать, и ещё раз, чтобы закончить; hold — записывать, пока палец на кнопке */
 export type MicMode = 'tap' | 'hold';
 
-/** Виджет на рабочем столе: показывать ли микрофон, непрозрачность фона (0…1), цвет текста */
-export type WidgetPrefs = { mic: boolean; opacity: number; text: 'auto' | 'light' | 'dark' };
-export const DEFAULT_WIDGET: WidgetPrefs = { mic: true, opacity: 1, text: 'auto' };
+/** Цвет элемента виджета: как в теме телефона, светлый или тёмный */
+export type WidgetTone = 'auto' | 'light' | 'dark';
+/** Виджет на рабочем столе: микрофон и его цвет, фон (цвет и непрозрачность 0…1), цвет названий и времени */
+export type WidgetPrefs = { mic: boolean; opacity: number; bg: WidgetTone; text: WidgetTone; time: WidgetTone; micTone: WidgetTone };
+export const DEFAULT_WIDGET: WidgetPrefs = { mic: true, opacity: 1, bg: 'auto', text: 'auto', time: 'auto', micTone: 'auto' };
 
 export const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
 

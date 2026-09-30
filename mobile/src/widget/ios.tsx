@@ -19,7 +19,8 @@ export type IosWidgetProps = {
 };
 
 /** Настройки виджета («Изменить виджет» на iPhone) — см. ios.configuration в app.json */
-export type IosWidgetConfig = { mic: boolean; text: 'auto' | 'light' | 'dark' };
+type Tone = 'auto' | 'light' | 'dark';
+export type IosWidgetConfig = { mic: boolean; bg: Tone; micTone: Tone; text: Tone; time: Tone };
 
 const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment<IosWidgetConfig>) => {
   'widget';
@@ -27,14 +28,18 @@ const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment<
   const cfg = environment.configuration;
   const showMic = cfg?.mic !== false;
   const themeDark = environment.colorScheme !== 'light';
-  const bgSet = themeDark ? props.dark : props.light;
-  // Цвет текста: как в теме или принудительно светлый/тёмный
+  // Фон: как в теме телефона или принудительно светлый/тёмный
+  const bgSet = cfg?.bg === 'light' ? props.light : cfg?.bg === 'dark' ? props.dark : themeDark ? props.dark : props.light;
+  // Текст и микрофон: «как в теме» — контрастные к фону; «светлый» — светлые буквы
   const textSet = cfg?.text === 'light' ? props.dark : cfg?.text === 'dark' ? props.light : bgSet;
+  const micSet = cfg?.micTone === 'light' ? props.dark : cfg?.micTone === 'dark' ? props.light : bgSet;
   const bg = bgSet[0];
   const text = textSet[1];
-  const muted = textSet[2];
-  const mic = textSet[3];
-  const onMic = textSet[4];
+  const muted = bgSet[2];
+  // Время: как в теме — приглушённое; светлое/тёмное — в полную яркость
+  const timeColor = cfg?.time === 'light' ? props.dark[1] : cfg?.time === 'dark' ? props.light[1] : muted;
+  const mic = micSet[3];
+  const onMic = micSet[4];
 
   if (family === 'accessoryCircular') {
     return <Image systemName="mic.fill" size={20} modifiers={[widgetURL('kstati://record')]} />;
@@ -54,7 +59,8 @@ const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment<
   }
 
   const small = family === 'systemSmall';
-  const rows = props.rows.slice(0, small ? 3 : 4);
+  const large = family === 'systemLarge';
+  const rows = props.rows.slice(0, small ? 3 : large ? 8 : 4);
   const micButton = showMic ? (
     <Image
       systemName="mic.fill"
@@ -70,14 +76,15 @@ const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment<
       {rows.length === 0 ? <Text modifiers={[font({ size: 14 }), foregroundStyle(muted)]}>Дел нет</Text> : null}
       {rows.map((r, i) => (
         <HStack key={i} spacing={6}>
-          {r.when ? <Text modifiers={[font({ size: 12, design: 'monospaced' }), foregroundStyle(muted), lineLimit(1)]}>{r.when}</Text> : null}
+          {r.when ? <Text modifiers={[font({ size: 12, design: 'monospaced' }), foregroundStyle(timeColor), lineLimit(1)]}>{r.when}</Text> : null}
           <Text modifiers={[font({ size: 14 }), foregroundStyle(text), lineLimit(1)]}>{r.title}</Text>
         </HStack>
       ))}
     </VStack>
   );
 
-  if (small) {
+  // Маленький и большой: дела сверху во всю ширину, микрофон снизу справа
+  if (small || large) {
     return (
       <VStack alignment="leading" modifiers={[widgetURL('kstati://record'), containerBackground(bg, 'widget')]}>
         {list}

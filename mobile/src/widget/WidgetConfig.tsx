@@ -4,9 +4,10 @@
  * Экран отдельный от приложения (своё окно), поэтому без шрифтов и навигации приложения — простые элементы.
  */
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, useColorScheme, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { Toggle } from '@/components/ui';
 import type { WidgetConfigurationScreenProps } from 'react-native-android-widget';
-import type { WidgetPrefs } from '@/lib/types';
+import type { WidgetPrefs, WidgetTone } from '@/lib/types';
 import { KstatiWidget, readPrefs, readSnapshot, savePrefs } from './android';
 
 const OPACITY = [
@@ -16,7 +17,7 @@ const OPACITY = [
   { label: '75%', value: 0.25 },
   { label: '100%', value: 0 },
 ];
-const TEXT: { key: WidgetPrefs['text']; label: string }[] = [
+const TONES: { key: WidgetTone; label: string }[] = [
   { key: 'auto', label: 'Как в теме' },
   { key: 'light', label: 'Светлый' },
   { key: 'dark', label: 'Тёмный' },
@@ -45,27 +46,31 @@ export function WidgetConfig({ widgetInfo, renderWidget, setResult }: WidgetConf
     </Pressable>
   );
 
+  /** Ряд «как в теме / светлый / тёмный» для одного элемента виджета */
+  const tones = (label: string, key: 'bg' | 'text' | 'time' | 'micTone') => (
+    <>
+      <Text style={[styles.label, { color: c.muted }]}>{label}</Text>
+      <View style={styles.wrap}>{TONES.map((t) => chip(t.label, p[key] === t.key, () => apply({ ...p, [key]: t.key })))}</View>
+    </>
+  );
+
   return (
     <View style={[styles.root, { backgroundColor: c.bg }]}>
       <Text style={[styles.title, { color: c.text }]}>Виджет «Кстати»</Text>
 
-      <View style={[styles.row, { borderColor: c.border }]}>
-        <Text style={{ fontSize: 16, color: c.text }}>Микрофон</Text>
-        <Switch
-          value={p.mic}
-          onValueChange={(mic) => apply({ ...p, mic })}
-          trackColor={{ true: c.primary, false: c.border }}
-          thumbColor={p.mic ? c.onPrimary : c.muted}
-        />
-      </View>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }}>
+        <View style={[styles.row, { borderColor: c.border }]}>
+          <Text style={{ fontSize: 16, color: c.text }}>Микрофон</Text>
+          <Toggle value={p.mic} onValueChange={(mic) => apply({ ...p, mic })} />
+        </View>
+        {p.mic ? tones('Цвет микрофона', 'micTone') : null}
+        {tones('Фон', 'bg')}
+        <Text style={[styles.label, { color: c.muted }]}>Прозрачность фона</Text>
+        <View style={styles.wrap}>{OPACITY.map((o) => chip(o.label, Math.abs(p.opacity - o.value) < 0.01, () => apply({ ...p, opacity: o.value })))}</View>
+        {tones('Цвет названий', 'text')}
+        {tones('Цвет времени', 'time')}
+      </ScrollView>
 
-      <Text style={[styles.label, { color: c.muted }]}>Прозрачность фона</Text>
-      <View style={styles.wrap}>{OPACITY.map((o) => chip(o.label, Math.abs(p.opacity - o.value) < 0.01, () => apply({ ...p, opacity: o.value })))}</View>
-
-      <Text style={[styles.label, { color: c.muted }]}>Цвет текста</Text>
-      <View style={styles.wrap}>{TEXT.map((t) => chip(t.label, p.text === t.key, () => apply({ ...p, text: t.key })))}</View>
-
-      <View style={{ flex: 1 }} />
       <View style={styles.actions}>
         <Pressable onPress={() => setResult('cancel')} style={styles.textBtn}>
           <Text style={{ fontSize: 16, color: c.muted }}>Отмена</Text>

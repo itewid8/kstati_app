@@ -121,6 +121,28 @@ export function Chip({
   );
 }
 
+/* ---------- Переключатель ---------- */
+
+/**
+ * Переключатель в стиле приложения: бегунок всегда белый, во включённом положении дорожка — фирменный красный
+ * (как центральный столбик логотипа). Одинаковый на Android и iPhone, в отличие от системного Switch.
+ */
+export function Toggle({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
+  const c = useColors();
+  const x = useSharedValue(value ? 1 : 0);
+  useEffect(() => {
+    x.value = withTiming(value ? 1 : 0, { duration: 160 });
+  }, [value, x]);
+  const thumb = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * 18 }] }));
+  return (
+    <Pressable onPress={() => onValueChange(!value)} hitSlop={10} accessibilityRole="switch" accessibilityState={{ checked: value }}>
+      <View style={[styles.track, { backgroundColor: value ? c.event : c.border }]}>
+        <Animated.View style={[styles.thumb, thumb]} />
+      </View>
+    </Pressable>
+  );
+}
+
 /* ---------- Кружок «выполнено» ---------- */
 
 export function Checkbox({ checked, onPress }: { checked: boolean; onPress: () => void }) {
@@ -337,6 +359,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkWrap: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  track: { width: 44, height: 26, borderRadius: 13, padding: 2, justifyContent: 'center' },
+  thumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
   check: {
     width: 20,
     height: 20,

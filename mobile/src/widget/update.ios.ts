@@ -17,7 +17,7 @@ export function pushWidget(snap: WidgetSnapshot) {
   const entries = moments.map((t) => ({
     date: new Date(t),
     props: {
-      rows: visibleAt(snap.items, t, 4).map((x) => ({ title: x.title, when: whenLabel(x, t) })),
+      rows: visibleAt(snap.items, t, 8).map((x) => ({ title: x.title, when: whenLabel(x, t) })),
       // Тему телефона виджет знает сам — отдаём обе палитры
       light: pal(WIDGET_LIGHT),
       dark: pal(WIDGET_DARK),
