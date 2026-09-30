@@ -1,4 +1,5 @@
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, useFonts } from '@expo-google-fonts/geist';
+import { watchWidget } from '@/widget/sync';
 import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -34,6 +35,7 @@ export default function RootLayout() {
   useEffect(() => applyTheme(theme), [theme]);
   // Напоминания о делах — локальные уведомления на телефоне
   useEffect(() => watchReminders(), []);
+  useEffect(() => watchWidget(), []);
   // Обмен с сервером: очередь изменений и новое от других участников
   useEffect(() => startSync(), []);
   // Шрифты вшиты в приложение (npm-пакеты с .ttf), сеть не нужна

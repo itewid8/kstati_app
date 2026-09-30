@@ -2,6 +2,7 @@ import { Check } from '@/components/icons';
 import React, { forwardRef, useEffect, useRef, useState } from 'react';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import {
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -174,11 +175,49 @@ export const Field = forwardRef<TextInput, TextInputProps & { label?: string; co
   const [rev, setRev] = useState(0);
 
   useEffect(() => {
+    if (code) return;
     if (value !== undefined && value !== last.current) {
       last.current = value;
       setRev((r) => r + 1);
     }
-  }, [value]);
+  }, [value, code]);
+
+  // Код: всегда заглавными. Поле обычное управляемое (без пересоздания — клавиатура не прыгает),
+  // а подсказки и автозамена выключены: иначе клавиатура Android дублирует буквы при замене на заглавные
+  if (code) {
+    return (
+      <View style={{ gap: 6 }}>
+        {label ? (
+          <T variant="label" muted>
+            {label}
+          </T>
+        ) : null}
+        <TextInput
+          ref={ref}
+          value={(value ?? '').toUpperCase()}
+          onChangeText={(t) => onChangeText?.(t.toUpperCase())}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          autoFocus={autoFocus}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          spellCheck={false}
+          autoComplete="off"
+          placeholderTextColor={c.textMuted}
+          selectionColor={selectionTint(c.text)}
+          selectionHandleColor={c.text}
+          cursorColor={c.text}
+          {...rest}
+          {...(Platform.OS === 'android' && !rest.keyboardType && { keyboardType: 'visible-password' as const })}
+          style={[
+            styles.field,
+            { backgroundColor: c.background, borderColor: c.border, fontFamily: font.mono, fontSize: size.caption, color: c.textMuted },
+            style,
+          ]}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={{ gap: 6 }}>
@@ -216,8 +255,6 @@ export const Field = forwardRef<TextInput, TextInputProps & { label?: string; co
         style={[
           styles.field,
           { backgroundColor: c.background, borderColor: c.border, color: c.text, fontFamily: font.regular },
-          // Коды (из письма, приглашения) — как код группы на экране группы: моноширинный, мелкий, приглушённый
-          code && { fontFamily: font.mono, fontSize: size.caption, color: c.textMuted },
           style,
         ]}
         {...rest}
