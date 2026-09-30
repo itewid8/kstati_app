@@ -168,7 +168,7 @@ function TaskEditor({ value, onChange }: { value: TaskDraft; onChange: (v: TaskD
       <PickerField
         placeholder="Не повторяется"
         display={value.repeat ? repeatLabel(value.repeat, value.date) : null}
-        prefix="Повтор"
+        plain
         active={open === 'repeat'}
         onPress={() => toggle('repeat')}
         onClear={() => {
@@ -205,24 +205,11 @@ function RemindersBlock({ value, set }: { value: TaskDraft; set: (p: Partial<Tas
   const c = useColors();
   const settings = useStore((s) => s.reminders);
   const [scope, setScope] = useState<'me' | 'all'>(value.mine ? 'me' : value.shared ? 'all' : 'me');
-  if (!value.date) {
-    return (
-      <T variant="caption" muted>
-        Напоминания появятся, когда у дела будет дата.
-      </T>
-    );
-  }
+  // Без даты напоминать не о чем — блок не показываем
+  if (!value.date) return null;
   const task = { time: value.time, reminders: value.shared ?? null };
-  const eff = effectiveSpecs(task, scope === 'me' ? value.mine : undefined, settings);
-  const specs = scope === 'me' ? eff.specs : (value.shared ?? (value.time ? settings.timed : settings.allDay));
-  const source =
-    scope === 'me'
-      ? eff.source === 'mine'
-        ? 'Только у вас. Остальные участники их не видят.'
-        : eff.source === 'shared'
-          ? 'Сейчас действуют общие для группы. Измените — и они станут вашими личными.'
-          : 'Сейчас — ваши настройки по умолчанию. Измените — и для этого дела они станут вашими.'
-      : 'Общие: сработают у всех участников, кроме тех, кто настроил свои.';
+  const specs =
+    scope === 'me' ? effectiveSpecs(task, value.mine, settings).specs : (value.shared ?? (value.time ? settings.timed : settings.allDay));
 
   return (
     <View style={{ gap: 6 }}>
@@ -230,17 +217,14 @@ function RemindersBlock({ value, set }: { value: TaskDraft; set: (p: Partial<Tas
         <T variant="label" muted style={{ flex: 1 }}>
           Напоминания
         </T>
-        <Chip label="Мне" selected={scope === 'me'} onPress={() => setScope('me')} />
-        <Chip label="Всем" selected={scope === 'all'} onPress={() => setScope('all')} />
+        <Chip label="Для меня" selected={scope === 'me'} onPress={() => setScope('me')} />
+        <Chip label="Для всех" selected={scope === 'all'} onPress={() => setScope('all')} />
       </View>
       {!settings.enabled && (
         <T variant="caption" danger>
           Напоминания выключены в настройках приложения
         </T>
       )}
-      <T variant="label" muted>
-        {source}
-      </T>
       <ReminderEditor
         value={specs}
         timed={!!value.time}
@@ -248,22 +232,17 @@ function RemindersBlock({ value, set }: { value: TaskDraft; set: (p: Partial<Tas
         time={value.time}
         onChange={(v) => (scope === 'me' ? set({ mine: v }) : set({ shared: v, mine: undefined }))}
       />
-      {value.repeat ? (
-        <T variant="label" muted>
-          Напоминания срабатывают перед каждым повтором.
-        </T>
-      ) : null}
       {scope === 'me' && value.mine ? (
         <Pressable onPress={() => set({ mine: undefined })} hitSlop={6}>
           <T variant="caption" color={c.textMuted}>
-            Сбросить мои — как у всех
+            Сбросить мои
           </T>
         </Pressable>
       ) : null}
       {scope === 'all' && value.shared ? (
         <Pressable onPress={() => set({ shared: null })} hitSlop={6}>
           <T variant="caption" color={c.textMuted}>
-            Убрать общие — у каждого свои по умолчанию
+            Убрать общие
           </T>
         </Pressable>
       ) : null}
@@ -275,15 +254,15 @@ function RemindersBlock({ value, set }: { value: TaskDraft; set: (p: Partial<Tas
 function PickerField({
   placeholder,
   display,
-  prefix,
+  plain,
   active,
   onPress,
   onClear,
 }: {
   placeholder: string;
   display: string | null;
-  /** Подпись перед значением: «Повтор» */
-  prefix?: string;
+  /** Значение обычным шрифтом, не моноширинным (повтор: «Каждую неделю: сб») */
+  plain?: boolean;
   active: boolean;
   onPress: () => void;
   onClear: () => void;
@@ -292,12 +271,7 @@ function PickerField({
   return (
     <View style={{ flex: 1 }}>
       <Pressable onPress={onPress} style={[styles.picker, { backgroundColor: c.background, borderColor: active ? c.text : c.border }]}>
-        {prefix ? (
-          <T variant="caption" muted>
-            {prefix}
-          </T>
-        ) : null}
-        <T mono={!!display && !prefix} muted={!display} variant={display || prefix ? 'caption' : 'body'} numberOfLines={1} style={{ flex: 1 }}>
+        <T mono={!!display && !plain} muted={!display} variant={display ? 'caption' : 'body'} numberOfLines={1} style={{ flex: 1 }}>
           {display ?? placeholder}
         </T>
         {display ? (

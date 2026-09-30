@@ -1,10 +1,10 @@
-import { Mic } from '@/components/icons';
+import { Mic, X } from '@/components/icons';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, Pressable, StyleSheet, View, type GestureResponderEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '@/lib/store';
-import { holdEnd, holdStart, MAX_MS, recordingStartedAt, toggleRecording, useVoiceLevel } from '@/lib/voice';
-import { motion, useColors } from '@/theme';
+import { cancelRecording, holdEnd, holdStart, MAX_MS, recordingStartedAt, toggleRecording, useVoiceLevel } from '@/lib/voice';
+import { ICON, motion, useColors } from '@/theme';
 import { T } from './ui';
 
 const LABELS: Record<string, string> = { tasks: 'Дела', wishes: 'Хочу', watch: 'Смотреть' };
@@ -50,38 +50,100 @@ export function BottomBar({ state, navigation }: Props) {
   );
 }
 
+/** Насколько увести палец влево, чтобы отменить запись в режиме удержания */
+const CANCEL_DX = 90;
+
 function MicCluster() {
   const c = useColors();
   const phase = useStore((s) => s.voice);
   const recording = phase === 'recording';
   const hold = useStore((s) => s.micMode) === 'hold';
+  // Удержание: кнопка едет за пальцем влево; дальше CANCEL_DX — запись отменяется
+  const drag = useRef(new Animated.Value(0)).current;
+  const startX = useRef(0);
+  const cancelled = useRef(false);
+  const [armed, setArmed] = useState(false);
+
+  const resetDrag = () => {
+    Animated.timing(drag, { toValue: 0, duration: motion.fast, useNativeDriver: true }).start();
+    setArmed(false);
+  };
+
+  // Режим удержания — сырые касания: нажали — запись, повели влево — отмена, отпустили — отправка
+  const holdHandlers = {
+    onTouchStart: (e: GestureResponderEvent) => {
+      if (phase === 'processing') return;
+      startX.current = e.nativeEvent.pageX;
+      cancelled.current = false;
+      holdStart();
+    },
+    onTouchMove: (e: GestureResponderEvent) => {
+      if (cancelled.current) return;
+      const dx = Math.min(0, e.nativeEvent.pageX - startX.current);
+      drag.setValue(Math.max(dx, -CANCEL_DX - 20));
+      setArmed(dx < -CANCEL_DX / 2);
+      if (dx < -CANCEL_DX) {
+        cancelled.current = true;
+        cancelRecording();
+        resetDrag();
+      }
+    },
+    onTouchEnd: () => {
+      resetDrag();
+      if (!cancelled.current) holdEnd();
+    },
+    onTouchCancel: () => {
+      resetDrag();
+      if (!cancelled.current) holdEnd();
+    },
+  };
+
+  const button = (
+    <View style={[styles.mic, { backgroundColor: phase === 'processing' ? c.surface : c.primary, borderColor: c.border }]}>
+      {phase === 'processing' ? (
+        <ActivityIndicator color={c.text} />
+      ) : recording && !hold ? (
+        <View style={[styles.stop, { backgroundColor: c.onPrimary }]} />
+      ) : (
+        <Mic size={26} strokeWidth={1.5} color={c.onPrimary} />
+      )}
+    </View>
+  );
 
   return (
     <View style={styles.cluster} pointerEvents="box-none">
-      <View style={styles.side} pointerEvents="none">{recording && <Timer />}</View>
-      <Pressable
-        // «Нажать — начать, ещё раз — стоп» или «держать, пока говоришь» (Настройки → Приложение)
-        {...(hold ? { onPressIn: holdStart, onPressOut: holdEnd } : { onPress: toggleRecording })}
-        disabled={phase === 'processing'}
-        style={({ pressed }) => [
-          styles.mic,
-          {
-            backgroundColor: phase === 'processing' ? c.surface : c.primary,
-            borderColor: c.border,
-            // В режиме удержания кнопка заметно «вдавлена», пока идёт запись
-            transform: [{ scale: hold && recording ? 1.12 : pressed ? 0.96 : 1 }],
-          },
-        ]}
-      >
-        {phase === 'processing' ? (
-          <ActivityIndicator color={c.text} />
-        ) : recording && !hold ? (
-          <View style={[styles.stop, { backgroundColor: c.onPrimary }]} />
-        ) : (
-          <Mic size={26} strokeWidth={1.5} color={c.onPrimary} />
-        )}
-      </Pressable>
-      <View style={[styles.side, { alignItems: 'flex-start' }]} pointerEvents="none">{recording && <Level />}</View>
+      <View style={styles.side} pointerEvents="box-none">
+        {recording && !hold ? (
+          // Режим «нажать и отпустить»: отмена — отдельной кнопкой
+          <Pressable onPress={cancelRecording} hitSlop={12} style={({ pressed }) => [styles.cancel, { borderColor: c.border, opacity: pressed ? 0.6 : 1 }]}>
+            <X size={18} strokeWidth={ICON.stroke} color={c.text} />
+          </Pressable>
+        ) : recording && hold ? (
+          <View style={[styles.cancel, { borderColor: armed ? c.danger : c.border }]} pointerEvents="none">
+            <X size={18} strokeWidth={ICON.stroke} color={armed ? c.danger : c.textMuted} />
+          </View>
+        ) : null}
+      </View>
+      {hold ? (
+        <Animated.View
+          {...holdHandlers}
+          style={{ transform: [{ translateX: drag }, { scale: recording ? 1.12 : 1 }] }}
+        >
+          {button}
+        </Animated.View>
+      ) : (
+        <Pressable
+          onPress={toggleRecording}
+          disabled={phase === 'processing'}
+          style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.96 : 1 }] })}
+        >
+          {button}
+        </Pressable>
+      )}
+      <View style={[styles.side, { alignItems: 'flex-start', gap: 4 }]} pointerEvents="none">
+        {recording && <Timer />}
+        {recording && <Level />}
+      </View>
     </View>
   );
 }
@@ -156,5 +218,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stop: { width: 20, height: 20, borderRadius: 3 },
+  cancel: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   levelTrack: { width: 56, height: 2, overflow: 'hidden' },
 });

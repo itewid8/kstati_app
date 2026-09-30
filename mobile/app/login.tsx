@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Logo } from '@/components/Logo';
-import { Button, Field, T, codeFieldStyle } from '@/components/ui';
+import { Button, Field, T } from '@/components/ui';
 import { login, loginWithVk, register, resetPassword, sendCode } from '@/lib/auth';
 import { syncNow } from '@/lib/sync';
 import { DEMO, useStore } from '@/lib/store';
@@ -136,7 +136,7 @@ export default function Login() {
                 keyboardType="number-pad"
                 autoComplete="one-time-code"
                 textContentType="oneTimeCode"
-                style={codeFieldStyle}
+                code
               />
               {mode === 'register' && (
                 <Field placeholder="Имя" value={name} onChangeText={setName} autoComplete="name" textContentType="givenName" maxLength={40} />
