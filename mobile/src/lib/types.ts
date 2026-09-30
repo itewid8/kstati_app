@@ -21,6 +21,10 @@ export type ThemePref = 'system' | 'light' | 'dark';
 /** Кнопка микрофона: tap — нажать, чтобы начать, и ещё раз, чтобы закончить; hold — записывать, пока палец на кнопке */
 export type MicMode = 'tap' | 'hold';
 
+/** Виджет на рабочем столе: показывать ли микрофон, непрозрачность фона (0…1), цвет текста */
+export type WidgetPrefs = { mic: boolean; opacity: number; text: 'auto' | 'light' | 'dark' };
+export const DEFAULT_WIDGET: WidgetPrefs = { mic: true, opacity: 1, text: 'auto' };
+
 export const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
 
 /** Категория группы: по ней ассистент понимает «мы», «наши друзья», «родители» */

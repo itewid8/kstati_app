@@ -89,6 +89,12 @@ const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('group.leave'), id: Id }),
   z.object({ op: z.literal('group.admin'), id: Id, userId: Id, admin: z.boolean() }),
   z.object({ op: z.literal('group.remove'), id: Id, userId: Id }),
+  // Личные напоминания: настройки по умолчанию и напоминания для отдельных дел (null — убрать своё)
+  z.object({
+    op: z.literal('prefs'),
+    reminders: z.object({ enabled: z.boolean(), timed: z.array(Spec).max(10), allDay: z.array(Spec).max(10) }).optional(),
+    overrides: z.record(Id, z.array(Spec).max(10).nullable()).optional(),
+  }),
   z.object({
     op: z.literal('profile'),
     name: z.string().trim().min(1).max(40).optional(),
@@ -355,6 +361,20 @@ export class Data {
         await this.log(user, { scope: g.id, groupId: g.id, kind: 'member.remove', target: op.userId });
         return {};
       }
+      case 'prefs': {
+        const cur = (await s.getPrefs(user.id)) ?? { reminders: null, overrides: {}, updatedAt: now };
+        if (op.reminders) cur.reminders = op.reminders;
+        for (const [id, v] of Object.entries(op.overrides ?? {})) {
+          if (v) cur.overrides[id] = v;
+          else delete cur.overrides[id];
+        }
+        // Не даём записи расти бесконечно: храним не больше 2000 дел с личными напоминаниями
+        const keys = Object.keys(cur.overrides);
+        if (keys.length > 2000) for (const k of keys.slice(0, keys.length - 2000)) delete cur.overrides[k];
+        cur.updatedAt = now;
+        await s.putPrefs(user.id, cur);
+        return {};
+      }
       case 'profile': {
         if (op.nick !== undefined) {
           const nick = op.nick?.replace(/^@/, '') || null;
@@ -391,9 +411,10 @@ export class Data {
     };
     const changedGroups = mine.filter((g) => known.groups[g.id] !== revs.groups[g.id]);
     const changedOwners = peopleIds.filter((id) => known.owners[id] !== revs.owners[id]);
-    const [itemLists, wishLists] = await Promise.all([
+    const [itemLists, wishLists, prefs] = await Promise.all([
       Promise.all(changedGroups.map((g) => s.listItems(g.id))),
       Promise.all(changedOwners.map((id) => s.listWishes(id))),
+      s.getPrefs(user.id),
     ]);
     return {
       me: meView(user),
@@ -402,6 +423,8 @@ export class Data {
       revs,
       items: Object.fromEntries(changedGroups.map((g, i) => [g.id, itemLists[i]])),
       wishes: Object.fromEntries(changedOwners.map((id, i) => [id, wishLists[i]])),
+      // Личные напоминания — всегда целиком (их немного); null — телефон ещё ни разу не присылал
+      prefs,
     };
   }
 
@@ -414,6 +437,7 @@ export class Data {
       else await s.removeMembership(user.id, gid);
     }
     for (const w of await s.listWishes(user.id)) await s.deleteWish(user.id, w.id);
+    await s.deletePrefs(user.id);
     if (user.email) await s.deleteKey(`email#${user.email}`);
     if (user.vkId) await s.deleteKey(`vk#${user.vkId}`);
     if (user.nick) await s.deleteKey(nickKey(user.nick));
@@ -456,6 +480,8 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
     for (const raw of ops) {
       const parsed = Op.safeParse(raw);
       if (!parsed.success) {
+        // Отклонённые операции пишем в журнал: телефон их больше не повторит, и без записи потерю не найти
+        req.log.warn({ op: (raw as { op?: unknown })?.op, issue: parsed.error.issues[0] }, 'Операция отклонена: неверный формат');
         results.push({ ok: false, error: 'bad_request', message: parsed.error.issues[0]?.message });
         continue;
       }
@@ -464,7 +490,10 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
         const fresh = (await store.getUser(user.id)) ?? user;
         results.push({ ok: true, ...((await data.apply(fresh, parsed.data)) as object) });
       } catch (e) {
-        if (e instanceof HttpError) results.push({ ok: false, error: e.code, message: e.message });
+        if (e instanceof HttpError) {
+          req.log.warn({ op: parsed.data.op, code: e.code }, `Операция отклонена: ${e.message}`);
+          results.push({ ok: false, error: e.code, message: e.message });
+        }
         else throw e;
       }
     }

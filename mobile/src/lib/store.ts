@@ -17,6 +17,8 @@ import {
   type Gender,
   type GroupCategory,
   type ThemePref, type MicMode,
+  type WidgetPrefs,
+  DEFAULT_WIDGET,
   type DraftItem,
   type Group,
   type ID,
@@ -110,6 +112,7 @@ type State = {
   calendarDate: string;
   theme: ThemePref;
   micMode: MicMode;
+  widget: WidgetPrefs;
   /** Лента активности: что сделали другие (свежие первыми) */
   activity: Activity[];
   /** id последней записи ленты, которую человек уже видел (для точки на колокольчике) */
@@ -139,6 +142,7 @@ type Actions = {
   saveProfile: (p: Profile) => Promise<string | null>;
   setTheme: (t: ThemePref) => void;
   setMicMode: (m: MicMode) => void;
+  setWidget: (p: Partial<WidgetPrefs>) => void;
   /** Добавить свежие записи ленты (с сервера) */
   mergeActivity: (list: Activity[]) => void;
   markActivitySeen: () => void;
@@ -218,6 +222,7 @@ const initial: State = {
   calendarDate: toISODate(new Date()),
   theme: 'system',
   micMode: 'tap',
+  widget: DEFAULT_WIDGET,
 };
 
 /** Отметить (или снять отметку) у одного повтора серии */
@@ -320,6 +325,7 @@ export const useStore = create<State & Actions>()(
     },
     setTheme: (theme) => set({ theme }),
     setMicMode: (micMode) => set({ micMode }),
+    setWidget: (p) => set({ widget: { ...get().widget, ...p } }),
     mergeActivity: (list) => {
       if (!list.length) return;
       const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString();
@@ -633,6 +639,7 @@ export const useStore = create<State & Actions>()(
       tasksView: s.tasksView,
       theme: s.theme,
       micMode: s.micMode,
+      widget: s.widget,
       activity: s.activity,
       activitySeen: s.activitySeen,
     }),

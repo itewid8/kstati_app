@@ -195,7 +195,10 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     const rep = spokenRepeat(transcript, ctx.today);
     if (rep) {
       d.repeat = rep;
-      d.date = firstDate(rep, d.date, ctx.today);
+      // «Каждую среду» — начиная с сегодняшнего дня, если он подходит (а не «со следующей среды»).
+      // Дату берём из фразы, только если начало названо явно: «с понедельника», «с 5 октября», «завтра», «через неделю»
+      const explicit = /(начиная|(^|\s)с\s+(завтра|понедельник|вторник|сред|четверг|пятниц|суббот|воскресен|\d)|завтра|послезавтра|через\s)/i.test(transcript);
+      d.date = firstDate(rep, explicit ? d.date : null, ctx.today);
       d.title = stripRepeat(d.title);
     }
   }

@@ -8,7 +8,7 @@
 import React from 'react';
 import { File, Paths } from 'expo-file-system';
 import { FlexWidget, SvgWidget, TextWidget, type WidgetTaskHandlerProps } from 'react-native-android-widget';
-import { visibleAt, whenLabel, WIDGET_DARK, WIDGET_LIGHT, type WidgetSnapshot } from './data';
+import { visibleAt, whenLabel, widgetColors, type WidgetSnapshot } from './data';
 
 export const ANDROID_WIDGET = 'Kstati';
 
@@ -16,21 +16,21 @@ const mic = (color: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/></svg>`;
 
 export function KstatiWidget({ snap, width, height, now }: { snap: WidgetSnapshot | null; width: number; height: number; now: number }) {
-  const c = snap?.dark === false ? WIDGET_LIGHT : WIDGET_DARK;
-  // Узкий виджет — только микрофон; по высоте — сколько дел помещается
-  const micOnly = width < 150;
-  const rows = visibleAt(snap?.items ?? [], now, height < 100 ? 2 : height < 150 ? 3 : 4);
-  const micSize = Math.min(56, Math.max(44, height - 24));
+  const c = widgetColors(snap);
+  // Узкий виджет — только микрофон (если он включён); по высоте — сколько дел помещается
+  const micOnly = c.showMic && width < 150;
+  const rows = visibleAt(snap?.items ?? [], now, height < 70 ? 1 : height < 100 ? 2 : height < 150 ? 3 : 4);
+  const micSize = height < 70 ? 36 : 44;
 
   return (
     <FlexWidget
       style={{
         height: 'match_parent',
         width: 'match_parent',
-        backgroundColor: c.bg as `#${string}`,
+        backgroundColor: c.bg,
         borderRadius: 20,
         paddingHorizontal: 14,
-        paddingVertical: 10,
+        paddingVertical: 8,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: micOnly ? 'center' : 'space-between',
@@ -40,7 +40,7 @@ export function KstatiWidget({ snap, width, height, now }: { snap: WidgetSnapsho
         <FlexWidget
           clickAction="OPEN_URI"
           clickActionData={{ uri: 'kstati://tasks' }}
-          style={{ flex: 1, height: 'match_parent', flexDirection: 'column', justifyContent: 'center', marginRight: 10 }}
+          style={{ flex: 1, height: 'match_parent', flexDirection: 'column', justifyContent: 'center', marginRight: c.showMic ? 10 : 0 }}
         >
           {rows.length === 0 ? (
             <TextWidget text="Дел нет" style={{ fontSize: 14, fontFamily: 'Geist_400Regular', color: c.muted as `#${string}` }} />
@@ -68,20 +68,22 @@ export function KstatiWidget({ snap, width, height, now }: { snap: WidgetSnapsho
           )}
         </FlexWidget>
       )}
-      <FlexWidget
-        clickAction="OPEN_URI"
-        clickActionData={{ uri: 'kstati://record' }}
-        style={{
-          width: micSize,
-          height: micSize,
-          borderRadius: micSize / 2,
-          backgroundColor: c.mic as `#${string}`,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <SvgWidget svg={mic(c.onMic)} style={{ width: 26, height: 26 }} />
-      </FlexWidget>
+      {c.showMic && (
+        <FlexWidget
+          clickAction="OPEN_URI"
+          clickActionData={{ uri: 'kstati://record' }}
+          style={{
+            width: micSize,
+            height: micSize,
+            borderRadius: micSize / 2,
+            backgroundColor: c.mic as `#${string}`,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <SvgWidget svg={mic(c.onMic)} style={{ width: micSize < 40 ? 18 : 20, height: micSize < 40 ? 18 : 20 }} />
+        </FlexWidget>
+      )}
     </FlexWidget>
   );
 }

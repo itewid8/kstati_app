@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 import { taskWhen } from '@/lib/dates';
 import { toISODate } from '@/lib/dates';
-import { repeatLabel } from '@/lib/recur';
+import { repeatLabel, shiftRepeat } from '@/lib/recur';
 import { effectiveSpecs, specsSummary } from '@/lib/remind';
 import { useStore } from '@/lib/store';
 import {
@@ -147,7 +147,8 @@ function TaskEditor({ value, onChange }: { value: TaskDraft; onChange: (v: TaskD
       {open === 'date' && (
         <DatePanel
           value={value.date}
-          onPick={(date) => set({ date })}
+          // Правило повтора, привязанное к дате («каждую среду»), переезжает вместе с ней
+          onPick={(date) => set({ date, repeat: shiftRepeat(value.repeat, value.date, date) })}
           onDone={() => setOpen(null)}
           onClear={() => {
             set({ date: null, repeat: null });
@@ -232,20 +233,6 @@ function RemindersBlock({ value, set }: { value: TaskDraft; set: (p: Partial<Tas
         time={value.time}
         onChange={(v) => (scope === 'me' ? set({ mine: v }) : set({ shared: v, mine: undefined }))}
       />
-      {scope === 'me' && value.mine ? (
-        <Pressable onPress={() => set({ mine: undefined })} hitSlop={6}>
-          <T variant="caption" color={c.textMuted}>
-            Сбросить мои
-          </T>
-        </Pressable>
-      ) : null}
-      {scope === 'all' && value.shared ? (
-        <Pressable onPress={() => set({ shared: null })} hitSlop={6}>
-          <T variant="caption" color={c.textMuted}>
-            Убрать общие
-          </T>
-        </Pressable>
-      ) : null}
     </View>
   );
 }

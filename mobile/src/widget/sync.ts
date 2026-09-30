@@ -13,7 +13,7 @@ function snapshot(): WidgetSnapshot {
   const s = useStore.getState();
   const mine = new Set(s.me ? s.groups.filter((g) => g.memberIds.includes(s.me!.id)).map((g) => g.id) : []);
   const dark = s.theme === 'system' ? Appearance.getColorScheme() !== 'light' : s.theme === 'dark';
-  return { items: s.me ? upcoming(s.tasks, mine) : [], dark, at: Date.now() };
+  return { items: s.me ? upcoming(s.tasks, mine) : [], dark, at: Date.now(), prefs: s.widget };
 }
 
 export function updateWidget() {
@@ -36,7 +36,7 @@ export function watchWidget(): () => void {
   };
   schedule();
   const unsub = useStore.subscribe((s, p) => {
-    if (s.tasks !== p.tasks || s.groups !== p.groups || s.theme !== p.theme || s.me !== p.me) schedule();
+    if (s.tasks !== p.tasks || s.groups !== p.groups || s.theme !== p.theme || s.me !== p.me || s.widget !== p.widget) schedule();
   });
   const app = AppState.addEventListener('change', (st) => st === 'background' && updateWidget());
   const scheme = Appearance.addChangeListener(schedule);
