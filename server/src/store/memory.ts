@@ -4,7 +4,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Group, Item, Store, User, Wish } from './types.js';
+import type { Activity, Group, Item, Store, User, Wish } from './types.js';
 
 type Dump = {
   users: Record<string, User>;
@@ -15,9 +15,10 @@ type Dump = {
   wishes: Record<string, Record<string, Wish>>;
   counters: Record<string, number>;
   temp: Record<string, { v: unknown; exp: number }>;
+  activity: Record<string, Activity[]>;
 };
 
-const empty = (): Dump => ({ users: {}, keys: {}, groups: {}, members: {}, items: {}, wishes: {}, counters: {}, temp: {} });
+const empty = (): Dump => ({ users: {}, keys: {}, groups: {}, members: {}, items: {}, wishes: {}, counters: {}, temp: {}, activity: {} });
 const clone = <T>(x: T): T => (x === undefined ? x : JSON.parse(JSON.stringify(x)));
 
 export class MemoryStore implements Store {
@@ -147,6 +148,21 @@ export class MemoryStore implements Store {
     const cur = this.d.counters[counter] ?? 0;
     if (cur >= limit) return null;
     return this.incr(counter);
+  }
+
+  async addActivity(a: Activity) {
+    const list = (this.d.activity[a.scope] ??= []);
+    list.push(clone(a));
+    // Храним последние 500 записей на ленту
+    if (list.length > 500) list.splice(0, list.length - 500);
+    this.save();
+  }
+  async listActivity(scope: string, since: string, limit: number) {
+    return (this.d.activity[scope] ?? [])
+      .filter((a) => a.id > since)
+      .sort((a, b) => b.id.localeCompare(a.id))
+      .slice(0, limit)
+      .map(clone);
   }
 
   async putTemp(key: string, value: unknown, ttlSec: number) {

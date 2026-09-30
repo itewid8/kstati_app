@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useCurrentGroup, useStore } from '@/lib/store';
 import { ICON, space, useColors } from '@/theme';
 import { Sheet } from './Sheet';
-import { Button, Chip, Divider, Field, ListRow, T } from './ui';
+import { Button, Chip, Divider, Field, ListRow, T, codeFieldStyle } from './ui';
 import { CATEGORIES, CATEGORY_LABEL, type GroupCategory } from '@/lib/types';
 
 type Mode = 'list' | 'create' | 'join' | 'rename';
@@ -73,7 +73,7 @@ export function GroupPanel({ onDone, initial = 'list' }: { onDone: () => void; i
           autoCapitalize={mode === 'join' ? 'characters' : 'sentences'}
           maxLength={mode === 'join' ? 6 : 40}
           onSubmitEditing={submit}
-          style={mode === 'join' ? { letterSpacing: 4 } : undefined}
+          style={mode === 'join' ? codeFieldStyle : undefined}
         />
         {mode === 'create' && (
           <View style={{ gap: 8 }}>

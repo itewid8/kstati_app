@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ChevronDown, ChevronLeft, Plus } from '@/components/icons';
+import { Bell, ChevronDown, ChevronLeft, Plus } from '@/components/icons';
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,8 @@ export function Header({
   const router = useRouter();
   const me = useStore((s) => s.me);
   const setGroupSheet = useStore((s) => s.setGroupSheet);
+  // Точка на колокольчике — есть записи в ленте, которые ещё не видели
+  const unread = useStore((s) => !!s.activity[0] && s.activity[0].id > s.activitySeen);
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top + 8, backgroundColor: c.background }]}>
@@ -45,6 +47,10 @@ export function Header({
             <Plus size={22} strokeWidth={ICON.stroke} color={c.text} />
           </Pressable>
         )}
+        <Pressable onPress={() => router.push('/activity')} hitSlop={10} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+          <Bell size={21} strokeWidth={ICON.stroke} color={c.text} />
+          {unread && <View style={[styles.badge, { backgroundColor: c.event, borderColor: c.background }]} />}
+        </Pressable>
         <Pressable
           onPress={() => router.push('/settings')}
           hitSlop={8}
@@ -84,6 +90,7 @@ const styles = StyleSheet.create({
   },
   title: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   right: { flexDirection: 'row', alignItems: 'center', gap: 20 },
+  badge: { position: 'absolute', top: -1, right: -1, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5 },
   avatar: {
     width: 30,
     height: 30,

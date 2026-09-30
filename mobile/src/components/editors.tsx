@@ -2,23 +2,26 @@ import { X } from '@/components/icons';
 import React, { useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 import { taskWhen } from '@/lib/dates';
+import { toISODate } from '@/lib/dates';
+import { repeatLabel } from '@/lib/recur';
+import { effectiveSpecs, specsSummary } from '@/lib/remind';
+import { useStore } from '@/lib/store';
 import {
-  ALL_RULES,
   GENRE_LABEL,
   KIND_LABEL,
   ORIGIN_LABEL,
-  RULE_LABEL,
   type DraftItem,
   type Genre,
   type Kind,
   type Origin,
   type TaskDraft,
-  type TaskReminderOverride,
   type WatchDraft,
   type WishDraft,
 } from '@/lib/types';
 import { ICON, useColors } from '@/theme';
 import { DatePanel, TimePanel } from './pickers';
+import { ReminderEditor } from './ReminderEditor';
+import { RepeatPanel } from './RepeatPanel';
 import { Chip, Field, T } from './ui';
 
 /* ================= Просмотр (карточка до «Исправить») ================= */
@@ -37,11 +40,12 @@ export function ItemPreview({ item }: { item: DraftItem }) {
             {d.note}
           </T>
         ) : null}
-        {d.date ? (
+        {d.repeat ? (
           <T variant="caption" muted>
-            Напоминания: {reminderSummary(d.reminder)}
+            {repeatLabel(d.repeat, d.date)}
           </T>
         ) : null}
+        {d.date ? <ReminderLine draft={d} /> : null}
       </View>
     );
   }
@@ -87,10 +91,15 @@ export function ItemPreview({ item }: { item: DraftItem }) {
   );
 }
 
-export function reminderSummary(r: TaskReminderOverride | undefined): string {
-  if (!r) return 'как обычно';
-  if (r.length === 0) return 'не напоминать';
-  return r.map((x) => RULE_LABEL[x].toLowerCase()).join(', ');
+/** «Напоминания: накануне в 20:00, за 1 ч до начала» — какие действуют для меня */
+function ReminderLine({ draft }: { draft: TaskDraft }) {
+  const settings = useStore((s) => s.reminders);
+  const { specs } = effectiveSpecs({ time: draft.time, reminders: draft.shared ?? null }, draft.mine, settings);
+  return (
+    <T variant="caption" muted>
+      Напоминания: {settings.enabled ? specsSummary(specs).toLowerCase() : 'выключены в настройках'}
+    </T>
+  );
 }
 
 /* ================= Редакторы ================= */
@@ -102,11 +111,10 @@ export function ItemEditor({ item, onChange }: { item: DraftItem; onChange: (i: 
 }
 
 function TaskEditor({ value, onChange }: { value: TaskDraft; onChange: (v: TaskDraft) => void }) {
-  const [remOpen, setRemOpen] = useState(false);
-  // Открыт свой выбор даты или времени (раскрывается под полями)
-  const [open, setOpen] = useState<'date' | 'time' | null>(null);
+  // Открыт свой выбор даты, времени или повтора (раскрывается под полями)
+  const [open, setOpen] = useState<'date' | 'time' | 'repeat' | null>(null);
   const set = (p: Partial<TaskDraft>) => onChange({ ...value, ...p });
-  const toggle = (k: 'date' | 'time') => {
+  const toggle = (k: 'date' | 'time' | 'repeat') => {
     Keyboard.dismiss();
     setOpen(open === k ? null : k);
   };
@@ -120,8 +128,8 @@ function TaskEditor({ value, onChange }: { value: TaskDraft; onChange: (v: TaskD
           active={open === 'date'}
           onPress={() => toggle('date')}
           onClear={() => {
-            // Сбрасываем только дату, время остаётся
-            set({ date: null });
+            // Сбрасываем только дату, время остаётся; без даты нет и повтора
+            set({ date: null, repeat: null });
             setOpen(null);
           }}
         />
@@ -142,7 +150,7 @@ function TaskEditor({ value, onChange }: { value: TaskDraft; onChange: (v: TaskD
           onPick={(date) => set({ date })}
           onDone={() => setOpen(null)}
           onClear={() => {
-            set({ date: null });
+            set({ date: null, repeat: null });
             setOpen(null);
           }}
         />
@@ -157,6 +165,25 @@ function TaskEditor({ value, onChange }: { value: TaskDraft; onChange: (v: TaskD
           }}
         />
       )}
+      <PickerField
+        placeholder="Не повторяется"
+        display={value.repeat ? repeatLabel(value.repeat, value.date) : null}
+        prefix="Повтор"
+        active={open === 'repeat'}
+        onPress={() => toggle('repeat')}
+        onClear={() => {
+          set({ repeat: null });
+          setOpen(null);
+        }}
+      />
+      {open === 'repeat' && (
+        <RepeatPanel
+          value={value.repeat ?? null}
+          start={value.date ?? toISODate(new Date())}
+          // Повтор без даты не бывает: первая дата — сегодня
+          onChange={(repeat) => set({ repeat, ...(repeat && !value.date && { date: toISODate(new Date()) }) })}
+        />
+      )}
       <Field
         placeholder="Описание"
         value={value.note ?? ''}
@@ -165,31 +192,81 @@ function TaskEditor({ value, onChange }: { value: TaskDraft; onChange: (v: TaskD
         textAlignVertical="top"
         style={{ height: undefined, minHeight: 72, paddingTop: 12, paddingBottom: 12 }}
       />
-      <Pressable onPress={() => setRemOpen((v) => !v)} hitSlop={6}>
-        <T variant="caption" muted>
-          Напоминания: <T variant="caption">{reminderSummary(value.reminder)}</T>
+      <RemindersBlock value={value} set={set} />
+    </View>
+  );
+}
+
+/**
+ * Напоминания дела. «Мне» — личные (видны и срабатывают только у меня),
+ * «Всем» — общие для группы (у каждого, кто не настроил свои). Показываем, откуда взялись текущие.
+ */
+function RemindersBlock({ value, set }: { value: TaskDraft; set: (p: Partial<TaskDraft>) => void }) {
+  const c = useColors();
+  const settings = useStore((s) => s.reminders);
+  const [scope, setScope] = useState<'me' | 'all'>(value.mine ? 'me' : value.shared ? 'all' : 'me');
+  if (!value.date) {
+    return (
+      <T variant="caption" muted>
+        Напоминания появятся, когда у дела будет дата.
+      </T>
+    );
+  }
+  const task = { time: value.time, reminders: value.shared ?? null };
+  const eff = effectiveSpecs(task, scope === 'me' ? value.mine : undefined, settings);
+  const specs = scope === 'me' ? eff.specs : (value.shared ?? (value.time ? settings.timed : settings.allDay));
+  const source =
+    scope === 'me'
+      ? eff.source === 'mine'
+        ? 'Только у вас. Остальные участники их не видят.'
+        : eff.source === 'shared'
+          ? 'Сейчас действуют общие для группы. Измените — и они станут вашими личными.'
+          : 'Сейчас — ваши настройки по умолчанию. Измените — и для этого дела они станут вашими.'
+      : 'Общие: сработают у всех участников, кроме тех, кто настроил свои.';
+
+  return (
+    <View style={{ gap: 6 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <T variant="label" muted style={{ flex: 1 }}>
+          Напоминания
         </T>
-      </Pressable>
-      {remOpen && (
-        <View style={styles.wrap}>
-          <Chip label="Как обычно" selected={!value.reminder} onPress={() => set({ reminder: undefined })} />
-          <Chip label="Не напоминать" selected={value.reminder?.length === 0} onPress={() => set({ reminder: [] })} />
-          {ALL_RULES.filter((r) => value.time || !r.startsWith('h')).map((r) => {
-            const on = !!value.reminder?.includes(r);
-            return (
-              <Chip
-                key={r}
-                label={RULE_LABEL[r]}
-                selected={on}
-                onPress={() => {
-                  const cur = value.reminder ?? [];
-                  set({ reminder: on ? cur.filter((x) => x !== r) : [...cur, r] });
-                }}
-              />
-            );
-          })}
-        </View>
+        <Chip label="Мне" selected={scope === 'me'} onPress={() => setScope('me')} />
+        <Chip label="Всем" selected={scope === 'all'} onPress={() => setScope('all')} />
+      </View>
+      {!settings.enabled && (
+        <T variant="caption" danger>
+          Напоминания выключены в настройках приложения
+        </T>
       )}
+      <T variant="label" muted>
+        {source}
+      </T>
+      <ReminderEditor
+        value={specs}
+        timed={!!value.time}
+        date={value.repeat ? null : value.date}
+        time={value.time}
+        onChange={(v) => (scope === 'me' ? set({ mine: v }) : set({ shared: v, mine: undefined }))}
+      />
+      {value.repeat ? (
+        <T variant="label" muted>
+          Напоминания срабатывают перед каждым повтором.
+        </T>
+      ) : null}
+      {scope === 'me' && value.mine ? (
+        <Pressable onPress={() => set({ mine: undefined })} hitSlop={6}>
+          <T variant="caption" color={c.textMuted}>
+            Сбросить мои — как у всех
+          </T>
+        </Pressable>
+      ) : null}
+      {scope === 'all' && value.shared ? (
+        <Pressable onPress={() => set({ shared: null })} hitSlop={6}>
+          <T variant="caption" color={c.textMuted}>
+            Убрать общие — у каждого свои по умолчанию
+          </T>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -198,12 +275,15 @@ function TaskEditor({ value, onChange }: { value: TaskDraft; onChange: (v: TaskD
 function PickerField({
   placeholder,
   display,
+  prefix,
   active,
   onPress,
   onClear,
 }: {
   placeholder: string;
   display: string | null;
+  /** Подпись перед значением: «Повтор» */
+  prefix?: string;
   active: boolean;
   onPress: () => void;
   onClear: () => void;
@@ -212,7 +292,12 @@ function PickerField({
   return (
     <View style={{ flex: 1 }}>
       <Pressable onPress={onPress} style={[styles.picker, { backgroundColor: c.background, borderColor: active ? c.text : c.border }]}>
-        <T mono={!!display} muted={!display} variant={display ? 'caption' : 'body'} style={{ flex: 1 }}>
+        {prefix ? (
+          <T variant="caption" muted>
+            {prefix}
+          </T>
+        ) : null}
+        <T mono={!!display && !prefix} muted={!display} variant={display || prefix ? 'caption' : 'body'} numberOfLines={1} style={{ flex: 1 }}>
           {display ?? placeholder}
         </T>
         {display ? (

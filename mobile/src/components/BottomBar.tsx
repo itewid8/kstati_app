@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '@/lib/store';
-import { MAX_MS, recordingStartedAt, toggleRecording, useVoiceLevel } from '@/lib/voice';
+import { holdEnd, holdStart, MAX_MS, recordingStartedAt, toggleRecording, useVoiceLevel } from '@/lib/voice';
 import { motion, useColors } from '@/theme';
 import { T } from './ui';
 
@@ -54,21 +54,28 @@ function MicCluster() {
   const c = useColors();
   const phase = useStore((s) => s.voice);
   const recording = phase === 'recording';
+  const hold = useStore((s) => s.micMode) === 'hold';
 
   return (
     <View style={styles.cluster} pointerEvents="box-none">
       <View style={styles.side} pointerEvents="none">{recording && <Timer />}</View>
       <Pressable
-        onPress={toggleRecording}
+        // «Нажать — начать, ещё раз — стоп» или «держать, пока говоришь» (Настройки → Приложение)
+        {...(hold ? { onPressIn: holdStart, onPressOut: holdEnd } : { onPress: toggleRecording })}
         disabled={phase === 'processing'}
         style={({ pressed }) => [
           styles.mic,
-          { backgroundColor: phase === 'processing' ? c.surface : c.primary, borderColor: c.border, transform: [{ scale: pressed ? 0.96 : 1 }] },
+          {
+            backgroundColor: phase === 'processing' ? c.surface : c.primary,
+            borderColor: c.border,
+            // В режиме удержания кнопка заметно «вдавлена», пока идёт запись
+            transform: [{ scale: hold && recording ? 1.12 : pressed ? 0.96 : 1 }],
+          },
         ]}
       >
         {phase === 'processing' ? (
           <ActivityIndicator color={c.text} />
-        ) : recording ? (
+        ) : recording && !hold ? (
           <View style={[styles.stop, { backgroundColor: c.onPrimary }]} />
         ) : (
           <Mic size={26} strokeWidth={1.5} color={c.onPrimary} />

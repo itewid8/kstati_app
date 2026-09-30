@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight, ExternalLink } from '@/components/icons';
+import { usePullRefresh } from '@/components/PullRefresh';
 import React, { useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useBottomSpace } from '@/components/BottomBar';
@@ -23,6 +24,7 @@ export default function Wishes() {
   const personId = useStore((s) => s.wishPersonId);
   const { setWishPerson, setCard } = useStore.getState();
   const bottom = useBottomSpace();
+  const refreshControl = usePullRefresh();
   const [showReceived, setShowReceived] = useState(false);
 
   // Люди текущей группы, кроме меня, по алфавиту
@@ -65,7 +67,7 @@ export default function Wishes() {
           <Chip key={p.id} label={p.name} selected={ownerId === p.id} onPress={() => setWishPerson(p.id)} />
         ))}
       </ScrollView>
-      <ScrollView contentContainerStyle={{ paddingBottom: bottom }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: bottom }} refreshControl={refreshControl}>
         {/* key: при смене человека список перерисовывается без анимаций */}
         <LayoutAnimationConfig skipEntering key={ownerId}>
           {list.length === 0 && (

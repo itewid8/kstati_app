@@ -4,8 +4,9 @@ import { taskWhen } from '@/lib/dates';
 import { userName, useStore } from '@/lib/store';
 import type { Task } from '@/lib/types';
 import { useDelayedMark } from '@/lib/useMark';
-import { space, useColors } from '@/theme';
+import { ICON, space, useColors } from '@/theme';
 import { openMenu } from './ActionMenu';
+import { Repeat } from './icons';
 import { SwipeRow } from './SwipeRow';
 import { Checkbox, T } from './ui';
 
@@ -27,21 +28,16 @@ export function TaskRow({
 }) {
   const c = useColors();
   const users = useStore((s) => s.users);
-  const override = useStore((s) => s.overrides[task.id]);
-  const { toggleTask, deleteTask, setCard } = useStore.getState();
-  const { marked: done, toggle } = useDelayedMark(!!task.doneAt, () => toggleTask(task.id), markDelay);
+  const { toggleTask, setCard } = useStore.getState();
+  const { marked: done, toggle } = useDelayedMark(!!task.doneAt, () => toggleTask(task.id, task.occ), markDelay);
 
-  const edit = () =>
-    setCard({
-      source: 'edit',
-      editing: true,
-      items: [{ key: task.id, id: task.id, type: 'task', data: { title: task.title, date: task.date, time: task.time, note: task.note ?? '', reminder: override } }],
-    });
+  const edit = () => editTask(task.id, setCard);
+  const remove = () => deleteTaskAsk(task);
 
   const when = whenFormat === 'time' ? (task.time ?? '') : task.date || task.time ? taskWhen(task.date, task.time) : '';
 
   return (
-    <SwipeRow onSwipeRight={toggle} onSwipeLeft={() => deleteTask(task.id)}>
+    <SwipeRow onSwipeRight={toggle} onSwipeLeft={remove}>
       <Pressable
         onPress={edit}
         onLongPress={() =>
@@ -49,7 +45,13 @@ export function TaskRow({
             title: task.title,
             actions: [
               { label: 'Изменить', onPress: edit },
-              { label: 'Удалить', danger: true, onPress: () => deleteTask(task.id) },
+              ...(task.repeat && task.occ
+                ? [
+                    { label: 'Удалить только этот раз', danger: true, onPress: () => useStore.getState().deleteTask(task.id, task.occ) },
+                    { label: 'Завершить повторы после этого раза', onPress: () => useStore.getState().endSeries(task.id, task.occ!) },
+                    { label: 'Удалить всю серию', danger: true, onPress: () => useStore.getState().deleteTask(task.id) },
+                  ]
+                : [{ label: 'Удалить', danger: true, onPress: remove }]),
             ],
           })
         }
@@ -64,6 +66,7 @@ export function TaskRow({
             {userName(users, task.createdBy)}
           </T>
         </View>
+        {task.repeat ? <Repeat size={14} strokeWidth={ICON.stroke} color={c.textMuted} /> : null}
         {when ? (
           <T variant="caption" mono muted={!past} danger={past && !done}>
             {when}
@@ -84,3 +87,42 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 });
+
+/** Открыть дело на правку. У повтора правится вся серия — берём её из хранилища (с датой первого раза) */
+export function editTask(id: string, setCard = useStore.getState().setCard) {
+  const s = useStore.getState();
+  const t = s.tasks.find((x) => x.id === id);
+  if (!t) return;
+  setCard({
+    source: 'edit',
+    editing: true,
+    items: [
+      {
+        key: t.id,
+        id: t.id,
+        type: 'task',
+        data: { title: t.title, date: t.date, time: t.time, note: t.note ?? '', repeat: t.repeat ?? null, mine: s.overrides[t.id], shared: t.reminders ?? null },
+      },
+    ],
+  });
+}
+
+/** Удалить: у повтора — спросить, только этот раз или всю серию */
+export function deleteTaskAsk(task: Task) {
+  const { deleteTask, endSeries } = useStore.getState();
+  if (!task.repeat || !task.occ) return deleteTask(task.id);
+  openMenu({
+    title: `Удалить «${task.title}»?`,
+    actions: [
+      { label: 'Только этот раз', danger: true, onPress: () => deleteTask(task.id, task.occ) },
+      { label: 'Этот и все следующие', danger: true, onPress: () => endSeries(task.id, prevDay(task.occ!)) },
+      { label: 'Всю серию', danger: true, onPress: () => deleteTask(task.id) },
+    ],
+  });
+}
+
+const prevDay = (iso: string) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+};

@@ -4,12 +4,14 @@
  */
 import { addDays, fromISODate, shortDate, sortKey, toISODate } from './dates';
 import { normTitle } from './dupes';
+import { instance, occurrences, taskKey } from './recur';
 import { CATEGORY_LABEL, type Group, type ID, type PlansQuery, type Task, type User } from './types';
 
 export type PlansAnswer = {
   title: string; // «Сб 3 окт», «Выходные, 3–4 окт», «Когда: «дача»»
   groupNames: string[];
-  sections: { groupId: ID; groupName: string; taskIds: ID[] }[];
+  /** Ключи дел (у повторов — «id@дата», см. taskKey) */
+  sections: { groupId: ID; groupName: string; taskIds: string[] }[];
   from: string;
   to: string;
   singleDay: boolean;
@@ -90,10 +92,12 @@ export function answerPlans(q: PlansQuery, s: State): { ok: true; answer: PlansA
   const sections = r.groups.map((g) => {
     const list = s.tasks
       .filter((t) => t.groupId === g.id && matches(t))
+      // Повторы серии в периоде — как отдельные дела
+      .flatMap((t) => (t.repeat && t.date ? occurrences(t, q.from, q.to).map((o) => instance(t, o)) : [t]))
       // С поиском («когда дача») показываем и дела без даты
       .filter((t) => (t.date ? t.date >= q.from && t.date <= q.to : words.length > 0))
       .sort((a, b) => sortKey(a.date, a.time).localeCompare(sortKey(b.date, b.time)));
-    return { groupId: g.id, groupName: g.name, taskIds: list.map((t) => t.id) };
+    return { groupId: g.id, groupName: g.name, taskIds: list.map(taskKey) };
   });
 
   return {

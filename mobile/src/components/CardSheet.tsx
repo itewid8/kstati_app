@@ -9,12 +9,14 @@ import { plural, type PlansAnswer } from '@/lib/plans';
 import { uid } from '@/lib/ids';
 import { useStore, type Card } from '@/lib/store';
 import { shortDate, taskWhen } from '@/lib/dates';
-import { pastEnd, type ChangeDraft, type DraftItem, type ItemType, type Task } from '@/lib/types';
+import { pastEnd, type ChangeDraft, type DraftItem, type ItemType, type Repeat, type Task } from '@/lib/types';
 import { track } from '@/lib/analytics';
 import { handleTranscript, startRecording, TAB_FOR } from '@/lib/voice';
 import { font, ICON, size, space, useColors } from '@/theme';
 import { ItemEditor, ItemPreview } from './editors';
 import { Sheet } from './Sheet';
+import { editTask } from './TaskRow';
+import { expandTasks, repeatLabel, taskKey } from '@/lib/recur';
 import { Button, Checkbox, Chip, Divider, T, selectionTint } from './ui';
 
 /** Пустой черновик нужного типа — для «+» и для «Не понял → добавить как…» */
@@ -323,10 +325,12 @@ function actionLabel(ch: ChangeDraft): string {
   if (ch.action === 'mark') return MARK_LABEL[ch.type];
   if (ch.action === 'unmark') return 'Снять отметку';
   if (ch.action === 'delete') return 'Удалить';
+  if (ch.patch?.repeat === null) return 'Убрать повтор';
+  if (ch.patch?.repeat) return 'Изменить повтор';
   return ch.patch?.title !== undefined ? 'Переименовать' : 'Перенести';
 }
 
-type Found = { title: string; date: string | null; time: string | null } | null;
+type Found = { title: string; date: string | null; time: string | null; repeat?: Repeat | null } | null;
 
 function useFind() {
   const tasks = useStore((s) => s.tasks);
@@ -335,7 +339,7 @@ function useFind() {
   return (type: ItemType, id: string): Found => {
     if (type === 'task') {
       const t = tasks.find((x) => x.id === id);
-      return t ? { title: t.title, date: t.date, time: t.time } : null;
+      return t ? { title: t.title, date: t.date, time: t.time, repeat: t.repeat ?? null } : null;
     }
     const w = (type === 'wish' ? wishes : watch).find((x) => x.id === id);
     return w ? { title: w.title, date: null, time: null } : null;
@@ -405,6 +409,10 @@ function ChangeView({
     const nt = p.time !== undefined ? p.time : item.time;
     diffs.push({ label: 'Когда', from: taskWhen(item.date, item.time) || 'без даты', to: taskWhen(nd, nt) || 'без даты', mono: true });
   }
+  if (p.repeat !== undefined) {
+    const start = p.date ?? item.date;
+    diffs.push({ label: 'Повтор', from: repeatLabel(item.repeat, item.date), to: repeatLabel(p.repeat, start) });
+  }
 
   return (
     <View style={[styles.pad, styles.item]}>
@@ -465,7 +473,8 @@ function Plans({ card }: { card: Extract<Card, { plans: PlansAnswer }> }) {
   const tasks = useStore((s) => s.tasks);
   const { setCard, toggleTask, selectGroup, setCalendarDate, setTasksView } = useStore.getState();
   const a = card.plans;
-  const byId = new Map(tasks.map((t) => [t.id, t]));
+  // Повторы серий разворачиваем на период ответа — чтобы найти их по ключу «id@дата»
+  const byId = new Map([...tasks, ...expandTasks(tasks.filter((t) => t.repeat), a.from, a.to)].map((t) => [taskKey(t), t]));
   const sections = a.sections.map((sec) => ({ ...sec, tasks: sec.taskIds.map((id) => byId.get(id)).filter((t): t is Task => !!t) }));
   const open = sections.reduce((n, sec) => n + sec.tasks.filter((t) => !t.doneAt).length, 0);
   const multi = sections.length > 1;
@@ -478,12 +487,7 @@ function Plans({ card }: { card: Extract<Card, { plans: PlansAnswer }> }) {
     router.navigate('/tasks');
   };
 
-  const edit = (t: Task) =>
-    setCard({
-      source: 'edit',
-      editing: true,
-      items: [{ key: t.id, id: t.id, type: 'task', data: { title: t.title, date: t.date, time: t.time, note: t.note ?? '' } }],
-    });
+  const edit = (t: Task) => editTask(t.id);
 
   return (
     <View>
@@ -506,10 +510,10 @@ function Plans({ card }: { card: Extract<Card, { plans: PlansAnswer }> }) {
               </T>
             )}
             {sec.tasks.map((t, i) => (
-              <View key={t.id}>
+              <View key={taskKey(t)}>
                 {i > 0 && <Divider inset={space.side + 36} />}
                 <Pressable onPress={() => edit(t)} style={({ pressed }) => [styles.planRow, { backgroundColor: pressed ? c.background : 'transparent' }]}>
-                  <Checkbox checked={!!t.doneAt} onPress={() => toggleTask(t.id)} />
+                  <Checkbox checked={!!t.doneAt} onPress={() => toggleTask(t.id, t.occ)} />
                   <T numberOfLines={2} muted={!!t.doneAt} style={[{ flex: 1 }, t.doneAt ? { textDecorationLine: 'line-through' } : null]}>
                     {t.title}
                   </T>

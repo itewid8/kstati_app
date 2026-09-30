@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { buildMessages } from './prompt.js';
+import { changesRepeat, firstDate, spokenRepeat, stopsRepeat, stripRepeat } from './repeat.js';
 import { changeTarget, hasChangeVerb, isUnmark, nearestWeekday, plainWeekday, spokenKind, spokenPeriod, spokenTime } from './spoken.js';
 import { addUsage, complete, NO_USAGE, type Usage } from './yandex.js';
 import {
@@ -70,6 +71,20 @@ function matchPerson(name: string, ctx: Context): string | null {
   return all.find((p) => stem(p.name) === stem(n) || n.startsWith(stem(p.name)))?.id ?? null;
 }
 
+/** Дело из списка по названию во фразе: «баню» → «Баня» (по основе первого значимого слова) */
+function findTask(text: string, ctx: Context) {
+  const n = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
+  const words = n(text)
+    .split(/[^а-яa-z0-9]+/)
+    .filter((w) => w.length >= 3 && !/^(теперь|больше|каждое|каждую|каждый|каждые|повторяй|повторять|сделай|пусть|будет)$/.test(w));
+  for (const w of words) {
+    const stem = w.slice(0, Math.max(3, w.length - 2));
+    const hit = ctx.existing.tasks.find((t) => n(t.title).split(/[^а-яa-z0-9]+/).some((x) => x.startsWith(stem)));
+    if (hit) return hit;
+  }
+  return null;
+}
+
 /* ---------- сборка результата ---------- */
 
 export function normalize(input: RawAction[], ctx: Context, transcript: string): ParseResult {
@@ -111,10 +126,22 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     return { type: 'queryPlans', plans: { scope, from, to, query: str(qp2.query) } };
   }
 
+  // «Баню теперь каждое воскресенье», «больше не повторяй зарядку» — правка повтора существующего дела,
+  // даже если модель решила, что это новое дело
+  if (changesRepeat(transcript)) {
+    actions = actions.map((a) => {
+      // «Больше не повторяй ужин» — это не удаление дела, а снятие повтора
+      if (a.intent === 'delete' && stopsRepeat(transcript)) return { ...a, intent: 'update' };
+      if (a.intent !== 'add' || (a.type && a.type !== 'task')) return a;
+      const t = findTask(str(a.title) || transcript, ctx);
+      return t ? ({ intent: 'update', target: [t.id], query: t.title } as RawAction) : a;
+    });
+  }
+
   // Модель иногда принимает «Через две недели забрать документы» за перенос похожей записи,
   // а «Сохрани фильм Интерстеллар» — за отметку «посмотрели».
   // Без глагола изменения («перенеси», «удали», «отметь»…) это всегда добавление; дубль покажет приложение.
-  if (!hasChangeVerb(transcript)) {
+  if (!hasChangeVerb(transcript) && !changesRepeat(transcript)) {
     actions = actions.map((a) => {
       if (!['update', 'mark', 'unmark'].includes(a.intent)) return a;
       const id = (Array.isArray(a.target) ? a.target : []).map((x) => String(x).replace(/^(task|watch|wish):/, ''))[0];
@@ -164,6 +191,13 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     if (said && said.from === said.to) d.date = said.from;
     // «На выходных» — если модель дала дату вне периода, берём его начало
     else if (said && (!d.date || d.date < said.from || d.date > said.to) && addDaysIso(said.from, 1) >= said.to) d.date = said.from;
+    // Повтор («каждую субботу», «по будням») считаем сами; первый раз — ближайший подходящий день
+    const rep = spokenRepeat(transcript, ctx.today);
+    if (rep) {
+      d.repeat = rep;
+      d.date = firstDate(rep, d.date, ctx.today);
+      d.title = stripRepeat(d.title);
+    }
   }
   // Одна запись в «Смотреть» — тип по слову во фразе («фильм», «сериал», «мультик»), если модель его не дала
   const watches = items.filter((i) => i.type === 'watch');
@@ -210,6 +244,18 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
         else if (saidDate && saidDate.from === saidDate.to) patch.date = saidDate.from;
         // Модель вернула «перенос» без изменений по сути — убираем поля, совпадающие со старыми
         if (old && patch.time === old.time && said === null && !('date' in a)) delete patch.time;
+        // Повтор: «теперь каждое воскресенье» — новый; «больше не повторяй» — снять
+        if (stopsRepeat(transcript)) {
+          patch.repeat = null;
+          delete patch.date;
+        } else {
+          const rep = spokenRepeat(transcript, ctx.today);
+          if (rep) {
+            patch.repeat = rep;
+            // Первый раз новой серии — ближайший подходящий день (не раньше сегодня)
+            patch.date = firstDate(rep, patch.date ?? null, ctx.today);
+          }
+        }
       }
       if (!Object.keys(patch).length) continue;
       change.patch = patch;

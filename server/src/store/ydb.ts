@@ -7,10 +7,11 @@
  *   members  userId (S) + groupId (S) — в каких группах человек
  *   items    groupId (S) + id (S)     — дела и «Смотреть» группы
  *   wishes   ownerId (S) + id (S)     — хотелки человека
+ *   activity scope (S) + id (S)       — лента активности (id = «время#случайное»), срок жизни — exp
  * Сам объект лежит в атрибуте v (JSON-строка), счётчик — в n, срок жизни временной записи — в exp.
  */
 import { signV4 } from '../sigv4.js';
-import type { Group, Item, Store, User, Wish } from './types.js';
+import type { Activity, Group, Item, Store, User, Wish } from './types.js';
 
 type AV = { S?: string; N?: string };
 type Row = Record<string, AV>;
@@ -31,12 +32,12 @@ const S = (s: string): AV => ({ S: s });
 const chunk = <T>(xs: T[], n: number) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 
 export class YdbStore implements Store {
-  private t: { kv: string; members: string; items: string; wishes: string };
+  private t: { kv: string; members: string; items: string; wishes: string; activity: string };
 
   constructor(private cfg: YdbConfig) {
     // Имена таблиц: не короче 3 символов (требование Document API), поэтому с приставкой: kstati_kv, kstati_items…
     const p = cfg.prefix ?? 'kstati_';
-    this.t = { kv: `${p}kv`, members: `${p}members`, items: `${p}items`, wishes: `${p}wishes` };
+    this.t = { kv: `${p}kv`, members: `${p}members`, items: `${p}items`, wishes: `${p}wishes`, activity: `${p}activity` };
   }
 
   /** Один вызов Document API: Target — имя операции DynamoDB (PutItem, Query…) */
@@ -219,6 +220,26 @@ export class YdbStore implements Store {
     await this.call('DeleteItem', { TableName: this.t.wishes, Key: { ownerId: S(ownerId), id: S(id) } });
   }
 
+  /* ---------- лента активности ---------- */
+
+  async addActivity(a: Activity) {
+    await this.call('PutItem', {
+      TableName: this.t.activity,
+      Item: { scope: S(a.scope), id: S(a.id), v: S(JSON.stringify(a)), exp: { N: String(Math.floor(Date.now() / 1000) + 45 * 86400) } },
+    });
+  }
+  async listActivity(scope: string, since: string, limit: number) {
+    const r = await this.call<{ Items?: Row[] }>('Query', {
+      TableName: this.t.activity,
+      KeyConditionExpression: '#p = :p AND #r > :s',
+      ExpressionAttributeNames: { '#p': 'scope', '#r': 'id' },
+      ExpressionAttributeValues: { ':p': S(scope), ':s': S(since) },
+      ScanIndexForward: false,
+      Limit: limit,
+    });
+    return (r.Items ?? []).map((row) => JSON.parse(row.v.S!) as Activity);
+  }
+
   /* ---------- счётчики ---------- */
 
   async incr(counter: string) {
@@ -277,6 +298,7 @@ export class YdbStore implements Store {
       [this.t.members, ['userId', 'groupId']],
       [this.t.items, ['groupId', 'id']],
       [this.t.wishes, ['ownerId', 'id']],
+      [this.t.activity, ['scope', 'id']],
     ];
     for (const [name, [hash, range]] of specs) {
       if (have.has(name)) {

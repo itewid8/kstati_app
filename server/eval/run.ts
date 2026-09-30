@@ -109,6 +109,25 @@ const plans = (scope: Record<string, unknown>, from: string, to: string, query =
   if (query && !p.query.toLowerCase().includes(query)) return `query «${p.query}»`;
   return true;
 };
+/** Дело с повтором: название, первая дата, время и правило (частично: freq, weekdays…) */
+const repeating = (title: RegExp, d: string, t: string | null, r: Record<string, unknown>): Check => (res) => {
+  const base = task(title, d, t)(res);
+  if (base !== true) return base;
+  const x = (res as Extract<ParseResult, { type: 'items' }>).items[0].data as { repeat?: Record<string, unknown> | null };
+  if (!x.repeat) return 'нет повтора';
+  for (const [k, v] of Object.entries(r)) if (JSON.stringify(x.repeat[k]) !== JSON.stringify(v)) return `repeat.${k}=${JSON.stringify(x.repeat[k])}, нужно ${JSON.stringify(v)}`;
+  return true;
+};
+const repeatChange = (id: string, r: Record<string, unknown> | null): Check => (res) => {
+  if (res.type !== 'changes') return `ожидалось изменение, получено ${res.type}`;
+  const c = res.changes[0];
+  if (c.chosen !== id) return `запись ${c.chosen}, нужна ${id}`;
+  const got = (c.patch as any)?.repeat;
+  if (r === null) return got === null ? true : `repeat=${JSON.stringify(got)}, нужно null`;
+  if (!got) return 'нет повтора в правке';
+  for (const [k, v] of Object.entries(r)) if (JSON.stringify(got[k]) !== JSON.stringify(v)) return `repeat.${k}=${JSON.stringify(got[k])}, нужно ${JSON.stringify(v)}`;
+  return true;
+};
 const is = (type: ParseResult['type']): Check => (r) => (r.type === type ? true : `получено ${r.type}`);
 
 const CASES: [string, Check][] = [
@@ -147,6 +166,16 @@ const CASES: [string, Check][] = [
   ['Переименуй лампочки в купить лампочки и батарейки', change('update', 't7')],
   ['Верни посылку в невыполненные', change('unmark', 't2')],
   ['Удали слона', is('notFound')],
+  // Повторы
+  ['Баня каждую субботу', repeating(/^баня$/i, '2026-09-26', null, { freq: 'week', weekdays: [6] })],
+  ['Каждую субботу в три баня', repeating(/^баня$/i, '2026-09-26', '15:00', { freq: 'week', weekdays: [6] })],
+  ['По будням зарядка в 8 утра', repeating(/зарядк/i, '2026-09-25', '08:00', { freq: 'week', weekdays: [1, 2, 3, 4, 5] })],
+  ['Каждый день пить витамины', repeating(/витамин/i, '2026-09-25', null, { freq: 'day', every: 1 })],
+  ['Раз в две недели по средам уборка', repeating(/уборк/i, '2026-09-30', null, { freq: 'week', every: 2, weekdays: [3] })],
+  ['Оплатить интернет каждое 20 число', repeating(/интернет/i, '2026-10-20', null, { freq: 'month', monthDays: [20] })],
+  ['Каждый год 8 марта поздравить маму', repeating(/поздрав/i, '2027-03-08', null, { freq: 'year', months: [3], monthDays: [8] })],
+  ['Ужин у родителей теперь каждое воскресенье', repeatChange('t3', { freq: 'week', weekdays: [7] })],
+  ['Больше не повторяй ужин у родителей', repeatChange('t3', null)],
   // Вопросы о планах
   ['Какие у нас с Кариной планы на следующую субботу?', plans({ kind: 'people', names: ['карина'] }, '2026-10-03', '2026-10-03')],
   ['Какие у наших друзей планы на выходные?', plans({ kind: 'category', category: 'friends' }, '2026-09-26', '2026-09-27')],

@@ -44,6 +44,12 @@ export type Task = {
   note?: string;
   createdBy: string;
   doneAt: string | null;
+  /** Повтор (формат — mobile/src/lib/types.ts, Repeat) */
+  repeat?: { freq: 'day' | 'week' | 'month' | 'year'; every: number; weekdays?: number[]; monthDays?: number[]; months?: number[]; until?: string | null; count?: number | null } | null;
+  doneDates?: string[];
+  skipDates?: string[];
+  /** Общие напоминания для всех участников */
+  reminders?: string[] | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -74,6 +80,46 @@ export type Wish = {
   receivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/** Что произошло — для ленты активности */
+export type ActivityKind =
+  | 'task.add'
+  | 'task.done'
+  | 'task.undone'
+  | 'task.edit'
+  | 'task.delete'
+  | 'watch.add'
+  | 'watch.done'
+  | 'watch.delete'
+  | 'wish.add'
+  | 'wish.done'
+  | 'wish.delete'
+  | 'member.join'
+  | 'member.leave'
+  | 'member.remove'
+  | 'group.rename';
+
+/**
+ * Запись ленты. scope — чья лента: id группы (дела, «Смотреть», участники) или «u:<id>» (хотелки человека).
+ * id — «время#случайное»: по нему записи идут по порядку.
+ */
+export type Activity = {
+  scope: string;
+  id: string;
+  at: string;
+  actor: string;
+  kind: ActivityKind;
+  groupId?: string;
+  itemId?: string;
+  title?: string;
+  /** Дата и время дела; у отметки повтора — дата этого раза */
+  date?: string | null;
+  time?: string | null;
+  /** Что поменяли: title, date, time, note, repeat, reminders */
+  fields?: string[];
+  /** Кого исключили */
+  target?: string;
 };
 
 /**
@@ -116,6 +162,10 @@ export interface Store {
   getCounters(counters: string[]): Promise<Record<string, number>>;
   /** +1, если значение меньше limit. null — лимит исчерпан */
   incrUpTo(counter: string, limit: number): Promise<number | null>;
+
+  /** Лента активности: добавить запись и прочитать новые (свежие первыми) */
+  addActivity(a: Activity): Promise<void>;
+  listActivity(scope: string, since: string, limit: number): Promise<Activity[]>;
 
   /** Временные записи: коды из писем, состояния входа VK. ttl — секунды */
   putTemp(key: string, value: unknown, ttlSec: number): Promise<void>;

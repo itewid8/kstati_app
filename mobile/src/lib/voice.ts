@@ -59,6 +59,35 @@ export async function startRecording() {
   autoStop = setTimeout(stopRecording, MAX_MS);
 }
 
+/* ---------- Режим «удерживать»: запись, пока палец на кнопке ---------- */
+
+let released = false;
+
+export async function holdStart() {
+  released = false;
+  await startRecording();
+  // Отпустили раньше, чем микрофон успел включиться
+  if (released) holdEnd();
+}
+
+export function holdEnd() {
+  released = true;
+  if (useStore.getState().voice !== 'recording') return;
+  // Короткое касание — не запись, а подсказка, как пользоваться кнопкой
+  if (Date.now() - startedAt < MIN_MS) return cancelRecording('Удерживайте кнопку, пока говорите');
+  stopRecording();
+}
+
+async function cancelRecording(hint: string) {
+  if (autoStop) clearTimeout(autoStop);
+  autoStop = null;
+  const s = useStore.getState();
+  s.setVoice('processing');
+  if (useRealMic()) await recorder!.stop().catch(() => null);
+  useStore.getState().setVoice('idle');
+  useStore.getState().setCard({ source: 'voice', transcript: '', problem: 'info', query: hint });
+}
+
 export async function stopRecording() {
   const s = useStore.getState();
   if (s.voice !== 'recording') return;

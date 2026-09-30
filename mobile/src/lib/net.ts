@@ -3,6 +3,7 @@
  * Ошибки: ApiError — сервер ответил отказом (status, code, message); NetError — нет связи.
  */
 import { API_URL } from './config';
+import type { Repeat } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -56,7 +57,19 @@ export async function request<T = any>(
 
 /* ---------- операции изменения данных (POST /ops) ---------- */
 
-type TaskOp = { id: string; groupId: string; title: string; date: string | null; time: string | null; note?: string; doneAt: string | null };
+type TaskOp = {
+  id: string;
+  groupId: string;
+  title: string;
+  date: string | null;
+  time: string | null;
+  note?: string;
+  doneAt: string | null;
+  repeat: Repeat | null;
+  doneDates: string[];
+  skipDates: string[];
+  reminders: string[] | null;
+};
 type WatchOp = {
   id: string;
   groupId: string;

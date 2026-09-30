@@ -224,6 +224,9 @@ export const Field = forwardRef<TextInput, TextInputProps & { label?: string }>(
   );
 });
 
+/** Единый вид полей для кодов (из письма, приглашения): моноширинный шрифт, лёгкая разрядка */
+export const codeFieldStyle: TextStyle = { fontFamily: font.mono, letterSpacing: 1 };
+
 /* ---------- Разделитель и строка ---------- */
 
 export function Divider({ inset = 0 }: { inset?: number }) {

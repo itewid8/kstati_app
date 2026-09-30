@@ -18,6 +18,9 @@ export const pastEnd = (u?: Pick<User, 'gender'> | null) => (u?.gender === 'f' ?
 
 export type ThemePref = 'system' | 'light' | 'dark';
 
+/** Кнопка микрофона: tap — нажать, чтобы начать, и ещё раз, чтобы закончить; hold — записывать, пока палец на кнопке */
+export type MicMode = 'tap' | 'hold';
+
 export const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
 
 /** Категория группы: по ней ассистент понимает «мы», «наши друзья», «родители» */
@@ -55,7 +58,34 @@ export const canRemoveMember = (g: Group, userId: ID, targetId: ID) => {
   return g.adminIds.includes(userId) && !g.adminIds.includes(targetId);
 };
 
+/** Старые правила напоминаний (до версии 2 хранилища) — нужны только для переноса настроек */
 export type ReminderRule = 'week' | 'days3' | 'dayBefore' | 'sameDay' | 'h1' | 'h2' | 'h3' | 'h6';
+
+/**
+ * Одно напоминание — короткая строка (так проще хранить и проверять на сервере):
+ *   m90        — за 90 минут до начала (только для дел со временем; m0 — в момент начала)
+ *   d1@20:00   — за 1 день, в 20:00 (d0@09:00 — в день события в 09:00)
+ *   M1@20:00   — за 1 месяц, в 20:00
+ */
+export type ReminderSpec = string;
+
+/**
+ * Повтор дела. Первый раз — дата дела (task.date), дальше по правилу.
+ *   day   — каждые every дней
+ *   week  — каждые every недель, по дням weekdays (1 = пн … 7 = вс; нет — день недели первой даты)
+ *   month — каждые every месяцев, по числам monthDays (-1 = последний день; нет — число первой даты)
+ *   year  — каждые every лет, в месяцы months (1…12) по числам monthDays
+ * Конец: until (включительно) или count повторов; нет обоих — бессрочно.
+ */
+export type Repeat = {
+  freq: 'day' | 'week' | 'month' | 'year';
+  every: number;
+  weekdays?: number[];
+  monthDays?: number[];
+  months?: number[];
+  until?: string | null;
+  count?: number | null;
+};
 
 export type Task = {
   id: ID;
@@ -68,10 +98,20 @@ export type Task = {
   createdBy: ID;
   doneAt: string | null;
   createdAt: string;
+  /** Повтор; у повторяющегося дела doneAt не используется — отмечаются отдельные разы */
+  repeat?: Repeat | null;
+  /** Даты повторов, отмеченных «сделано» */
+  doneDates?: string[];
+  /** Даты повторов, удалённых по одному («только этот раз») */
+  skipDates?: string[];
+  /** Общие напоминания для всех участников группы; null/нет — у каждого свои настройки по умолчанию */
+  reminders?: ReminderSpec[] | null;
+  /** Только в приложении: дата конкретного повтора, если это «развёрнутый» повтор серии */
+  occ?: string;
 };
 
-/** Личное правило для дела: undefined — как обычно, [] — не напоминать */
-export type TaskReminderOverride = ReminderRule[];
+/** Личные напоминания для дела (только мои): undefined — как у всех, [] — не напоминать */
+export type TaskReminderOverride = ReminderSpec[];
 
 export type Wish = {
   id: ID;
@@ -122,11 +162,11 @@ export type WatchFilters = {
 
 export const emptyFilters: WatchFilters = { kind: [], genre: [], origin: [], fresh: [] };
 
+/** Напоминания по умолчанию: отдельно для дел со временем и на весь день (как в Google Календаре) */
 export type ReminderSettings = {
   enabled: boolean;
-  rules: ReminderRule[];
-  dayTime: string; // для «за неделю», «за 3 дня», «накануне»
-  sameDayTime: string; // «в день события»
+  timed: ReminderSpec[];
+  allDay: ReminderSpec[];
 };
 
 export const KIND_LABEL: Record<Kind, string> = {
@@ -153,21 +193,53 @@ export const GENRE_LABEL: Record<Genre, string> = {
 export const ORIGIN_LABEL: Record<Origin, string> = { ru: 'наше', foreign: 'зарубежное' };
 export const FRESH_LABEL: Record<Freshness, string> = { new: 'новое', old: 'не новое' };
 
-export const RULE_LABEL: Record<ReminderRule, string> = {
-  week: 'За неделю',
-  days3: 'За 3 дня',
-  dayBefore: 'Накануне',
-  sameDay: 'В день события',
-  h1: 'За 1 час',
-  h2: 'За 2 часа',
-  h3: 'За 3 часа',
-  h6: 'За 6 часов',
+
+/** Запись ленты активности (приходит с сервера, GET /activity) */
+export type ActivityKind =
+  | 'task.add'
+  | 'task.done'
+  | 'task.undone'
+  | 'task.edit'
+  | 'task.delete'
+  | 'watch.add'
+  | 'watch.done'
+  | 'watch.delete'
+  | 'wish.add'
+  | 'wish.done'
+  | 'wish.delete'
+  | 'member.join'
+  | 'member.leave'
+  | 'member.remove'
+  | 'group.rename';
+
+export type Activity = {
+  scope: string;
+  /** «время#случайное» — по нему порядок и «что уже видели» */
+  id: string;
+  at: string;
+  actor: ID;
+  kind: ActivityKind;
+  groupId?: ID;
+  itemId?: ID;
+  title?: string;
+  date?: string | null;
+  time?: string | null;
+  fields?: string[];
+  target?: ID;
 };
 
-export const ALL_RULES: ReminderRule[] = ['week', 'days3', 'dayBefore', 'sameDay', 'h1', 'h2', 'h3', 'h6'];
-
 /* Черновики для карточки подтверждения */
-export type TaskDraft = { title: string; date: string | null; time: string | null; note?: string; reminder?: TaskReminderOverride };
+export type TaskDraft = {
+  title: string;
+  date: string | null;
+  time: string | null;
+  note?: string;
+  repeat?: Repeat | null;
+  /** Мои личные напоминания (undefined — как у всех) */
+  mine?: TaskReminderOverride;
+  /** Общие напоминания группы (null — у каждого свои по умолчанию) */
+  shared?: ReminderSpec[] | null;
+};
 export type WishDraft = { title: string; note: string; link: string };
 export type WatchDraft = {
   title: string;

@@ -12,7 +12,7 @@ import { randomInt } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
-import { grev, publicUser, urev, type Group, type Item, type Store, type User, type Wish } from './store/index.js';
+import { grev, publicUser, urev, type Activity, type Group, type Item, type Store, type Task, type User, type Wish } from './store/index.js';
 import { CATEGORIES } from './types.js';
 
 const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
@@ -32,6 +32,20 @@ const Date10 = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
 const Time5 = z.string().regex(/^\d{2}:\d{2}$/).nullable();
 const Stamp = z.string().max(40).nullable();
 
+const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+/** Повтор дела — см. mobile/src/lib/types.ts (Repeat) */
+const RepeatIn = z.object({
+  freq: z.enum(['day', 'week', 'month', 'year']),
+  every: z.number().int().min(1).max(99),
+  weekdays: z.array(z.number().int().min(1).max(7)).max(7).optional(),
+  monthDays: z.array(z.number().int().min(-1).max(31)).max(32).optional(),
+  months: z.array(z.number().int().min(1).max(12)).max(12).optional(),
+  until: Day.nullable().optional(),
+  count: z.number().int().min(1).max(999).nullable().optional(),
+});
+/** Напоминание: «m90», «d1@20:00», «M1@20:00» */
+const Spec = z.string().regex(/^(m\d{1,4}|[dM]\d{1,3}@\d{2}:\d{2})$/);
+
 const TaskIn = z.object({
   id: Id,
   groupId: Id,
@@ -40,6 +54,10 @@ const TaskIn = z.object({
   time: Time5,
   note: z.string().max(2000).optional(),
   doneAt: Stamp,
+  repeat: RepeatIn.nullable().optional(),
+  doneDates: z.array(Day).max(400).optional(),
+  skipDates: z.array(Day).max(400).optional(),
+  reminders: z.array(Spec).max(10).nullable().optional(),
 });
 const WatchIn = z.object({
   id: Id,
@@ -80,8 +98,55 @@ const Op = z.discriminatedUnion('op', [
 ]);
 export type OpIn = z.infer<typeof Op>;
 
+/** Какие поля дела поменялись (для ленты: «изменил(а) дату») */
+function taskChanges(a: Task, b: Task): string[] {
+  const norm = (t: Task) => ({
+    title: t.title,
+    date: t.date ?? null,
+    time: t.time ?? null,
+    note: t.note ?? '',
+    repeat: JSON.stringify(t.repeat ?? null),
+    reminders: JSON.stringify(t.reminders ?? null),
+  });
+  const x = norm(a);
+  const y = norm(b);
+  return (Object.keys(x) as (keyof typeof x)[]).filter((k) => x[k] !== y[k]);
+}
+
 export class Data {
   constructor(private store: Store) {}
+
+  /** Запись в ленту активности. Ошибка ленты не должна ломать саму правку */
+  private async log(user: User, a: Omit<Activity, 'id' | 'at' | 'actor'>) {
+    try {
+      const at = new Date().toISOString();
+      await this.store.addActivity({ ...a, actor: user.id, at, id: `${at}#${randomInt(1_000_000).toString(36)}` });
+    } catch (e) {
+      console.warn('Лента активности:', (e as Error).message);
+    }
+  }
+
+  /** Лента для человека: события в его группах и хотелки соучастников. Свои действия не показываем */
+  async activity(user: User, since: string) {
+    const s = this.store;
+    const groups = (await s.getGroups(await s.listMemberships(user.id))).filter((g) => g.memberIds.includes(user.id));
+    const people = [...new Set(groups.flatMap((g) => g.memberIds))].filter((id) => id !== user.id);
+    const scopes = [...groups.map((g) => g.id), ...people.map((id) => `u:${id}`)];
+    const lists = await Promise.all(
+      scopes.map((sc) =>
+        s.listActivity(sc, since, 60).catch((e) => {
+          console.warn('Лента активности:', (e as Error).message);
+          return [] as Activity[];
+        }),
+      ),
+    );
+    const events = lists
+      .flat()
+      .filter((a) => a.actor !== user.id)
+      .sort((a, b) => b.id.localeCompare(a.id))
+      .slice(0, 150);
+    return { events };
+  }
 
   private async memberGroup(user: User, groupId: string): Promise<Group> {
     const g = await this.store.getGroup(groupId);
@@ -148,6 +213,22 @@ export class Data {
         };
         await s.putItem(task);
         await s.incr(grev(op.task.groupId));
+        const base = { scope: task.groupId, groupId: task.groupId, itemId: task.id, title: task.title, date: task.date, time: task.time };
+        if (!old || old.type !== 'task') await this.log(user, { ...base, kind: 'task.add' });
+        else {
+          const t = task as Task;
+          if (!old.doneAt && t.doneAt) await this.log(user, { ...base, kind: 'task.done' });
+          if (old.doneAt && !t.doneAt) await this.log(user, { ...base, kind: 'task.undone' });
+          // Повторы: отметки отдельных раз и удаление одного раза
+          const had = new Set(old.doneDates ?? []);
+          const has = new Set(t.doneDates ?? []);
+          for (const d of has) if (!had.has(d)) await this.log(user, { ...base, date: d, kind: 'task.done' });
+          for (const d of had) if (!has.has(d) && d >= new Date(Date.now() - 86400000 * 7).toISOString().slice(0, 10)) await this.log(user, { ...base, date: d, kind: 'task.undone' });
+          const skipped = (t.skipDates ?? []).filter((d) => !(old.skipDates ?? []).includes(d));
+          for (const d of skipped) await this.log(user, { ...base, date: d, kind: 'task.delete', fields: ['occurrence'] });
+          const fields = taskChanges(old, t);
+          if (fields.length) await this.log(user, { ...base, kind: 'task.edit', fields });
+        }
         return {};
       }
       case 'watch.put': {
@@ -163,12 +244,25 @@ export class Data {
         };
         await s.putItem(item);
         await s.incr(grev(op.watch.groupId));
+        const base = { scope: item.groupId, groupId: item.groupId, itemId: item.id, title: item.title };
+        if (!old) await this.log(user, { ...base, kind: 'watch.add' });
+        else if (old.type === 'watch' && !old.watchedAt && op.watch.watchedAt) await this.log(user, { ...base, kind: 'watch.done' });
         return {};
       }
       case 'item.delete': {
         await this.memberGroup(user, op.groupId);
+        const old = await s.getItem(op.groupId, op.id);
         await s.deleteItem(op.groupId, op.id);
         await s.incr(grev(op.groupId));
+        if (old)
+          await this.log(user, {
+            scope: op.groupId,
+            groupId: op.groupId,
+            itemId: op.id,
+            title: old.title,
+            kind: old.type === 'task' ? 'task.delete' : 'watch.delete',
+            ...(old.type === 'task' && { date: old.date, time: old.time }),
+          });
         return {};
       }
       case 'wish.put': {
@@ -176,11 +270,16 @@ export class Data {
         const w: Wish = { ...op.wish, ownerId: user.id, createdAt: old?.createdAt ?? now, updatedAt: now };
         await s.putWish(w);
         await s.incr(urev(user.id));
+        const base = { scope: `u:${user.id}`, itemId: w.id, title: w.title };
+        if (!old) await this.log(user, { ...base, kind: 'wish.add' });
+        else if (!old.receivedAt && w.receivedAt) await this.log(user, { ...base, kind: 'wish.done' });
         return {};
       }
       case 'wish.delete': {
+        const old = await s.getWish(user.id, op.id);
         await s.deleteWish(user.id, op.id);
         await s.incr(urev(user.id));
+        if (old) await this.log(user, { scope: `u:${user.id}`, itemId: op.id, title: old.title, kind: 'wish.delete' });
         return {};
       }
       case 'group.create': {
@@ -207,10 +306,12 @@ export class Data {
       case 'group.update': {
         const g = await this.memberGroup(user, op.id);
         if (!canManage(g, user.id)) throw new HttpError(403, 'forbidden', 'Менять группу могут создатель и админы');
+        const renamed = !!op.name && op.name !== g.name;
         if (op.name) g.name = op.name;
         if (op.category) g.category = op.category as Group['category'];
         await s.putGroup(g);
         await s.incr(grev(g.id));
+        if (renamed) await this.log(user, { scope: g.id, groupId: g.id, title: g.name, kind: 'group.rename' });
         return {};
       }
       case 'group.join': {
@@ -223,12 +324,16 @@ export class Data {
           await s.putGroup(g);
           await s.addMembership(user.id, g.id);
           await s.incr(grev(g.id));
+          await this.log(user, { scope: g.id, groupId: g.id, kind: 'member.join' });
         }
         return { group: groupView(g, user.id) };
       }
       case 'group.leave': {
         const g = await s.getGroup(op.id);
-        if (g?.memberIds.includes(user.id)) await this.dropMember(g, user.id, false);
+        if (g?.memberIds.includes(user.id)) {
+          await this.dropMember(g, user.id, false);
+          if (g.memberIds.length) await this.log(user, { scope: g.id, groupId: g.id, kind: 'member.leave' });
+        }
         else await s.removeMembership(user.id, op.id);
         return {};
       }
@@ -247,6 +352,7 @@ export class Data {
         if (!g.memberIds.includes(op.userId)) return {};
         if (!canRemove(g, user.id, op.userId)) throw new HttpError(403, 'forbidden', 'Нет прав исключить этого участника');
         await this.dropMember(g, op.userId, true, true);
+        await this.log(user, { scope: g.id, groupId: g.id, kind: 'member.remove', target: op.userId });
         return {};
       }
       case 'profile': {
@@ -331,6 +437,15 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
       .object({ groups: z.record(z.number()).default({}), owners: z.record(z.number()).default({}) })
       .parse(req.body ?? {});
     return data.sync(user, known);
+  });
+
+  /** Лента активности: что сделали другие за последние 30 дней (или с since) */
+  app.get('/activity', async (req) => {
+    const user = await requireUser(req, store);
+    const q = z.object({ since: z.string().max(40).optional() }).parse(req.query ?? {});
+    const floor = new Date(Date.now() - 30 * 86400000).toISOString();
+    const since = q.since && q.since > floor ? q.since : floor;
+    return data.activity(user, since);
   });
 
   /** Пачка изменений. Ошибка одной операции не мешает остальным */

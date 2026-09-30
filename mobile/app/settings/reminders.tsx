@@ -1,33 +1,27 @@
-import { Check } from '@/components/icons';
-import React, { useState } from 'react';
+import React from 'react';
 import { Platform, ScrollView, Switch, View } from 'react-native';
-import { TimePanel } from '@/components/pickers';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackHeader } from '@/components/Header';
+import { ReminderEditor } from '@/components/ReminderEditor';
 import { Divider, ListRow, SectionLabel, T } from '@/components/ui';
 import { useStore } from '@/lib/store';
-import { ALL_RULES, RULE_LABEL, type ReminderRule } from '@/lib/types';
-import { ICON, space, useColors } from '@/theme';
+import { space, useColors } from '@/theme';
 
+/**
+ * Напоминания по умолчанию — отдельно для дел со временем и для дел на весь день (как в Google Календаре).
+ * Они действуют для новых и старых дел, пока в карточке дела не выбрано своё.
+ */
 export default function Reminders() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const r = useStore((s) => s.reminders);
   const setReminders = useStore((s) => s.setReminders);
-  // Какое время сейчас выбирается — панель раскрывается под строкой
-  const [picking, setPicking] = useState<'dayTime' | 'sameDayTime' | null>(null);
-
-  const toggle = (rule: ReminderRule) =>
-    setReminders({ rules: r.rules.includes(rule) ? r.rules.filter((x) => x !== rule) : ALL_RULES.filter((x) => x === rule || r.rules.includes(x)) });
-
-  const pickTime = (key: 'dayTime' | 'sameDayTime') => setPicking(picking === key ? null : key);
-
   const disabled = !r.enabled;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <BackHeader title="Напоминания" />
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled">
         <Divider />
         <ListRow
           label="Напоминания включены"
@@ -44,44 +38,27 @@ export default function Reminders() {
         <Divider />
 
         <View style={{ opacity: disabled ? 0.4 : 1 }} pointerEvents={disabled ? 'none' : 'auto'}>
-          <SectionLabel>Когда напоминать</SectionLabel>
-          <Divider />
-          {ALL_RULES.map((rule, i) => (
-            <View key={rule}>
-              {i > 0 && <Divider inset={space.side} />}
-              <ListRow
-                label={RULE_LABEL[rule]}
-                onPress={() => toggle(rule)}
-                right={r.rules.includes(rule) ? <Check size={ICON.size} strokeWidth={ICON.stroke} color={c.text} /> : <View style={{ width: ICON.size }} />}
-              />
-            </View>
-          ))}
-          <Divider />
+          <SectionLabel>Дела со временем</SectionLabel>
+          <View style={{ paddingHorizontal: space.side }}>
+            <T variant="label" muted>
+              Например, «Ужин у родителей» в сб 19:00
+            </T>
+            <ReminderEditor value={r.timed} onChange={(timed) => setReminders({ timed })} timed />
+          </View>
 
-          <SectionLabel>Время</SectionLabel>
-          <Divider />
-          <ListRow label="За неделю, за 3 дня, накануне" value={r.dayTime} mono onPress={() => pickTime('dayTime')} />
-          {picking === 'dayTime' && <TimeBox value={r.dayTime} onPick={(v, done) => { setReminders({ dayTime: v }); if (done) setPicking(null); }} />}
-          <Divider inset={space.side} />
-          <ListRow label="В день события" value={r.sameDayTime} mono onPress={() => pickTime('sameDayTime')} />
-          {picking === 'sameDayTime' && (
-            <TimeBox value={r.sameDayTime} onPick={(v, done) => { setReminders({ sameDayTime: v }); if (done) setPicking(null); }} />
-          )}
-          <Divider />
+          <SectionLabel>Дела на весь день</SectionLabel>
+          <View style={{ paddingHorizontal: space.side }}>
+            <T variant="label" muted>
+              Дела без времени, например «День рождения Лены». У них нет часа начала, поэтому напоминание всегда с точным временем: «в день события в 09:00», «накануне в 20:00».
+            </T>
+            <ReminderEditor value={r.allDay} onChange={(allDay) => setReminders({ allDay })} timed={false} />
+          </View>
 
-          <T variant="caption" muted style={{ paddingHorizontal: space.side, paddingTop: 12 }}>
-            Для дел без времени «за N часов» не применяется. Для отдельного дела правило меняется в его карточке.
+          <T variant="caption" muted style={{ paddingHorizontal: space.side, paddingTop: 16 }}>
+            Это настройки по умолчанию. Для отдельного дела напоминания меняются в его карточке — только для себя или для всех участников группы.
           </T>
         </View>
       </ScrollView>
-    </View>
-  );
-}
-
-function TimeBox({ value, onPick }: { value: string; onPick: (v: string, done: boolean) => void }) {
-  return (
-    <View style={{ paddingHorizontal: space.side, paddingBottom: 12 }}>
-      <TimePanel value={value} onPick={onPick} />
     </View>
   );
 }
