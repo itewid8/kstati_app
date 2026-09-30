@@ -22,12 +22,12 @@ export type WidgetColors = { bg: string; text: string; muted: string; mic: strin
 export const WIDGET_DARK: WidgetColors = { bg: '#1E1E1E', text: '#E6E6E6', muted: '#8B8B8B', mic: '#E6E6E6', onMic: '#1E1E1E', border: '#333333' };
 export const WIDGET_LIGHT: WidgetColors = { bg: '#FFFFFF', text: '#1A1A1A', muted: '#6B6B6B', mic: '#1A1A1A', onMic: '#FFFFFF', border: '#E5E5E5' };
 
-export type WidgetSnapshot = { items: WidgetItem[]; dark: boolean; at: number; prefs?: WidgetPrefs };
+export type WidgetSnapshot = { items: WidgetItem[]; dark: boolean; at: number };
 
-/** Итоговые цвета: фон по теме с нужной непрозрачностью, текст — по теме или как выбрано в настройках */
-export function widgetColors(snap: WidgetSnapshot | null) {
-  const p = snap?.prefs ?? DEFAULT_WIDGET;
-  const theme = snap?.dark === false ? WIDGET_LIGHT : WIDGET_DARK;
+/** Итоговые цвета: фон по теме с нужной непрозрачностью, текст — по теме или как выбрано в настройках виджета */
+export function widgetColors(dark: boolean, prefs: WidgetPrefs | null | undefined) {
+  const p = prefs ?? DEFAULT_WIDGET;
+  const theme = dark ? WIDGET_DARK : WIDGET_LIGHT;
   const textTheme = p.text === 'light' ? WIDGET_DARK : p.text === 'dark' ? WIDGET_LIGHT : theme;
   const hex = theme.bg.slice(1);
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));

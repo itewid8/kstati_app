@@ -80,7 +80,36 @@
                   "systemMedium",
                   "accessoryCircular",
                   "accessoryRectangular"
-                ]
+                ],
+                "configuration": {
+                  "title": "Кстати",
+                  "parameters": {
+                    "mic": {
+                      "title": "Микрофон",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    "text": {
+                      "title": "Цвет текста",
+                      "type": "enum",
+                      "values": [
+                        {
+                          "name": "Как в теме",
+                          "value": "auto"
+                        },
+                        {
+                          "name": "Светлый",
+                          "value": "light"
+                        },
+                        {
+                          "name": "Тёмный",
+                          "value": "dark"
+                        }
+                      ],
+                      "default": "auto"
+                    }
+                  }
+                }
               }
             }
           ]
@@ -100,16 +129,18 @@
               "description": "Ближайшие дела и микрофон",
               "minWidth": "110dp",
               "minHeight": "40dp",
-              "targetCellWidth": 4,
+              "targetCellWidth": 2,
               "targetCellHeight": 1,
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
+              "updatePeriodMillis": 1800000,
+              "widgetFeatures": "reconfigurable|configuration_optional"
             }
           ]
         }
       ],
       "./plugins/withoutPushEntitlement",
-      "./plugins/withWorkManagerFix"
+      "./plugins/withWorkManagerFix",
+      "expo-background-task"
     ],
     "icon": "./assets/icon.png"
   }

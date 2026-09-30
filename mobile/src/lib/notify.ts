@@ -61,10 +61,10 @@ async function setup() {
 }
 
 /** Разрешение на уведомления: спрашиваем, только когда есть что напоминать */
-async function ensurePermission(): Promise<boolean> {
+async function ensurePermission(ask: boolean): Promise<boolean> {
   const cur = await Notifications.getPermissionsAsync();
   if (cur.granted) return true;
-  if (!cur.canAskAgain) return false;
+  if (!ask || !cur.canAskAgain) return false;
   const res = await Notifications.requestPermissionsAsync();
   return res.granted;
 }
@@ -73,7 +73,8 @@ let running: Promise<void> | null = null;
 let again = false;
 
 /** Пересчитать и поставить все напоминания заново */
-export async function syncReminders(): Promise<void> {
+/** ask = false — в фоне: разрешение не спрашиваем (некому ответить), только ставим, если уже есть */
+export async function syncReminders(ask = true): Promise<void> {
   if (running) {
     again = true;
     return running;
@@ -90,7 +91,7 @@ export async function syncReminders(): Promise<void> {
       const next = all.slice(0, MAX_SCHEDULED);
 
       await Notifications.cancelAllScheduledNotificationsAsync();
-      if (!next.length || !(await ensurePermission())) return;
+      if (!next.length || !(await ensurePermission(ask))) return;
       for (const t of next) {
         await Notifications.scheduleNotificationAsync({
           content: { title: t.title, body: t.body, data: { taskId: t.taskId } },

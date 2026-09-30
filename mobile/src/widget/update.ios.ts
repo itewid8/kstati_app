@@ -1,5 +1,5 @@
 import { addDays, startOfDay } from '@/lib/dates';
-import { visibleAt, whenLabel, widgetColors, type WidgetSnapshot } from './data';
+import { visibleAt, whenLabel, WIDGET_DARK, WIDGET_LIGHT, type WidgetSnapshot } from './data';
 import KstatiWidget, { type IosWidgetProps } from './ios';
 
 /**
@@ -7,7 +7,7 @@ import KstatiWidget, { type IosWidgetProps } from './ios';
  * с какого момента — сейчас, после начала каждого ближайшего дела и в полночь (меняется «завтра» → «сегодня»).
  */
 export function pushWidget(snap: WidgetSnapshot) {
-  const c = widgetColors(snap);
+  const pal = (c: typeof WIDGET_DARK) => [c.bg, c.text, c.muted, c.mic, c.onMic];
   const now = Date.now();
   const midnights = [1, 2, 3].map((n) => addDays(startOfDay(new Date(now)), n).getTime());
   const moments = [...new Set([now, ...snap.items.filter((x) => x.date).slice(0, 10).map((x) => x.until), ...midnights])]
@@ -17,14 +17,10 @@ export function pushWidget(snap: WidgetSnapshot) {
   const entries = moments.map((t) => ({
     date: new Date(t),
     props: {
-      rows: visibleAt(snap.items, t, 3).map((x) => ({ title: x.title, when: whenLabel(x, t) })),
-      // Прозрачный фон на iPhone система не поддерживает — берём цвет темы, прозрачность только на Android
-      bg: c.bgHex,
-      text: c.text,
-      muted: c.muted,
-      mic: c.mic,
-      onMic: c.onMic,
-      showMic: c.showMic,
+      rows: visibleAt(snap.items, t, 4).map((x) => ({ title: x.title, when: whenLabel(x, t) })),
+      // Тему телефона виджет знает сам — отдаём обе палитры
+      light: pal(WIDGET_LIGHT),
+      dark: pal(WIDGET_DARK),
     } satisfies IosWidgetProps,
   }));
   try {

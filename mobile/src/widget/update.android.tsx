@@ -1,13 +1,13 @@
 import React from 'react';
 import { requestWidgetUpdate } from 'react-native-android-widget';
-import { ANDROID_WIDGET, KstatiWidget } from './android';
+import { ANDROID_WIDGET, KstatiWidget, readPrefs } from './android';
 import type { WidgetSnapshot } from './data';
 
-/** Перерисовать виджеты на рабочем столе (если они есть) */
+/** Перерисовать все виджеты «Кстати» на рабочем столе (у каждого — свои настройки) */
 export function pushWidget(snap: WidgetSnapshot) {
   requestWidgetUpdate({
     widgetName: ANDROID_WIDGET,
-    renderWidget: (info) => <KstatiWidget snap={snap} width={info.width} height={info.height} now={Date.now()} />,
+    renderWidget: (info) => <KstatiWidget snap={snap} prefs={readPrefs(info.widgetId)} width={info.width} height={info.height} now={Date.now()} />,
     widgetNotFound: () => {},
-  }).catch(() => {});
+  }).catch((e) => console.warn('Виджет не обновлён', e));
 }
