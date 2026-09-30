@@ -163,6 +163,36 @@ async function scenario(name: string, store: Store) {
   assert.equal(s3.items.g1.find((i: any) => i.id === 't1').createdBy, sasha.me.id, 'автор не меняется при правке');
   assert.deepEqual(s3.wishes, {});
 
+  /* ---------- повторы и общие напоминания ---------- */
+  const rep = { freq: 'week', every: 1, weekdays: [6] };
+  const tr = await ops(T1, { op: 'task.put', task: { id: 't5', groupId: 'g1', title: 'Баня', date: '2026-10-03', time: '15:00', doneAt: null, repeat: rep, doneDates: [], skipDates: [], reminders: ['d1@20:00', 'm60'] } });
+  assert.equal(tr[0].ok, true);
+  assert.equal((await ops(T1, { op: 'task.put', task: { id: 't6', groupId: 'g1', title: 'x', date: null, time: null, doneAt: null, reminders: ['за час'] } }))[0].ok, false, 'кривое напоминание отклоняется');
+  await ops(T1, { op: 'task.put', task: { id: 't5', groupId: 'g1', title: 'Баня', date: '2026-10-03', time: '15:00', doneAt: null, repeat: rep, doneDates: ['2026-10-03'], skipDates: ['2026-10-10'], reminders: ['d1@20:00', 'm60'] } });
+  const t5 = (await ok('POST', '/sync', {}, T2)).items.g1.find((i: any) => i.id === 't5');
+  assert.deepEqual(t5.repeat, rep);
+  assert.deepEqual(t5.doneDates, ['2026-10-03']);
+  assert.deepEqual(t5.skipDates, ['2026-10-10']);
+  assert.deepEqual(t5.reminders, ['d1@20:00', 'm60']);
+
+  /* ---------- лента активности ---------- */
+  const feed2 = (await ok('GET', '/activity', undefined, T2)).events as any[];
+  const kinds2 = feed2.map((e) => `${e.kind}:${e.title ?? ''}${e.date && e.kind !== 'task.add' ? '@' + e.date : ''}`);
+  assert.ok(kinds2.includes('task.add:Ужин у родителей'), 'Маша видит, что Саша добавил дело');
+  assert.ok(kinds2.includes('watch.add:Дюна'));
+  assert.ok(kinds2.includes('wish.add:Наушники'), 'и хотелку Саши');
+  assert.ok(kinds2.includes('task.done:Баня@2026-10-03'), 'отметка одного повтора');
+  assert.ok(kinds2.includes('task.delete:Баня@2026-10-10'), 'удалён один раз');
+  assert.ok(feed2.some((e) => e.kind === 'task.edit' && e.fields.includes('time')), 'правка времени');
+  assert.ok(!feed2.some((e) => e.actor === masha.me.id), 'свои действия в ленте не показываются');
+  assert.ok(feed2[0].id >= feed2[feed2.length - 1].id, 'свежие сверху');
+  const feed1 = (await ok('GET', '/activity', undefined, T1)).events as any[];
+  assert.ok(feed1.some((e) => e.kind === 'member.join' && e.actor === masha.me.id), 'Саша видит, что Маша вступила');
+  assert.ok(feed1.some((e) => e.kind === 'group.rename' && e.title === 'Наше'));
+  assert.ok(feed1.some((e) => e.kind === 'task.add' && e.title === 'Забрать посылку'));
+  const later = (await ok('GET', '/activity?since=' + encodeURIComponent(feed2[0].id), undefined, T2)).events;
+  assert.equal(later.length, 0, 'since отсекает уже виденное');
+
   /* ---------- ник и профиль ---------- */
   assert.equal((await ok('GET', '/nick/check?nick=' + encodeURIComponent('саша'), undefined, T2)).status, 'free');
   assert.equal((await ops(T1, { op: 'profile', nick: 'Саша', gender: 'm' }))[0].ok, true);
@@ -175,7 +205,7 @@ async function scenario(name: string, store: Store) {
   const v = await ok('POST', '/voice', { groupId: 'g1', today: '2026-09-26', now: '12:00', audio: Buffer.from('m4a').toString('base64') }, T2);
   assert.equal(v.transcript, 'хочу наушники');
   assert.equal(v.left, 2);
-  assert.match(parsed[0], /people=Саша \| tasks=2 \| wishes=0/);
+  assert.match(parsed[0], /people=Саша \| tasks=3 \| wishes=0/);
   assert.equal((await call('POST', '/voice/text', { groupId: 'nope', today: '2026-09-26', now: '12:00', text: 'x' }, T2)).status, 403);
   await ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'купить хлеб' }, T2);
   await ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'купить молоко' }, T2);
@@ -188,7 +218,7 @@ async function scenario(name: string, store: Store) {
   await ops(T2, { op: 'wish.put', wish: { id: 'w2', title: 'Кофемолка', note: '', link: '', receivedAt: null } });
   assert.equal((await ops(T1, { op: 'group.remove', id: 'g1', userId: masha.me.id }))[0].ok, true);
   const s4 = await ok('POST', '/sync', {}, T1);
-  assert.deepEqual(s4.items.g1.map((i: any) => i.id).sort(), ['m1', 't1'], 'дело Маши удалено');
+  assert.deepEqual(s4.items.g1.map((i: any) => i.id).sort(), ['m1', 't1', 't5'], 'дело Маши удалено');
   assert.equal(s4.users.length, 1);
   assert.equal(s4.wishes[masha.me.id], undefined, 'хотелки Маши Саше больше не видны');
   const s5 = await ok('POST', '/sync', {}, T2);

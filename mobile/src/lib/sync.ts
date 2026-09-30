@@ -11,7 +11,7 @@
 import { AppState } from 'react-native';
 import { ApiError, NetError, request, type Op, type OpResult } from './net';
 import { DEMO, syncHooks, useStore, type Me, type Revs } from './store';
-import type { Group, ID, Task, User, WatchItem, Wish } from './types';
+import type { Activity, Group, ID, Task, User, WatchItem, Wish } from './types';
 
 type ServerItem = (Task & { type: 'task'; updatedAt?: string }) | (WatchItem & { type: 'watch'; updatedAt?: string });
 type SyncResponse = {
@@ -29,7 +29,19 @@ let applyingRemote = false;
 
 const taskOp = (t: Task): Op => ({
   op: 'task.put',
-  task: { id: t.id, groupId: t.groupId, title: t.title, date: t.date, time: t.time, note: t.note ?? '', doneAt: t.doneAt },
+  task: {
+    id: t.id,
+    groupId: t.groupId,
+    title: t.title,
+    date: t.date,
+    time: t.time,
+    note: t.note ?? '',
+    doneAt: t.doneAt,
+    repeat: t.repeat ?? null,
+    doneDates: t.doneDates ?? [],
+    skipDates: t.skipDates ?? [],
+    reminders: t.reminders ?? null,
+  },
 });
 const watchOp = (w: WatchItem): Op => ({
   op: 'watch.put',
@@ -71,7 +83,7 @@ useStore.subscribe((s, p) => {
 
 /* ---------- отправка и получение ---------- */
 
-let running = false;
+let running: Promise<void> | null = null;
 let again = false;
 let failures = 0;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -160,21 +172,35 @@ async function pull(token: string) {
   }
 }
 
-/** Отправить очередь и забрать новое. Повторные вызовы во время работы склеиваются */
-export async function syncNow(): Promise<void> {
-  if (DEMO) return;
+/** Отправить очередь и забрать новое. Повторные вызовы во время работы склеиваются и ждут общего окончания */
+export function syncNow(): Promise<void> {
+  if (DEMO) return Promise.resolve();
   if (running) {
     again = true;
-    return;
+    return running;
   }
+  running = (async () => {
+    try {
+      do {
+        again = false;
+        await syncOnce();
+      } while (again);
+    } finally {
+      running = null;
+    }
+  })();
+  return running;
+}
+
+async function syncOnce(): Promise<void> {
   const token = useStore.getState().session?.token;
   if (!token) return;
-  running = true;
   try {
     await flush(token);
     await pull(token);
     failures = 0;
     useStore.getState().setNet('ok');
+    await fetchActivity();
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
       // Токен больше не действует — просим войти заново
@@ -188,12 +214,29 @@ export async function syncNow(): Promise<void> {
     } else {
       console.warn('Синхронизация', e);
     }
-  } finally {
-    running = false;
   }
-  if (again) {
-    again = false;
-    await syncNow();
+}
+
+/* ---------- лента активности ---------- */
+
+let activityAt = 0;
+
+/**
+ * Забрать новые записи ленты (только те, что свежее последней известной).
+ * Не чаще раза в минуту; force — сразу (открыли ленту, потянули вниз). Ошибки ленты молча пропускаем.
+ */
+export async function fetchActivity(force = false): Promise<void> {
+  const s = useStore.getState();
+  const token = s.session?.token;
+  if (DEMO || !token) return;
+  if (!force && Date.now() - activityAt < 60_000) return;
+  activityAt = Date.now();
+  try {
+    const since = s.activity[0]?.id;
+    const r = await request<{ events: Activity[] }>(`/activity${since ? `?since=${encodeURIComponent(since)}` : ''}`, { token });
+    if (useStore.getState().session?.token === token) useStore.getState().mergeActivity(r.events);
+  } catch {
+    /* нет связи или лента ещё не готова на сервере */
   }
 }
 

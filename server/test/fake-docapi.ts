@@ -69,11 +69,17 @@ export function startFakeDocApi(): Promise<{ url: string; server: Server; calls:
     Query: (b) => {
       const t = tables.get(b.TableName)!;
       const pk = b.ExpressionAttributeValues[':p'].S;
-      const all = [...t.rows.values()].filter((r) => r[t.hash].S === pk).sort((x, y) => (x[t.range!]?.S ?? '').localeCompare(y[t.range!]?.S ?? ''));
-      // Постранично по 2 записи — чтобы проверить LastEvaluatedKey
+      // Условие на ключ сортировки: «#r > :s» (лента активности)
+      const gt = b.ExpressionAttributeValues[':s']?.S;
+      const all = [...t.rows.values()]
+        .filter((r) => r[t.hash].S === pk && (gt === undefined || (r[t.range!]?.S ?? '') > gt))
+        .sort((x, y) => (x[t.range!]?.S ?? '').localeCompare(y[t.range!]?.S ?? ''));
+      if (b.ScanIndexForward === false) all.reverse();
+      // Постранично по 2 записи — чтобы проверить LastEvaluatedKey (с Limit — сколько просили)
+      const size = b.Limit ?? 2;
       const start = b.ExclusiveStartKey ? all.findIndex((r) => keyOf(t, r) === keyOf(t, b.ExclusiveStartKey)) + 1 : 0;
-      const page = all.slice(start, start + 2);
-      const more = start + 2 < all.length;
+      const page = all.slice(start, start + size);
+      const more = start + size < all.length;
       return { Items: page, ...(more && { LastEvaluatedKey: { [t.hash]: page.at(-1)![t.hash], ...(t.range && { [t.range]: page.at(-1)![t.range] }) } }) };
     },
     UpdateItem: (b) => {

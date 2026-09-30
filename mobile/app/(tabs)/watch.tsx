@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight } from '@/components/icons';
+import { usePullRefresh } from '@/components/PullRefresh';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useBottomSpace } from '@/components/BottomBar';
@@ -50,6 +51,7 @@ export default function Watch() {
   const filters = useStore((s) => s.watchFilters);
   const { setWatchFilters, setCard } = useStore.getState();
   const bottom = useBottomSpace();
+  const refreshControl = usePullRefresh();
   const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
   const [showWatched, setShowWatched] = useState(false);
 
@@ -84,7 +86,7 @@ export default function Watch() {
             )}
           </View>
 
-          <ScrollView contentContainerStyle={{ paddingBottom: bottom }}>
+          <ScrollView contentContainerStyle={{ paddingBottom: bottom }} refreshControl={refreshControl}>
             <LayoutAnimationConfig skipEntering>
             {list.length === 0 && active && (
               <View style={{ padding: space.side, paddingTop: 24, gap: 4, alignItems: 'flex-start' }}>

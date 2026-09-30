@@ -12,7 +12,9 @@ export const KINDS: Kind[] = ['movie', 'series', 'cartoon', 'show', 'standup'];
 export const GENRES: Genre[] = ['comedy', 'drama', 'action', 'thriller', 'horror', 'scifi', 'detective', 'romance', 'adventure', 'documentary'];
 export const ORIGINS: Origin[] = ['ru', 'foreign'];
 
-export type TaskDraft = { title: string; date: string | null; time: string | null; note: string };
+import type { Repeat } from './repeat.js';
+
+export type TaskDraft = { title: string; date: string | null; time: string | null; note: string; repeat?: Repeat | null };
 export type WishDraft = { title: string; note: string; link: string };
 export type WatchDraft = { title: string; kind: Kind | null; genres: Genre[]; origin: Origin | null; year: number | null };
 
@@ -28,7 +30,7 @@ export type ChangeDraft = {
   type: ItemType;
   candidates: string[];
   chosen: string;
-  patch?: Partial<{ title: string; date: string | null; time: string | null }>;
+  patch?: Partial<{ title: string; date: string | null; time: string | null; repeat: Repeat | null }>;
 };
 
 export type GroupCategory = 'couple' | 'family' | 'parents' | 'friends' | 'other';

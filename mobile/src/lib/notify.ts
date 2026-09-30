@@ -5,53 +5,39 @@
  */
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { fromISODate } from './dates';
+import { addDays, shortDate, toISODate } from './dates';
+import { occurrences } from './recur';
+import { effectiveSpecs, eventStart, moment } from './remind';
 import { useStore } from './store';
-import type { ReminderRule, ReminderSettings, Task, TaskReminderOverride } from './types';
+import type { ReminderSettings, Task, TaskReminderOverride } from './types';
 
 const CHANNEL = 'reminders';
 /** Android держит ограниченное число запланированных уведомлений — ставим только ближайшие */
 const MAX_SCHEDULED = 60;
-
-const at = (date: string, hhmm: string) => {
-  const d = fromISODate(date);
-  const [h, m] = hhmm.split(':').map(Number);
-  d.setHours(h, m, 0, 0);
-  return d;
-};
-const minusDays = (d: Date, n: number) => new Date(d.getTime() - n * 86400000);
-const minusHours = (d: Date, n: number) => new Date(d.getTime() - n * 3600000);
-
-const HOURS: Partial<Record<ReminderRule, number>> = { h1: 1, h2: 2, h3: 3, h6: 6 };
-
-const hoursWord = (n: number) => (n === 1 ? 'час' : n < 5 ? 'часа' : 'часов');
+/** Повторы серий смотрим на 60 дней вперёд (плюс запас на «за месяц») */
+const HORIZON_DAYS = 62;
 
 export type Trigger = { taskId: string; date: Date; title: string; body: string };
 
-/** Когда и что напомнить по одному делу */
-export function triggersFor(task: Task, settings: ReminderSettings, override: TaskReminderOverride | undefined, groupName: string, now = new Date()): Trigger[] {
+/** Когда и что напомнить по одному делу (у серии — по каждому ближайшему повтору) */
+export function triggersFor(task: Task, settings: ReminderSettings, mine: TaskReminderOverride | undefined, groupName: string, now = new Date()): Trigger[] {
   if (!settings.enabled || !task.date || task.doneAt) return [];
-  const rules = override ?? settings.rules;
-  const event = task.time ? at(task.date, task.time) : at(task.date, '00:00');
-  const when = task.time ? ` в ${task.time}` : '';
+  const { specs } = effectiveSpecs(task, mine, settings);
+  if (!specs.length) return [];
+  const today = toISODate(now);
+  // Для «за месяц» ищем повторы чуть дальше горизонта, но ставим только то, что сработает скоро
+  const dates = task.repeat ? occurrences(task, today, toISODate(addDays(now, HORIZON_DAYS + 31)), 200).filter((d) => !task.doneDates?.includes(d)) : [task.date];
   const out: Trigger[] = [];
-  const push = (date: Date, lead: string) => {
-    if (date.getTime() <= now.getTime() + 30_000) return; // прошедшие не ставим
-    out.push({ taskId: task.id, date, title: task.title, body: `${lead}${when} · ${groupName}` });
-  };
-
-  for (const r of rules) {
-    if (r === 'week') push(minusDays(at(task.date, settings.dayTime), 7), 'Через неделю');
-    else if (r === 'days3') push(minusDays(at(task.date, settings.dayTime), 3), 'Через 3 дня');
-    else if (r === 'dayBefore') push(minusDays(at(task.date, settings.dayTime), 1), 'Завтра');
-    else if (r === 'sameDay') {
-      // Утром в день дела; если дело раньше этого времени — за час до него
-      let d = at(task.date, settings.sameDayTime);
-      if (task.time && d >= event) d = minusHours(event, 1);
-      push(d, 'Сегодня');
-    } else if (HOURS[r] && task.time) {
-      const n = HOURS[r]!;
-      push(minusHours(event, n), `Через ${n} ${hoursWord(n)}`);
+  for (const date of dates) {
+    const start = eventStart(date, task.time);
+    for (const spec of specs) {
+      const m = moment(spec, date, task.time);
+      if (!m) continue;
+      if (m.getTime() <= now.getTime() + 30_000) continue; // прошедшие не ставим
+      if (task.time && m.getTime() > start.getTime()) continue; // «в день события в 09:00» у дела в 08:00 — уже поздно
+      // «Завтра в 19:00 · Мы с котиком», «сб 4 окт · Семья»
+      const day = date === toISODate(m) ? 'Сегодня' : date === toISODate(addDays(m, 1)) ? 'Завтра' : shortDate(date);
+      out.push({ taskId: task.id, date: m, title: task.title, body: [task.time ? `${day} в ${task.time}` : day, groupName].filter(Boolean).join(' · ') });
     }
   }
   return out;

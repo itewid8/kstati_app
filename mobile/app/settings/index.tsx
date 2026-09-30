@@ -3,11 +3,10 @@ import { ChevronRight } from '@/components/icons';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { reminderSummary } from '@/components/editors';
 import { BackHeader } from '@/components/Header';
 import { Button, Chip, Divider, Field, ListRow, SectionLabel, T } from '@/components/ui';
 import { useStore, type NickStatus } from '@/lib/store';
-import type { Gender, ThemePref } from '@/lib/types';
+import type { Gender } from '@/lib/types';
 import { ICON, space, useColors } from '@/theme';
 
 const GENDERS: { key: Gender | null; label: string }[] = [
@@ -16,19 +15,12 @@ const GENDERS: { key: Gender | null; label: string }[] = [
   { key: null, label: 'Не указывать' },
 ];
 const GENDER_LABEL = (g?: Gender) => (g === 'm' ? 'мужской' : g === 'f' ? 'женский' : 'не указан');
-const THEMES: { key: ThemePref; label: string }[] = [
-  { key: 'system', label: 'Как в системе' },
-  { key: 'light', label: 'Светлая' },
-  { key: 'dark', label: 'Тёмная' },
-];
 
 export default function Settings() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const me = useStore((s) => s.me);
-  const reminders = useStore((s) => s.reminders);
-  const theme = useStore((s) => s.theme);
-  const { saveProfile, checkNick, logout, deleteAccount, setTheme } = useStore.getState();
+  const { saveProfile, checkNick, logout, deleteAccount } = useStore.getState();
 
   // Профиль редактируется только после «Редактировать»; ник проверяется, только если его изменили
   const [editing, setEditing] = useState(false);
@@ -82,7 +74,7 @@ export default function Settings() {
         : status === 'checking'
           ? { text: 'Проверяю…', tone: 'muted' }
           : status === 'free'
-            ? { text: '✓ Свободен', tone: 'ok' }
+            ? { text: 'Свободен', tone: 'ok' }
             : null;
 
   const chevron = <ChevronRight size={ICON.size} strokeWidth={ICON.stroke} color={c.textMuted} />;
@@ -143,14 +135,14 @@ export default function Settings() {
                 </T>
               </View>
               {nickHint ? (
-                <T variant="caption" danger={nickHint.tone === 'danger'} muted={nickHint.tone === 'muted'}>
+                <T variant="caption" danger={nickHint.tone === 'danger'} muted={nickHint.tone === 'muted'} color={nickHint.tone === 'ok' ? c.success : undefined}>
                   {nickHint.text}
                 </T>
               ) : null}
             </View>
             <View style={{ gap: 6 }}>
               <T variant="label" muted>
-                Пол — чтобы приложение обращалось правильно
+                Пол
               </T>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {GENDERS.map((g) => (
@@ -170,21 +162,9 @@ export default function Settings() {
           </View>
         )}
 
-        <SectionLabel>Тема</SectionLabel>
-        <View style={{ paddingHorizontal: space.side, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {THEMES.map((t) => (
-            <Chip key={t.key} label={t.label} selected={theme === t.key} onPress={() => setTheme(t.key)} />
-          ))}
-        </View>
-
         <SectionLabel> </SectionLabel>
         <Divider />
-        <ListRow
-          label="Напоминания"
-          value={reminders.enabled ? reminderSummary(reminders.rules).replace(/^./, (s) => s.toUpperCase()) : 'Выключены'}
-          onPress={() => router.push('/settings/reminders')}
-          right={chevron}
-        />
+        <ListRow label="Приложение" value="тема, микрофон, напоминания" onPress={() => router.push('/settings/app')} right={chevron} />
         <Divider />
 
         <SectionLabel> </SectionLabel>

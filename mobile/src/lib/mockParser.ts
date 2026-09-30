@@ -3,6 +3,7 @@
  * Простые правила, которых хватает на фразы из раздела 8 ТЗ.
  * Когда появится сервер, этот модуль заменится вызовом API с тем же форматом ответа.
  */
+import { changesRepeat, firstDate, spokenRepeat, stopsRepeat, stripRepeat } from './spokenRepeat';
 import { addDays, toISODate } from './dates';
 import { uid } from './ids';
 import { periodFromText } from './plans';
@@ -268,9 +269,12 @@ export function mockParse(raw: string, ctx: { me: User; people: User[]; now?: Da
 
   // Дело
   const { date, time, rest } = parseDate(text, now);
-  const title = taskTitle(rest);
+  const rep = spokenRepeat(text, toISODate(now));
+  const title = rep ? stripRepeat(taskTitle(rest).replace(/(^|\s)кажд\S*(?=\s|$)/gi, ' ').trim()) : taskTitle(rest);
   if (title.length < 4 || /^(.)\1*$/i.test(title)) return { type: 'unknown' };
-  return { type: 'items', items: [{ key: uid(), type: 'task', data: { title, date, time } }] };
+  // «Баня каждую субботу» — повтор; первый раз — ближайший подходящий день
+  const first = rep ? firstDate(rep, date, toISODate(now)) : date;
+  return { type: 'items', items: [{ key: uid(), type: 'task', data: { title, date: first, time, ...(rep && { repeat: rep }) } }] };
 }
 
 /** Фразы, которые заглушка «распознаёт» по очереди вместо настоящей записи */
@@ -371,6 +375,18 @@ function parseChange(text: string, ex: Existing, now: Date): ParseResult | null 
   // Переименовать: «переименуй лампочки в купить лампочки и батарейки»
   if ((m = text.match(/^(переименуй|переименовать)\s+(.+?)\s+в\s+(.+)$/))) {
     return change('update', m[2], ex, typeHint(m[2]), { title: cap(clean(m[3])) });
+  }
+
+  // Повтор существующего дела: «баню теперь каждое воскресенье», «больше не повторяй зарядку»
+  if (changesRepeat(text)) {
+    const today = toISODate(now);
+    const name = text
+      .replace(/(больше не повторя\S*|не повторя\S*|сделай|теперь|разов\S*|без повтора)/g, ' ')
+      .replace(/(кажд\S*|по)\s+\S+(\s+и\s+\S+)?|ежедневн\S*|еженедельн\S*|через день/g, ' ');
+    const rep = stopsRepeat(text) ? null : spokenRepeat(text, today);
+    const patch: ChangePatch = { repeat: rep };
+    if (rep) patch.date = firstDate(rep, null, today);
+    return change('update', clean(name), ex, 'task', patch);
   }
 
   // Перенести: «перенеси дачу на воскресенье», «перенеси ужин на восемь»

@@ -3,20 +3,24 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { API_URL } from './config';
 import { errorText, opKey, request, type Op } from './net';
 import { fileStorage } from './storage';
-import { toISODate } from './dates';
+import { shortDate, toISODate } from './dates';
+import { nextOpen } from './recur';
+import { DEFAULT_REMINDERS, migrateRules } from './remind';
 import * as M from './mock';
 import type { PlansAnswer } from './plans';
 import {
   emptyFilters,
   NICK_RULE,
   canRemoveMember,
+  type Activity,
   type ChangeDraft,
   type Gender,
   type GroupCategory,
-  type ThemePref,
+  type ThemePref, type MicMode,
   type DraftItem,
   type Group,
   type ID,
+  type ReminderRule,
   type ReminderSettings,
   type Task,
   type TaskReminderOverride,
@@ -105,6 +109,11 @@ type State = {
   /** Выбранный день календаря — общий для экрана «Дела» и ответа ассистента */
   calendarDate: string;
   theme: ThemePref;
+  micMode: MicMode;
+  /** Лента активности: что сделали другие (свежие первыми) */
+  activity: Activity[];
+  /** id последней записи ленты, которую человек уже видел (для точки на колокольчике) */
+  activitySeen: string;
   /** Аккаунт, из которого вышли: при входе снова данные остаются на месте */
   lastMe: User | null;
 };
@@ -129,6 +138,10 @@ type Actions = {
   /** Имя, ник и пол разом. null — сохранено, иначе текст ошибки */
   saveProfile: (p: Profile) => Promise<string | null>;
   setTheme: (t: ThemePref) => void;
+  setMicMode: (m: MicMode) => void;
+  /** Добавить свежие записи ленты (с сервера) */
+  mergeActivity: (list: Activity[]) => void;
+  markActivitySeen: () => void;
 
   selectGroup: (id: ID) => void;
   createGroup: (name: string, category?: GroupCategory) => void;
@@ -140,8 +153,12 @@ type Actions = {
 
   saveItems: (items: DraftItem[]) => void;
   applyChanges: (changes: ChangeDraft[]) => void;
-  toggleTask: (id: ID) => void;
-  deleteTask: (id: ID) => void;
+  /** occ — дата повтора: у серии отмечается только этот раз */
+  toggleTask: (id: ID, occ?: string) => void;
+  /** occ — удалить только этот повтор серии */
+  deleteTask: (id: ID, occ?: string) => void;
+  /** Завершить серию: больше не повторять после этой даты (включительно) */
+  endSeries: (id: ID, lastDate: string) => void;
   deleteWish: (id: ID) => void;
   toggleWish: (id: ID) => void;
   toggleWatched: (id: ID) => void;
@@ -183,12 +200,14 @@ const emptyData = () => ({
   overrides: {} as Record<ID, TaskReminderOverride>,
   wishPersonId: null as ID | null,
   lastMe: null as User | null,
+  activity: [] as Activity[],
+  activitySeen: '',
 });
 
 const initial: State = {
   ...emptyData(),
   net: 'ok',
-  reminders: { enabled: true, rules: ['week', 'dayBefore', 'sameDay'], dayTime: '20:00', sameDayTime: '09:00' },
+  reminders: DEFAULT_REMINDERS,
   watchFilters: emptyFilters,
   undo: null,
   card: null,
@@ -198,7 +217,20 @@ const initial: State = {
   menu: null,
   calendarDate: toISODate(new Date()),
   theme: 'system',
+  micMode: 'tap',
 };
+
+/** Отметить (или снять отметку) у одного повтора серии */
+function toggleOcc(t: Task, occ: string | null, done: boolean): Task {
+  if (!occ) return t;
+  const set = new Set(t.doneDates ?? []);
+  if (done) set.add(occ);
+  else set.delete(occ);
+  // Храним только недавние отметки: старше года — не нужны
+  const yearAgo = toISODate(new Date(Date.now() - 366 * 86400000));
+  return { ...t, doneDates: [...set].filter((d) => d >= yearAgo).sort() };
+}
+const lastDone = (t: Task) => (t.doneDates?.length ? t.doneDates[t.doneDates.length - 1] : null);
 
 export const useStore = create<State & Actions>()(
   persist((set, get) => {
@@ -287,6 +319,16 @@ export const useStore = create<State & Actions>()(
       return null;
     },
     setTheme: (theme) => set({ theme }),
+    setMicMode: (micMode) => set({ micMode }),
+    mergeActivity: (list) => {
+      if (!list.length) return;
+      const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+      const byId = new Map([...get().activity, ...list].map((a) => [a.id, a]));
+      const activity = [...byId.values()].filter((a) => a.at >= monthAgo).sort((a, b) => b.id.localeCompare(a.id)).slice(0, 200);
+      // Первая загрузка на этом телефоне: старое не считаем новым
+      set({ activity, ...(!get().activitySeen && { activitySeen: activity[0]?.id ?? '' }) });
+    },
+    markActivitySeen: () => set({ activitySeen: get().activity[0]?.id ?? get().activitySeen }),
 
     selectGroup: (id) => set({ currentGroupId: id }),
     createGroup: (name, category = 'other') => {
@@ -350,16 +392,21 @@ export const useStore = create<State & Actions>()(
       let { tasks, wishes, watch, overrides } = get();
       for (const it of items) {
         if (it.type === 'task') {
-          const { reminder, ...data } = it.data;
-          if (it.id) {
-            tasks = tasks.map((t) => (t.id === it.id ? { ...t, ...data } : t));
-            overrides = { ...overrides };
-            if (reminder) overrides[it.id] = reminder;
-            else delete overrides[it.id];
+          const { mine, shared, repeat, ...data } = it.data;
+          // Повтор без даты не бывает; повторяющееся дело не отмечается целиком
+          const rep = data.date ? (repeat ?? null) : null;
+          const fields = { ...data, repeat: rep, ...(shared !== undefined && { reminders: shared }) };
+          let id = it.id;
+          if (id) {
+            tasks = tasks.map((t) => (t.id === id ? { ...t, ...fields, ...(rep && { doneAt: null }) } : t));
           } else if (currentGroupId) {
-            const id = uid();
-            tasks = [...tasks, { id, groupId: currentGroupId, createdBy: me.id, doneAt: null, createdAt: now, ...data }];
-            if (reminder) overrides = { ...overrides, [id]: reminder };
+            id = uid();
+            tasks = [...tasks, { id, groupId: currentGroupId, createdBy: me.id, doneAt: null, createdAt: now, ...fields }];
+          }
+          if (id) {
+            overrides = { ...overrides };
+            if (mine) overrides[id] = mine;
+            else delete overrides[id];
           }
         } else if (it.type === 'wish') {
           if (it.id) wishes = wishes.map((w) => (w.id === it.id ? { ...w, ...it.data } : w));
@@ -393,11 +440,15 @@ export const useStore = create<State & Actions>()(
           tasks = tasks.map((t) =>
             t.id !== id
               ? t
-              : {
+              : t.repeat && stamp !== undefined
+                ? // Серия: голосом отмечается ближайший раз
+                  toggleOcc(t, stamp ? nextOpen(t, toISODate(new Date())) : lastDone(t), !!stamp)
+                : {
                   ...t,
                   ...(p.title !== undefined && { title: p.title }),
                   ...(p.date !== undefined && { date: p.date }),
                   ...(p.time !== undefined && { time: p.time }),
+                  ...(p.repeat !== undefined && { repeat: p.repeat, doneAt: null }),
                   ...(stamp !== undefined && { doneAt: stamp }),
                 },
           );
@@ -418,12 +469,47 @@ export const useStore = create<State & Actions>()(
       if (deleted) withUndo(deleted > 1 ? `Удалено: ${deleted}` : 'Удалено', before);
     },
 
-    toggleTask: (id) =>
-      set({ tasks: get().tasks.map((t) => (t.id === id ? { ...t, doneAt: t.doneAt ? null : new Date().toISOString() } : t)) }),
-    deleteTask: (id) => {
+    toggleTask: (id, occ) => {
+      const t0 = get().tasks.find((t) => t.id === id);
+      if (!t0) return;
+      if (t0.repeat && occ) {
+        const done = !t0.doneDates?.includes(occ);
+        const before = { tasks: get().tasks };
+        const next = toggleOcc(t0, occ, done);
+        set({ tasks: before.tasks.map((t) => (t.id === id ? next : t)) });
+        // Подсказываем, когда следующий раз: строка в списке сразу переезжает на новую дату
+        if (done) {
+          const n = nextOpen(next, toISODate(new Date()));
+          withUndo(n ? `Готово · следующий раз ${shortDate(n)}` : 'Готово · повторов больше нет', before);
+        }
+        return;
+      }
+      set({ tasks: get().tasks.map((t) => (t.id === id ? { ...t, doneAt: t.doneAt ? null : new Date().toISOString() } : t)) });
+    },
+    deleteTask: (id, occ) => {
       const before = { tasks: get().tasks };
+      const t0 = before.tasks.find((t) => t.id === id);
+      if (t0?.repeat && occ) {
+        set({ tasks: before.tasks.map((t) => (t.id === id ? { ...t, skipDates: [...new Set([...(t.skipDates ?? []), occ])] } : t)) });
+        withUndo('Удалён один раз', before);
+        return;
+      }
       set({ tasks: before.tasks.filter((t) => t.id !== id) });
       withUndo('Дело удалено', before);
+    },
+    endSeries: (id, lastDate) => {
+      const before = { tasks: get().tasks };
+      const t0 = before.tasks.find((t) => t.id === id);
+      // Завершить раньше первого раза — значит удалить серию целиком
+      if (t0?.date && lastDate < t0.date) {
+        set({ tasks: before.tasks.filter((t) => t.id !== id) });
+        withUndo('Дело удалено', before);
+        return;
+      }
+      set({
+        tasks: before.tasks.map((t) => (t.id === id && t.repeat ? { ...t, repeat: { ...t.repeat, until: lastDate, count: null } } : t)),
+      });
+      withUndo('Повторы завершены', before);
     },
     deleteWish: (id) => {
       const before = { wishes: get().wishes };
@@ -507,7 +593,27 @@ export const useStore = create<State & Actions>()(
   },
   {
     name: 'kstati-state',
-    version: 1,
+    version: 2,
+    // Версия 2: напоминания стали строками («d1@20:00», «m60») — переносим старые правила
+    migrate: (old: any, version) => {
+      if (version < 2 && old) {
+        const r = old.reminders;
+        if (r && Array.isArray(r.rules)) {
+          const rules = r.rules as ReminderRule[];
+          old.reminders = {
+            enabled: r.enabled ?? true,
+            timed: migrateRules(rules, r.dayTime ?? '20:00', r.sameDayTime ?? '09:00'),
+            allDay: migrateRules(rules.filter((x) => !x.startsWith('h')), r.dayTime ?? '20:00', r.sameDayTime ?? '09:00'),
+          };
+        }
+        if (old.overrides) {
+          old.overrides = Object.fromEntries(
+            Object.entries(old.overrides as Record<string, ReminderRule[]>).map(([k, v]) => [k, migrateRules(v, r?.dayTime ?? '20:00', r?.sameDayTime ?? '09:00')]),
+          );
+        }
+      }
+      return old;
+    },
     storage: createJSONStorage(() => fileStorage),
     // Сохраняем данные и настройки; экранное состояние (карточки, запись, отмена) — нет
     partialize: (s) => ({
@@ -526,6 +632,9 @@ export const useStore = create<State & Actions>()(
       reminders: s.reminders,
       tasksView: s.tasksView,
       theme: s.theme,
+      micMode: s.micMode,
+      activity: s.activity,
+      activitySeen: s.activitySeen,
     }),
   },
   ),
