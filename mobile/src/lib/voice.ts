@@ -73,19 +73,21 @@ export async function holdStart() {
 export function holdEnd() {
   released = true;
   if (useStore.getState().voice !== 'recording') return;
-  // Короткое касание — не запись, а подсказка, как пользоваться кнопкой
-  if (Date.now() - startedAt < MIN_MS) return cancelRecording('Удерживайте кнопку, пока говорите');
+  // Короткое касание — не запись: просто отменяем
+  if (Date.now() - startedAt < MIN_MS) return cancelRecording();
   stopRecording();
 }
 
-async function cancelRecording(hint: string) {
+/** Отменить запись: ничего не отправляем и не показываем (кнопка «×» или смахивание влево) */
+export async function cancelRecording() {
+  if (useStore.getState().voice !== 'recording') return;
+  released = true;
   if (autoStop) clearTimeout(autoStop);
   autoStop = null;
-  const s = useStore.getState();
-  s.setVoice('processing');
+  useStore.getState().setVoice('processing');
   if (useRealMic()) await recorder!.stop().catch(() => null);
   useStore.getState().setVoice('idle');
-  useStore.getState().setCard({ source: 'voice', transcript: '', problem: 'info', query: hint });
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 }
 
 export async function stopRecording() {

@@ -164,8 +164,8 @@ export const selectionTint = (text: string) => `${text}40`;
  * и буквы шли задом наперёд. Если значение поменяли снаружи (или обработчик поправил ввод) —
  * поле пересоздаётся с новым текстом и, если было в фокусе, остаётся в фокусе.
  */
-export const Field = forwardRef<TextInput, TextInputProps & { label?: string }>(function Field(
-  { label, style, value, defaultValue, onChangeText, onFocus, onBlur, autoFocus, ...rest },
+export const Field = forwardRef<TextInput, TextInputProps & { label?: string; code?: boolean }>(function Field(
+  { label, code, style, value, defaultValue, onChangeText, onFocus, onBlur, autoFocus, ...rest },
   ref,
 ) {
   const c = useColors();
@@ -216,6 +216,8 @@ export const Field = forwardRef<TextInput, TextInputProps & { label?: string }>(
         style={[
           styles.field,
           { backgroundColor: c.background, borderColor: c.border, color: c.text, fontFamily: font.regular },
+          // Коды (из письма, приглашения) — как код группы на экране группы: моноширинный, мелкий, приглушённый
+          code && { fontFamily: font.mono, fontSize: size.caption, color: c.textMuted },
           style,
         ]}
         {...rest}
@@ -223,9 +225,6 @@ export const Field = forwardRef<TextInput, TextInputProps & { label?: string }>(
     </View>
   );
 });
-
-/** Единый вид полей для кодов (из письма, приглашения): моноширинный шрифт, лёгкая разрядка */
-export const codeFieldStyle: TextStyle = { fontFamily: font.mono, letterSpacing: 1 };
 
 /* ---------- Разделитель и строка ---------- */
 

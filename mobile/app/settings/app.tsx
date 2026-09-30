@@ -15,9 +15,9 @@ const THEMES: { key: ThemePref; label: string }[] = [
   { key: 'dark', label: 'Тёмная' },
 ];
 
-const MIC: { key: MicMode; label: string; hint: string }[] = [
-  { key: 'tap', label: 'Нажать и отпустить', hint: 'Нажмите, чтобы начать запись, и ещё раз — чтобы закончить.' },
-  { key: 'hold', label: 'Удерживать', hint: 'Запись идёт, пока палец на кнопке. Отпустите — и фраза уйдёт на разбор.' },
+const MIC: { key: MicMode; label: string }[] = [
+  { key: 'tap', label: 'Нажать и отпустить' },
+  { key: 'hold', label: 'Удерживать' },
 ];
 
 /** Настройки приложения: тема, кнопка микрофона, напоминания по умолчанию */
@@ -31,7 +31,7 @@ export default function AppSettings() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
-      <BackHeader title="Приложение" />
+      <BackHeader title="Настройки приложения" />
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
         <SectionLabel>Тема</SectionLabel>
         <View style={{ paddingHorizontal: space.side, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -41,15 +41,10 @@ export default function AppSettings() {
         </View>
 
         <SectionLabel>Кнопка микрофона</SectionLabel>
-        <View style={{ paddingHorizontal: space.side, gap: 8 }}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {MIC.map((m) => (
-              <Chip key={m.key} label={m.label} selected={micMode === m.key} onPress={() => setMicMode(m.key)} />
-            ))}
-          </View>
-          <T variant="caption" muted>
-            {MIC.find((m) => m.key === micMode)?.hint}
-          </T>
+        <View style={{ paddingHorizontal: space.side, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {MIC.map((m) => (
+            <Chip key={m.key} label={m.label} selected={micMode === m.key} onPress={() => setMicMode(m.key)} />
+          ))}
         </View>
 
         <SectionLabel>Напоминания</SectionLabel>

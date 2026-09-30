@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useCurrentGroup, useStore } from '@/lib/store';
 import { ICON, space, useColors } from '@/theme';
 import { Sheet } from './Sheet';
-import { Button, Chip, Divider, Field, ListRow, T, codeFieldStyle } from './ui';
+import { Button, Chip, Divider, Field, ListRow, T } from './ui';
 import { CATEGORIES, CATEGORY_LABEL, type GroupCategory } from '@/lib/types';
 
 type Mode = 'list' | 'create' | 'join' | 'rename';
@@ -53,7 +53,7 @@ export function GroupPanel({ onDone, initial = 'list' }: { onDone: () => void; i
       if (mode === 'join') {
         // Вступление проверяет сервер — нужен интернет
         setBusy(true);
-        const err = await joinGroup(v);
+        const err = await joinGroup(v.toUpperCase());
         setBusy(false);
         if (err) return setError(err);
       }
@@ -65,15 +65,17 @@ export function GroupPanel({ onDone, initial = 'list' }: { onDone: () => void; i
         <Field
           placeholder={cfg.ph}
           value={text}
+          // Текст не переписываем (раньше тут был toUpperCase): иначе поле пересоздаётся и клавиатура «прыгает»
+          // на каждой букве. Заглавные даёт сама клавиатура, а сервер принимает код в любом регистре
           onChangeText={(t) => {
-            setText(mode === 'join' ? t.toUpperCase() : t);
-            setError('');
+            setText(t);
+            if (error) setError('');
           }}
           autoFocus
           autoCapitalize={mode === 'join' ? 'characters' : 'sentences'}
           maxLength={mode === 'join' ? 6 : 40}
           onSubmitEditing={submit}
-          style={mode === 'join' ? codeFieldStyle : undefined}
+          code={mode === 'join'}
         />
         {mode === 'create' && (
           <View style={{ gap: 8 }}>

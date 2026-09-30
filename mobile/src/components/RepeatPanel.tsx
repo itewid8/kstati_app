@@ -5,7 +5,7 @@
  */
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { MONTH_SHORT, repeatLabel, WEEKDAY_SHORT, weekdayOf } from '@/lib/recur';
+import { MONTH_SHORT, WEEKDAY_SHORT, weekdayOf } from '@/lib/recur';
 import type { Repeat } from '@/lib/types';
 import { useColors } from '@/theme';
 import { DatePanel } from './pickers';
@@ -53,11 +53,6 @@ export function RepeatPanel({ value, start, onChange }: { value: Repeat | null; 
         />
       </View>
       {custom && value ? <Custom value={value} start={start} onChange={onChange} /> : null}
-      {value ? (
-        <T variant="caption" muted>
-          {repeatLabel(value, start)}
-        </T>
-      ) : null}
     </View>
   );
 }
@@ -126,9 +121,6 @@ function Custom({ value, start, onChange }: { value: Repeat; start: string; onCh
             Числа месяца
           </T>
           <DayGrid selected={value.monthDays?.length ? value.monthDays : [sd]} onToggle={(d) => set({ monthDays: toggle(value.monthDays, d, sd) })} />
-          <T variant="label" muted>
-            Если в месяце нет такого числа (например, 31-го), этот месяц пропускается. Для конца месяца выберите «посл.».
-          </T>
         </View>
       )}
 
@@ -142,7 +134,7 @@ function Custom({ value, start, onChange }: { value: Repeat; start: string; onCh
         {endMode === 'count' && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Stepper value={value.count ?? 10} min={1} max={999} onChange={(count) => set({ count })} />
-            <T muted>раз, считая первый</T>
+            <T muted>раз</T>
           </View>
         )}
       </View>

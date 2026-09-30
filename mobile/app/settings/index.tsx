@@ -81,7 +81,7 @@ export default function Settings() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
-      <BackHeader title="Настройки" />
+      <BackHeader title="Профиль" />
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled">
         <View style={styles.sectionHead}>
           <T variant="caption" muted>
@@ -164,7 +164,7 @@ export default function Settings() {
 
         <SectionLabel> </SectionLabel>
         <Divider />
-        <ListRow label="Приложение" value="тема, микрофон, напоминания" onPress={() => router.push('/settings/app')} right={chevron} />
+        <ListRow label="Настройки приложения" onPress={() => router.push('/settings/app')} right={chevron} />
         <Divider />
 
         <SectionLabel> </SectionLabel>
