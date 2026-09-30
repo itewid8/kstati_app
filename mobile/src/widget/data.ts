@@ -24,23 +24,31 @@ export const WIDGET_LIGHT: WidgetColors = { bg: '#FFFFFF', text: '#1A1A1A', mute
 
 export type WidgetSnapshot = { items: WidgetItem[]; dark: boolean; at: number };
 
-/** Итоговые цвета: фон по теме с нужной непрозрачностью, текст — по теме или как выбрано в настройках виджета */
-export function widgetColors(dark: boolean, prefs: WidgetPrefs | null | undefined) {
-  const p = prefs ?? DEFAULT_WIDGET;
-  const theme = dark ? WIDGET_DARK : WIDGET_LIGHT;
-  const textTheme = p.text === 'light' ? WIDGET_DARK : p.text === 'dark' ? WIDGET_LIGHT : theme;
-  const hex = theme.bg.slice(1);
+/**
+ * Итоговые цвета виджета. Каждый элемент — «как в теме», светлый или тёмный:
+ *   фон (с непрозрачностью), названия, время, микрофон (значок на нём — цвета, контрастного микрофону).
+ * «Как в теме»: фон — по теме телефона; текст и микрофон — контрастные к фону.
+ */
+export function widgetColors(dark: boolean, prefs: Partial<WidgetPrefs> | null | undefined) {
+  const p = { ...DEFAULT_WIDGET, ...prefs };
+  const pick = (tone: WidgetPrefs['bg'], auto: WidgetColors) => (tone === 'light' ? WIDGET_LIGHT : tone === 'dark' ? WIDGET_DARK : auto);
+  const bgSet = pick(p.bg, dark ? WIDGET_DARK : WIDGET_LIGHT);
+  // Светлый фон → тёмные буквы и наоборот; явный выбор — светлый текст = светлые буквы
+  const ink = (tone: WidgetPrefs['text']) => (tone === 'light' ? WIDGET_DARK : tone === 'dark' ? WIDGET_LIGHT : bgSet);
+  const hex = bgSet.bg.slice(1);
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
   const a = Math.round(Math.min(1, Math.max(0, p.opacity)) * 100) / 100;
+  const micSet = ink(p.micTone);
   return {
     bg: `rgba(${r}, ${g}, ${b}, ${a})` as const,
-    bgHex: theme.bg,
+    bgHex: bgSet.bg,
     alpha: a,
-    text: textTheme.text,
-    muted: textTheme.muted,
-    // Микрофон — цвета текста, значок на нём — цвета фона
-    mic: textTheme.mic,
-    onMic: textTheme.onMic,
+    text: ink(p.text).text,
+    // Время «как в теме» — приглушённое; выбранное явно — в полную яркость (иначе не видно на обоях)
+    time: p.time === 'auto' ? bgSet.muted : ink(p.time).text,
+    muted: bgSet.muted,
+    mic: micSet.mic,
+    onMic: micSet.onMic,
     showMic: p.mic,
   };
 }
@@ -53,8 +61,8 @@ const ms = (date: string, time: string | null) => {
 };
 
 /**
- * Дела для виджета из всех моих групп: сначала ближайшие с датой (с повторами, на 2 месяца вперёд),
- * потом без даты (новые первыми). Выполненные и прошедшие — не показываем.
+ * Дела для виджета из всех моих групп: ближайшие с датой (с повторами, на 2 месяца вперёд).
+ * Дела без даты не показываем — их бывает много, они забивают виджет. Выполненные и прошедшие — тоже.
  */
 export function upcoming(tasks: Task[], groupIds: Set<string>, now = new Date()): WidgetItem[] {
   const from = toISODate(now);
@@ -70,12 +78,7 @@ export function upcoming(tasks: Task[], groupIds: Set<string>, now = new Date())
     .filter((x) => x.until > now.getTime())
     .sort((a, b) => a.until - b.until || a.title.localeCompare(b.title, 'ru'))
     .slice(0, 60);
-  const undated = mine
-    .filter((t) => !t.date && !t.doneAt)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 5)
-    .map((t) => ({ id: t.id, title: t.title, date: null, time: t.time, until: Number.MAX_SAFE_INTEGER }));
-  return [...dated, ...undated];
+  return dated;
 }
 
 /** Что показать в момент now: первые n ещё не прошедших, у серии — только ближайший раз */

@@ -1,9 +1,9 @@
 import React from 'react';
-import { Platform, ScrollView, Switch, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackHeader } from '@/components/Header';
 import { ReminderEditor } from '@/components/ReminderEditor';
-import { Divider, ListRow, SectionLabel, T } from '@/components/ui';
+import { Divider, ListRow, SectionLabel, T, Toggle } from '@/components/ui';
 import { useStore } from '@/lib/store';
 import { space, useColors } from '@/theme';
 
@@ -26,13 +26,7 @@ export default function Reminders() {
         <ListRow
           label="Напоминания включены"
           right={
-            <Switch
-              value={r.enabled}
-              onValueChange={(enabled) => setReminders({ enabled })}
-              trackColor={{ true: c.primary, false: c.border }}
-              thumbColor={Platform.OS === 'android' ? (r.enabled ? c.onPrimary : c.textMuted) : undefined}
-              ios_backgroundColor={c.border}
-            />
+            <Toggle value={r.enabled} onValueChange={(enabled) => setReminders({ enabled })} />
           }
         />
         <Divider />

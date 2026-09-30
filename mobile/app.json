@@ -78,6 +78,7 @@
                 "supportedFamilies": [
                   "systemSmall",
                   "systemMedium",
+                  "systemLarge",
                   "accessoryCircular",
                   "accessoryRectangular"
                 ],
@@ -89,8 +90,65 @@
                       "type": "boolean",
                       "default": true
                     },
+                    "micTone": {
+                      "title": "Цвет микрофона",
+                      "type": "enum",
+                      "values": [
+                        {
+                          "name": "Как в теме",
+                          "value": "auto"
+                        },
+                        {
+                          "name": "Светлый",
+                          "value": "light"
+                        },
+                        {
+                          "name": "Тёмный",
+                          "value": "dark"
+                        }
+                      ],
+                      "default": "auto"
+                    },
+                    "bg": {
+                      "title": "Фон",
+                      "type": "enum",
+                      "values": [
+                        {
+                          "name": "Как в теме",
+                          "value": "auto"
+                        },
+                        {
+                          "name": "Светлый",
+                          "value": "light"
+                        },
+                        {
+                          "name": "Тёмный",
+                          "value": "dark"
+                        }
+                      ],
+                      "default": "auto"
+                    },
                     "text": {
-                      "title": "Цвет текста",
+                      "title": "Цвет названий",
+                      "type": "enum",
+                      "values": [
+                        {
+                          "name": "Как в теме",
+                          "value": "auto"
+                        },
+                        {
+                          "name": "Светлый",
+                          "value": "light"
+                        },
+                        {
+                          "name": "Тёмный",
+                          "value": "dark"
+                        }
+                      ],
+                      "default": "auto"
+                    },
+                    "time": {
+                      "title": "Цвет времени",
                       "type": "enum",
                       "values": [
                         {
