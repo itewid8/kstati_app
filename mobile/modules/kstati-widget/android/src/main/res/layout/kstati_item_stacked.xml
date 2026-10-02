@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Строка дела в узком виджете: название, под ним время -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:gravity="center_vertical"
+  android:minHeight="36dp"
+  android:orientation="vertical">
+  <TextView
+    android:id="@+id/kstati_title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:fontFamily="@font/kstati_geist"
+    android:maxLines="1"
+    android:textSize="14sp" />
+  <TextView
+    android:id="@+id/kstati_time"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fontFamily="@font/kstati_geist_mono"
+    android:maxLines="1"
+    android:textSize="12sp" />
+</LinearLayout>

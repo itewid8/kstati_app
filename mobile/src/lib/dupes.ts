@@ -1,4 +1,4 @@
-import type { DraftItem, ID, Task, WatchItem, Wish } from './types';
+import type { DraftItem, ID, Task, Topic, WatchItem, Wish } from './types';
 
 /** «Дюна », «дюна», «Дюна!» — одно и то же */
 export const normTitle = (s: string) =>
@@ -9,7 +9,7 @@ export const normTitle = (s: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-type Ctx = { tasks: Task[]; watch: WatchItem[]; wishes: Wish[]; groupId: ID | null; meId: ID };
+type Ctx = { tasks: Task[]; watch: WatchItem[]; wishes: Wish[]; topics?: Topic[]; groupId: ID | null; meId: ID };
 
 /**
  * Уже есть такая запись? Возвращает текст предупреждения или null.
@@ -20,6 +20,12 @@ type Ctx = { tasks: Task[]; watch: WatchItem[]; wishes: Wish[]; groupId: ID | nu
 export function duplicateOf(item: DraftItem, ctx: Ctx): string | null {
   const t = normTitle(item.data.title);
   if (!t) return null;
+  // Идеи повторяться могут — это черновики мыслей; тема с тем же названием у меня уже есть — предупреждаем
+  if (item.type === 'idea') return null;
+  if (item.type === 'topic') {
+    const hit = ctx.topics?.find((x) => x.id !== item.id && x.ownerId === ctx.meId && normTitle(x.title) === t);
+    return hit ? `Тема «${hit.title}» уже есть` : null;
+  }
   if (item.type === 'task') {
     const d = item.data.date ?? null;
     const hit = ctx.tasks.find(

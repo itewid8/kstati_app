@@ -1,18 +1,16 @@
 /**
- * Точка входа. На Android сначала регистрируем обработчик виджета на рабочем столе:
- * Android вызывает его без открытия приложения (добавили виджет, прошло 30 минут).
+ * Точка входа. На Android дополнительно регистрируем экран настроек виджета на рабочем столе.
  */
 import { Platform } from 'react-native';
 // Фоновое обновление (виджет, напоминания) — задача должна быть объявлена при загрузке кода
 import './src/lib/background';
 
 if (Platform.OS === 'android') {
-  const { registerWidgetTaskHandler, registerWidgetConfigurationScreen } = require('react-native-android-widget');
-  const { widgetTaskHandler } = require('./src/widget/android');
+  // Настройки виджета на рабочем столе (долгое нажатие на виджет → «Настроить»): нативное окно
+  // KstatiWidgetConfigActivity из modules/kstati-widget показывает этот экран
+  const { AppRegistry } = require('react-native');
   const { WidgetConfig } = require('./src/widget/WidgetConfig');
-  registerWidgetTaskHandler(widgetTaskHandler);
-  // Настройки виджета: долгое нажатие на виджет → «Настроить»
-  registerWidgetConfigurationScreen(WidgetConfig);
+  AppRegistry.registerComponent('KstatiWidgetConfig', () => WidgetConfig);
 }
 
 import 'expo-router/entry';

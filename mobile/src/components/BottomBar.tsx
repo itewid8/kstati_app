@@ -4,12 +4,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useStore } from '@/lib/store';
 import { cancelRecording, holdEnd, holdStart, MAX_MS, recordingStartedAt, toggleRecording, useVoiceLevel } from '@/lib/voice';
 import { ICON, motion, useColors } from '@/theme';
 import { T } from './ui';
 
-const LABELS: Record<string, string> = { tasks: 'Дела', wishes: 'Хочу', watch: 'Смотреть' };
+const LABELS: Record<string, string> = { tasks: 'Дела', wishes: 'Хочу', watch: 'Смотреть', ideas: 'Идеи' };
 export const TAB_BAR_HEIGHT = 52;
 export const MIC_SIZE = 64;
 /** Сколько места снизу оставлять под таб-бар и микрофон */
@@ -28,6 +29,7 @@ export function BottomBar({ state, navigation }: Props) {
     // Абсолютное позиционирование: список прокручивается под микрофоном,
     // а зона кнопки остаётся внутри границ View (на Android иначе не ловит нажатия).
     <View style={styles.root} pointerEvents="box-none">
+      <Scrim bottom={TAB_BAR_HEIGHT + insets.bottom} />
       <MicCluster />
       <View style={[styles.bar, { backgroundColor: c.background, borderTopColor: c.border, paddingBottom: insets.bottom, height: TAB_BAR_HEIGHT + insets.bottom }]}>
         {state.routes.map((r, i) => {
@@ -57,6 +59,8 @@ export function BottomBar({ state, navigation }: Props) {
  * Кнопка едет за пальцем не дальше крестика; наехала на него — запись отменяется.
  */
 const CROSS_DX = MIC_SIZE / 2 + 12 + 20;
+/** Ширина колонок по бокам микрофона */
+const SIDE = 80;
 const CANCEL_DX = CROSS_DX - 12;
 
 function MicCluster() {
@@ -154,6 +158,37 @@ function MicCluster() {
   );
 }
 
+/** Высота плавного затемнения над таб-баром: зона микрофона и ещё немного списка над ней */
+const SCRIM_H = MIC_SIZE + 12 + 96;
+
+/**
+ * Плавное затемнение низа экрана, пока идёт запись (в обоих режимах) и её разбор:
+ * список уходит в цвет фона, и запись не теряется на фоне дел.
+ */
+function Scrim({ bottom }: { bottom: number }) {
+  const c = useColors();
+  const phase = useStore((s) => s.voice);
+  const active = phase === 'recording' || phase === 'processing';
+  const fade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(fade, { toValue: active ? 1 : 0, duration: motion.base, useNativeDriver: true }).start();
+  }, [active, fade]);
+  return (
+    <Animated.View pointerEvents="none" style={[styles.scrim, { bottom, opacity: fade }]}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id="kstatiScrim" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={c.background} stopOpacity={0} />
+            <Stop offset="0.55" stopColor={c.background} stopOpacity={0.85} />
+            <Stop offset="1" stopColor={c.background} stopOpacity={1} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#kstatiScrim)" />
+      </Svg>
+    </Animated.View>
+  );
+}
+
 function Timer() {
   const [ms, setMs] = useState(0);
   useEffect(() => {
@@ -208,6 +243,7 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   root: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  scrim: { position: 'absolute', left: 0, right: 0, height: SCRIM_H },
   cluster: {
     height: MIC_SIZE,
     marginBottom: 12,
@@ -215,7 +251,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  side: { width: 80, alignItems: 'flex-end', paddingHorizontal: 12 },
+  side: { width: SIDE, alignItems: 'flex-end', paddingHorizontal: 12 },
   mic: {
     width: MIC_SIZE,
     height: MIC_SIZE,

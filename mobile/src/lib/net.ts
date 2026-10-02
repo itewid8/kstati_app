@@ -88,6 +88,10 @@ export type Op =
   | { op: 'item.delete'; groupId: string; id: string }
   | { op: 'wish.put'; wish: WishOp }
   | { op: 'wish.delete'; id: string }
+  | { op: 'topic.put'; topic: { id: string; title: string; groupIds: string[] } }
+  | { op: 'topic.delete'; id: string }
+  | { op: 'idea.put'; idea: { id: string; topicId: string | null; text: string } }
+  | { op: 'idea.delete'; id: string }
   | { op: 'group.create'; group: { id: string; name: string; category: string } }
   | { op: 'group.update'; id: string; name?: string; category?: string }
   | { op: 'group.join'; code: string }
@@ -113,6 +117,14 @@ export function opKey(o: Op): string | null {
       return `wish:${o.wish.id}`;
     case 'wish.delete':
       return `wish:${o.id}`;
+    case 'topic.put':
+      return `topic:${o.topic.id}`;
+    case 'topic.delete':
+      return `topic:${o.id}`;
+    case 'idea.put':
+      return `idea:${o.idea.id}`;
+    case 'idea.delete':
+      return `idea:${o.id}`;
     default:
       return null;
   }

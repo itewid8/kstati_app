@@ -21,7 +21,7 @@ const errText = (e: unknown) => {
   const extra = cause ? ` (${[cause.code, cause.message].filter(Boolean).join(': ')})` : '';
   return (e.message + extra).slice(0, 500);
 };
-const ctxSize = (c: Context) => ({ tasks: c.existing.tasks.length, watch: c.existing.watch.length, wishes: c.existing.wishes.length, people: c.people.length });
+const ctxSize = (c: Context) => ({ tasks: c.existing.tasks.length, watch: c.existing.watch.length, wishes: c.existing.wishes.length, ideas: c.existing.ideas?.length ?? 0, people: c.people.length });
 
 /** Сегодняшняя дата по Москве — для суточного лимита */
 const mskDay = () => new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
@@ -30,6 +30,8 @@ const VoiceMeta = z.object({
   groupId: z.string().max(64),
   today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   now: z.string().regex(/^\d{2}:\d{2}$/),
+  /** Открытая тема идей (если запись начали на её экране) */
+  topicId: z.string().max(64).nullable().optional(),
 });
 
 export type Deps = {
@@ -81,7 +83,18 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   async function buildContext(user: User, meta: z.infer<typeof VoiceMeta>): Promise<Context> {
     const { groups, people } = await data.circle(user);
     if (!groups.some((g) => g.id === meta.groupId)) throw new HttpError(403, 'not_member', 'Нет доступа к группе');
-    const [items, wishes] = await Promise.all([store.listItems(meta.groupId), store.listWishes(user.id)]);
+    const [items, wishes, notes] = await Promise.all([
+      store.listItems(meta.groupId),
+      store.listWishes(user.id),
+      store.listNotes(user.id).catch(() => []),
+    ]);
+    const topics = notes.flatMap((n) => (n.kind === 'topic' ? [{ id: n.id, title: n.title }] : []));
+    // Для переноса и удаления голосом хватает последних идей; текст укорачиваем — экономим токены
+    const ideas = notes
+      .flatMap((n) => (n.kind === 'idea' ? [n] : []))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 60)
+      .map((n) => ({ id: n.id, text: n.text.length > 90 ? `${n.text.slice(0, 90)}…` : n.text, topicId: n.topicId }));
     return {
       today: meta.today,
       now: meta.now,
@@ -92,7 +105,10 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
         tasks: items.flatMap((t) => (t.type === 'task' ? [{ id: t.id, title: t.title, date: t.date, time: t.time, done: !!t.doneAt }] : [])),
         watch: items.flatMap((w) => (w.type === 'watch' ? [{ id: w.id, title: w.title, done: !!w.watchedAt }] : [])),
         wishes: wishes.map((w) => ({ id: w.id, title: w.title, done: !!w.receivedAt })),
+        ideas,
       },
+      topics,
+      currentTopicId: meta.topicId && topics.some((t) => t.id === meta.topicId) ? meta.topicId : null,
     };
   }
 

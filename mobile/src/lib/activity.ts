@@ -54,5 +54,7 @@ export function activityText(e: Activity, actor: User | undefined, users: User[]
       return `${v('исключил')} ${users.find((u) => u.id === e.target)?.name ?? 'участника'}`;
     case 'group.rename':
       return `${v('переименовал')} группу в ${q(e.title)}`;
+    case 'topic.share':
+      return `${v('открыл')} группе тему идей ${q(e.title)}`;
   }
 }

@@ -131,6 +131,31 @@ export type Wish = {
   createdAt: string;
 };
 
+/**
+ * Идеи — личный блокнот, разложенный по темам. Тема и идеи принадлежат человеку и видны только ему;
+ * тему можно открыть группам (groupIds) — участники её видят, но менять не могут.
+ */
+export type Topic = {
+  id: ID;
+  ownerId: ID;
+  title: string;
+  groupIds: ID[];
+  createdAt: string;
+};
+
+export type Idea = {
+  id: ID;
+  ownerId: ID;
+  /** null — «Без темы» */
+  topicId: ID | null;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** id «темы» для идей без темы — в адресе экрана и в голосовом ответе */
+export const INBOX = 'inbox';
+
 export type Kind = 'movie' | 'series' | 'cartoon' | 'show' | 'standup';
 export type Genre =
   | 'comedy'
@@ -216,7 +241,8 @@ export type ActivityKind =
   | 'member.join'
   | 'member.leave'
   | 'member.remove'
-  | 'group.rename';
+  | 'group.rename'
+  | 'topic.share';
 
 export type Activity = {
   scope: string;
@@ -255,17 +281,23 @@ export type WatchDraft = {
   year: number | null;
 };
 
+/** Идея в карточке: title — её текст; тема — существующая (topicId) или новая (newTopic); обе null — «Без темы» */
+export type IdeaDraft = { title: string; topicId: ID | null; newTopic: string | null };
+export type TopicDraft = { title: string };
+
 export type DraftItem =
   | { key: string; type: 'task'; id?: ID; force?: boolean; data: TaskDraft }
   | { key: string; type: 'wish'; id?: ID; force?: boolean; data: WishDraft }
-  | { key: string; type: 'watch'; id?: ID; force?: boolean; data: WatchDraft };
+  | { key: string; type: 'watch'; id?: ID; force?: boolean; data: WatchDraft }
+  | { key: string; type: 'idea'; id?: ID; force?: boolean; data: IdeaDraft }
+  | { key: string; type: 'topic'; id?: ID; force?: boolean; data: TopicDraft };
 
 export type ItemType = DraftItem['type'];
 
 /* Голосовые изменения существующих записей */
 export type ChangeAction = 'update' | 'mark' | 'unmark' | 'delete';
 
-export type ChangePatch = Partial<TaskDraft> & Partial<WishDraft> & Partial<WatchDraft>;
+export type ChangePatch = Partial<TaskDraft> & Partial<WishDraft> & Partial<WatchDraft> & Partial<Omit<IdeaDraft, 'title'>>;
 
 export type ChangeDraft = {
   key: string;

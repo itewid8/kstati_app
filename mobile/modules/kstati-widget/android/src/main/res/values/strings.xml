@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="kstati_widget_label">Кстати</string>
+  <string name="kstati_widget_description">Ближайшие дела и микрофон</string>
+  <string name="kstati_widget_empty">Дел нет</string>
+</resources>

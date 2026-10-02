@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Низкий или вытянутый вбок виджет: дела слева, микрофон справа по центру высоты.
+     Размеры не задаются числами — раскладку по настоящей рамке виджета делает сам Android. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@android:id/background"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent">
+  <ImageView
+    android:id="@+id/kstati_card"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no"
+    android:scaleType="fitXY"
+    android:src="@drawable/kstati_card" />
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/kstati_pad"
+    android:paddingTop="@dimen/kstati_pad_row"
+    android:paddingEnd="@dimen/kstati_pad"
+    android:paddingBottom="@dimen/kstati_pad_row">
+    <LinearLayout
+      android:id="@+id/kstati_list"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:orientation="vertical" />
+    <include
+      layout="@layout/kstati_mic_button"
+      android:layout_width="@dimen/kstati_mic"
+      android:layout_height="@dimen/kstati_mic"
+      android:layout_marginStart="@dimen/kstati_gap" />
+  </LinearLayout>
+</FrameLayout>

@@ -12,6 +12,7 @@ import {
   ORIGIN_LABEL,
   type DraftItem,
   type Genre,
+  type IdeaDraft,
   type Kind,
   type Origin,
   type TaskDraft,
@@ -67,6 +68,16 @@ export function ItemPreview({ item }: { item: DraftItem }) {
       </View>
     );
   }
+  if (item.type === 'idea') return <IdeaPreview value={item.data} />;
+  if (item.type === 'topic')
+    return (
+      <View style={{ gap: 2 }}>
+        <T variant="label" muted>
+          Новая тема
+        </T>
+        <T weight="medium">{item.data.title}</T>
+      </View>
+    );
   const d = item.data;
   const meta = [d.kind ? KIND_LABEL[d.kind] : null, d.year].filter(Boolean).join(' · ');
   const sub = [...d.genres.map((g) => GENRE_LABEL[g]), d.origin ? ORIGIN_LABEL[d.origin] : null].filter(Boolean).join(', ');
@@ -107,7 +118,58 @@ function ReminderLine({ draft }: { draft: TaskDraft }) {
 export function ItemEditor({ item, onChange }: { item: DraftItem; onChange: (i: DraftItem) => void }) {
   if (item.type === 'task') return <TaskEditor value={item.data} onChange={(data) => onChange({ ...item, data })} />;
   if (item.type === 'wish') return <WishEditor value={item.data} onChange={(data) => onChange({ ...item, data })} />;
+  if (item.type === 'idea') return <IdeaEditor value={item.data} onChange={(data) => onChange({ ...item, data })} />;
+  if (item.type === 'topic')
+    return <Field placeholder="Название темы" value={item.data.title} onChangeText={(title) => onChange({ ...item, data: { title } })} autoFocus={!item.data.title} />;
   return <WatchEditor value={item.data} onChange={(data) => onChange({ ...item, data })} />;
+}
+
+/** Куда ляжет идея: «Тема», «Новая тема: …» или «Без темы» */
+function topicLine(d: IdeaDraft, title: (id: string) => string | undefined) {
+  if (d.newTopic?.trim()) return `Новая тема: ${d.newTopic.trim()}`;
+  return d.topicId ? (title(d.topicId) ?? 'Без темы') : 'Без темы';
+}
+
+function IdeaPreview({ value }: { value: IdeaDraft }) {
+  const topics = useStore((s) => s.topics);
+  return (
+    <View style={{ gap: 4 }}>
+      <T>{value.title}</T>
+      <T variant="caption" muted>
+        {topicLine(value, (id) => topics.find((t) => t.id === id)?.title)}
+      </T>
+    </View>
+  );
+}
+
+/** Идея: текст и тема. Тему можно выбрать из своих или назвать новую */
+function IdeaEditor({ value, onChange }: { value: IdeaDraft; onChange: (v: IdeaDraft) => void }) {
+  const meId = useStore((s) => s.me?.id);
+  const all = useStore((s) => s.topics);
+  const topics = all.filter((t) => t.ownerId === meId);
+  const set = (p: Partial<IdeaDraft>) => onChange({ ...value, ...p });
+  const creating = value.newTopic !== null;
+  return (
+    <View style={{ gap: 14 }}>
+      <Field
+        placeholder="Идея"
+        value={value.title}
+        onChangeText={(title) => set({ title })}
+        autoFocus={!value.title}
+        multiline
+        textAlignVertical="top"
+        style={{ height: undefined, minHeight: 96, paddingTop: 12, paddingBottom: 12 }}
+      />
+      <Group label="Тема">
+        <Chip label="Без темы" selected={!creating && !value.topicId} onPress={() => set({ topicId: null, newTopic: null })} />
+        {topics.map((t) => (
+          <Chip key={t.id} label={t.title} selected={!creating && value.topicId === t.id} onPress={() => set({ topicId: t.id, newTopic: null })} />
+        ))}
+        <Chip label="Новая" selected={creating} onPress={() => set({ topicId: null, newTopic: creating ? null : '' })} />
+      </Group>
+      {creating && <Field placeholder="Название темы" value={value.newTopic ?? ''} onChangeText={(newTopic) => set({ newTopic })} autoFocus={!value.newTopic} />}
+    </View>
+  );
 }
 
 function TaskEditor({ value, onChange }: { value: TaskDraft; onChange: (v: TaskDraft) => void }) {

@@ -83,7 +83,7 @@ const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment<
     </VStack>
   );
 
-  // Маленький и большой: дела сверху во всю ширину, микрофон снизу справа
+  // Маленький и большой: дела сверху во всю ширину, микрофон снизу по центру
   if (small || large) {
     return (
       <VStack alignment="leading" modifiers={[widgetURL('kstati://record'), containerBackground(bg, 'widget')]}>
@@ -92,6 +92,7 @@ const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment<
         <HStack>
           <Spacer />
           {micButton}
+          <Spacer />
         </HStack>
       </VStack>
     );

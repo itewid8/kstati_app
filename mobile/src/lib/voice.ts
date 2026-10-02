@@ -16,8 +16,8 @@ import { answerPlans } from './plans';
 import { groupmates, useStore } from './store';
 import type { ItemType } from './types';
 
-/** Голосовая команда — не длиннее 7 секунд: короткие фразы дешевле и точнее разбираются */
-export const MAX_MS = 7_000;
+/** Голосовая команда — не длиннее 10 секунд: короткие фразы дешевле и точнее разбираются */
+export const MAX_MS = 10_000;
 const MIN_MS = 700;
 const FAKE_PROCESSING_MS = 800;
 
@@ -134,10 +134,12 @@ export function toggleRecording() {
   else if (v === 'recording') stopRecording();
 }
 
-export const TAB_FOR: Record<ItemType, '/tasks' | '/wishes' | '/watch'> = {
+export const TAB_FOR: Record<ItemType, '/tasks' | '/wishes' | '/watch' | '/ideas'> = {
   task: '/tasks',
   wish: '/wishes',
   watch: '/watch',
+  idea: '/ideas',
+  topic: '/ideas',
 };
 
 /** Разбор текста: «Разобрать заново» и режим без микрофона */
@@ -200,6 +202,10 @@ function applyResult(transcript: string, r: ParseResult) {
     }
     case 'unknownPerson':
       s.setCard({ source: 'voice', transcript, problem: 'unknownPerson', person: r.name });
+      return;
+    case 'queryIdeas':
+      s.setCard(null);
+      router.navigate(r.topicId ? `/ideas/${r.topicId}` : '/ideas');
       return;
     case 'unknown':
       s.setCard({ source: 'voice', transcript, problem: 'notUnderstood' });

@@ -4,7 +4,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Activity, Group, Item, Prefs, Store, User, Wish } from './types.js';
+import type { Activity, Group, Item, Note, Prefs, Store, User, Wish } from './types.js';
 
 type Dump = {
   users: Record<string, User>;
@@ -17,9 +17,10 @@ type Dump = {
   temp: Record<string, { v: unknown; exp: number }>;
   activity: Record<string, Activity[]>;
   prefs: Record<string, Prefs>;
+  notes: Record<string, Record<string, Note>>;
 };
 
-const empty = (): Dump => ({ users: {}, keys: {}, groups: {}, members: {}, items: {}, wishes: {}, counters: {}, temp: {}, activity: {}, prefs: {} });
+const empty = (): Dump => ({ users: {}, keys: {}, groups: {}, members: {}, items: {}, wishes: {}, counters: {}, temp: {}, activity: {}, prefs: {}, notes: {} });
 const clone = <T>(x: T): T => (x === undefined ? x : JSON.parse(JSON.stringify(x)));
 
 export class MemoryStore implements Store {
@@ -118,6 +119,21 @@ export class MemoryStore implements Store {
   }
   async deleteItem(groupId: string, id: string) {
     delete this.d.items[groupId]?.[id];
+    this.save();
+  }
+
+  async listNotes(ownerId: string) {
+    return Object.values(this.d.notes[ownerId] ?? {}).map(clone);
+  }
+  async getNote(ownerId: string, id: string) {
+    return clone(this.d.notes[ownerId]?.[id]) ?? null;
+  }
+  async putNote(n: Note) {
+    (this.d.notes[n.ownerId] ??= {})[n.id] = clone(n);
+    this.save();
+  }
+  async deleteNote(ownerId: string, id: string) {
+    delete this.d.notes[ownerId]?.[id];
     this.save();
   }
 

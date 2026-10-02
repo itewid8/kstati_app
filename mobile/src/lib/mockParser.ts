@@ -35,6 +35,8 @@ export type ParseResult =
   | { type: 'changes'; changes: ChangeDraft[] }
   | { type: 'notFound'; query: string }
   | { type: 'queryPlans'; plans: PlansQuery }
+  /** «Покажи идеи для подарков»: тема (id), 'inbox' — «Без темы», null — список тем */
+  | { type: 'queryIdeas'; topicId: ID | null }
   | { type: 'unknown' };
 
 /** Записи, среди которых ищем цель для «перенеси / отметь / удали» */

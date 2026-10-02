@@ -17,6 +17,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="tasks" />
       <Tabs.Screen name="wishes" />
       <Tabs.Screen name="watch" />
+      <Tabs.Screen name="ideas" />
     </Tabs>
   );
 }

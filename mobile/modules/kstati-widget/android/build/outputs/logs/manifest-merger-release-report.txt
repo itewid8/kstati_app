@@ -1,0 +1,56 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:1:1-28:12
+INJECTED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:1:1-28:12
+	package
+		INJECTED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:1:11-69
+application
+ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:2:3-27:17
+receiver#expo.modules.kstatiwidget.KstatiWidgetProvider
+ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:4:5-14:16
+	android:label
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:7:7-50
+	android:exported
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:6:7-31
+	android:name
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:5:7-68
+intent-filter#action:name:android.appwidget.action.APPWIDGET_UPDATE
+ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:8:7-10:23
+action#android.appwidget.action.APPWIDGET_UPDATE
+ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:9:9-76
+	android:name
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:9:17-73
+meta-data#android.appwidget.provider
+ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:11:7-13:54
+	android:resource
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:13:9-51
+	android:name
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:12:9-50
+activity#expo.modules.kstatiwidget.KstatiWidgetConfigActivity
+ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:17:5-26:16
+	android:excludeFromRecents
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:20:7-40
+	android:exported
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:19:7-30
+	android:theme
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:22:7-54
+	android:taskAffinity
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:21:7-30
+	android:name
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:18:7-74
+intent-filter#action:name:android.appwidget.action.APPWIDGET_CONFIGURE
+ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:23:7-25:23
+action#android.appwidget.action.APPWIDGET_CONFIGURE
+ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:24:9-79
+	android:name
+		ADDED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml:24:17-76
+uses-sdk
+INJECTED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml
+INJECTED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android/src/main/AndroidManifest.xml
