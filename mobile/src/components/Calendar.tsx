@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { ChevronLeft, ChevronRight } from '@/components/icons';
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions, type RefreshControlProps } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import {
@@ -15,17 +15,20 @@ import {
   startOfMonth,
   startOfWeek,
   toISODate,
-  weekDayShort,
   WEEKDAYS_SHORT,
   weekTitle,
 } from '@/lib/dates';
-import type { Task } from '@/lib/types';
+import { daysOf, fromMin, peopleOf } from '@/lib/span';
+import { useStore } from '@/lib/store';
+import type { ID, Task } from '@/lib/types';
 import { font, ICON, space, useColors } from '@/theme';
-import { TaskRow } from './TaskRow';
+import { uid } from '@/lib/ids';
+import { DayHeader, TimeGrid, type GridColumn } from './TimeGrid';
+import { editTask, openPlan, TaskRow } from './TaskRow';
 import { Button, Divider, T } from './ui';
 
-export type Zoom = 'week' | 'month' | 'year';
-const ZOOMS: Zoom[] = ['week', 'month', 'year'];
+export type Zoom = 'day' | 'week' | 'month' | 'year';
+const ZOOMS: Zoom[] = ['day', 'week', 'month', 'year'];
 const MONTH_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
@@ -35,6 +38,7 @@ const daysIn = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
 /** Сдвиг выбранной даты на один период; число месяца сохраняется, если оно есть в новом месяце */
 function shift(iso: string, zoom: Zoom, dir: 1 | -1): string {
   const d = fromISODate(iso);
+  if (zoom === 'day') return toISODate(addDays(d, dir));
   if (zoom === 'week') return toISODate(addDays(d, 7 * dir));
   const months = zoom === 'month' ? dir : 12 * dir;
   const y = d.getFullYear();
@@ -47,10 +51,8 @@ function shift(iso: string, zoom: Zoom, dir: 1 | -1): string {
 function useByDate(tasks: Task[]) {
   return useMemo(() => {
     const m = new Map<string, Task[]>();
-    for (const t of tasks) {
-      if (!t.date) continue;
-      m.set(t.date, [...(m.get(t.date) ?? []), t]);
-    }
+    // Многодневное дело — в каждом своём дне
+    for (const t of tasks) for (const d of daysOf(t)) m.set(d, [...(m.get(d) ?? []), t]);
     m.forEach((list) => list.sort((a, b) => sortKey(a.date, a.time).localeCompare(sortKey(b.date, b.time))));
     return m;
   }, [tasks]);
@@ -70,8 +72,14 @@ export function CalendarView({
   selected,
   onSelect,
   onPinching,
+  members = [],
+  refreshControl,
 }: {
   tasks: Task[];
+  /** Обновление потягиванием — для сетки времени, которая листается сама */
+  refreshControl?: React.ReactElement<RefreshControlProps>;
+  /** Участники группы — колонки «дня по людям» */
+  members?: ID[];
   zoom: Zoom;
   onZoom: (z: Zoom) => void;
   selected: string;
@@ -158,11 +166,18 @@ export function CalendarView({
   const anim = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ translateX: tx.value }, { scale: scale.value }] }));
 
   const title =
-    zoom === 'week' ? weekTitle(startOfWeek(sel)) : zoom === 'month' ? monthTitle(sel) : String(sel.getFullYear());
+    zoom === 'day'
+      ? cap(shortDate(selected))
+      : zoom === 'week'
+        ? weekTitle(startOfWeek(sel))
+        : zoom === 'month'
+          ? monthTitle(sel)
+          : String(sel.getFullYear());
+  const grid = zoom === 'day' || zoom === 'week';
 
   return (
     <GestureDetector gesture={pinch}>
-      <View collapsable={false}>
+      <View collapsable={false} style={grid ? { flex: 1 } : undefined}>
         <NavRow
           title={title}
           onTitle={zoom === 'year' ? undefined : () => zoomBy(1)}
@@ -171,8 +186,24 @@ export function CalendarView({
           onToday={() => onSelect(today)}
         />
         <GestureDetector gesture={slideWithPinch}>
-          <Animated.View style={[{ paddingBottom: 8 }, anim]}>
-            {zoom === 'week' && <WeekStrip byDate={byDate} selected={selected} today={today} onSelect={onSelect} />}
+          <Animated.View style={[{ paddingBottom: grid ? 0 : 8 }, grid ? { flex: 1 } : null, anim]}>
+            {zoom === 'week' && (
+              <WeekGrid
+                byDate={byDate}
+                selected={selected}
+                refreshControl={refreshControl}
+                onDay={(iso) => {
+                  onSelect(iso);
+                  onZoom('day');
+                }}
+              />
+            )}
+            {zoom === 'day' && (
+              <>
+                <WeekStrip byDate={byDate} selected={selected} today={today} onSelect={onSelect} />
+                <PeopleDay byDate={byDate} day={selected} members={members} refreshControl={refreshControl} />
+              </>
+            )}
             {zoom === 'month' && <MonthGrid byDate={byDate} selected={selected} today={today} onSelect={onSelect} />}
             {zoom === 'year' && (
               <YearGrid
@@ -191,7 +222,6 @@ export function CalendarView({
         </GestureDetector>
 
         {zoom === 'month' && <DayTasks byDate={byDate} day={selected} today={today} />}
-        {zoom === 'week' && <WeekAgenda byDate={byDate} selected={selected} today={today} onSelect={onSelect} />}
       </View>
     </GestureDetector>
   );
@@ -297,39 +327,69 @@ function WeekStrip(p: GridProps) {
   );
 }
 
-/** Под полоской — дела всей недели по дням */
-function WeekAgenda({ byDate, selected, today, onSelect }: GridProps) {
+/** Дело в сетке: план — открыть план, обычное — карточка */
+const openTask = (t: Task) => (useStore.getState().tasks.some((x) => x.parentId === t.id) ? openPlan(t.id) : editTask(t.id));
+
+/** Новое дело в пустом месте сетки: день и время, для колонки человека — он и занят */
+function newAt(day: string, minutes: number, people?: ID[]) {
+  useStore.getState().setCard({
+    source: 'manual',
+    editing: true,
+    items: [{ key: uid(), type: 'task', data: { title: '', date: day, time: fromMin(minutes), endTime: fromMin(Math.min(minutes + 60, 23 * 60 + 59)), ...(people && { people }) } }],
+  });
+}
+
+/** Неделя сеткой, как в Outlook: 7 колонок, часы сверху вниз; нажатие на день — день по людям */
+function WeekGrid({
+  byDate,
+  selected,
+  onDay,
+  refreshControl,
+}: {
+  byDate: Map<string, Task[]>;
+  selected: string;
+  onDay: (iso: string) => void;
+  refreshControl?: React.ReactElement<RefreshControlProps>;
+}) {
   const start = startOfWeek(fromISODate(selected));
-  return (
-    <View>
-      {Array.from({ length: 7 }, (_, i) => addDays(start, i)).map((d) => {
-        const iso = toISODate(d);
-        const list = byDate.get(iso) ?? [];
-        const isSel = iso === selected;
-        return (
-          <View key={iso}>
-            <Divider />
-            <Pressable onPress={() => onSelect(iso)} style={styles.dayHead}>
-              <T variant="caption" weight={isSel ? 'medium' : 'regular'} muted={!isSel}>
-                {cap(weekDayShort(d))}, {shortDate(iso).split(' ').slice(1).join(' ')}
-                {iso === today ? ' · сегодня' : ''}
-              </T>
-              <View style={{ flex: 1 }} />
-              {list.length === 0 && (
-                <T variant="caption" muted>
-                  —
-                </T>
-              )}
-            </Pressable>
-            {list.map((t) => (
-              <TaskRow key={t.id} task={t} past={isPast(t)} whenFormat="time" markDelay={0} />
-            ))}
-          </View>
-        );
-      })}
-      <Divider />
-    </View>
+  const columns: GridColumn[] = Array.from({ length: 7 }, (_, i) => {
+    const d = addDays(start, i);
+    const iso = toISODate(d);
+    return { key: iso, day: iso, header: <DayHeader date={d} label={WEEKDAYS_SHORT[i]} />, onHeader: () => onDay(iso), tasks: byDate.get(iso) ?? [] };
+  });
+  return <TimeGrid columns={columns} onTask={openTask} onSlot={(col, m) => newAt(col.day, m)} refreshControl={refreshControl} />;
+}
+
+/** День по людям: колонка на каждого участника группы, в ней — дела, где он занят */
+function PeopleDay({
+  byDate,
+  day,
+  members,
+  refreshControl,
+}: {
+  byDate: Map<string, Task[]>;
+  day: string;
+  members: ID[];
+  refreshControl?: React.ReactElement<RefreshControlProps>;
+}) {
+  const users = useStore((s) => s.users);
+  const meId = useStore((s) => s.me?.id);
+  const list = byDate.get(day) ?? [];
+  // Я — первым, дальше по алфавиту
+  const people = [...members].sort((a, b) =>
+    a === meId ? -1 : b === meId ? 1 : (users.find((u) => u.id === a)?.name ?? '').localeCompare(users.find((u) => u.id === b)?.name ?? '', 'ru'),
   );
+  const columns: GridColumn[] = (people.length ? people : [meId ?? '']).map((id) => ({
+    key: id,
+    day,
+    header: (
+      <T variant="caption" weight="medium" numberOfLines={1}>
+        {id === meId ? 'Я' : (users.find((u) => u.id === id)?.name ?? '—')}
+      </T>
+    ),
+    tasks: list.filter((t) => peopleOf(t).includes(id)),
+  }));
+  return <TimeGrid columns={columns} onTask={openTask} onSlot={(col, m) => newAt(day, m, [col.key])} refreshControl={refreshControl} />;
 }
 
 /* ---------------- Месяц ---------------- */
@@ -369,7 +429,7 @@ function DayTasks({ byDate, day, today }: { byDate: Map<string, Task[]>; day: st
         list.map((t, i) => (
           <View key={t.id}>
             {i > 0 && <Divider inset={space.side + 36} />}
-            <TaskRow task={t} past={isPast(t)} whenFormat="time" markDelay={0} />
+            <TaskRow task={t} past={isPast(t)} whenFormat="time" day={day} markDelay={0} />
           </View>
         ))
       )}

@@ -6,7 +6,21 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { buildMessages } from './prompt.js';
 import { changesRepeat, firstDate, spokenRepeat, stopsRepeat, stripRepeat } from './repeat.js';
-import { changeTarget, hasChangeVerb, isUnmark, nearestWeekday, normalizeTimes, plainWeekday, spokenKind, spokenPeriod, spokenTime } from './spoken.js';
+import {
+  changeTarget,
+  hasChangeVerb,
+  isUnmark,
+  nearestWeekday,
+  normalizeTimes,
+  plainWeekday,
+  spokenDateRange,
+  spokenDuration,
+  spokenKind,
+  spokenPeriod,
+  spokenSpan,
+  spokenTime,
+  spokenUntil,
+} from './spoken.js';
 import { addUsage, complete, NO_USAGE, type Usage } from './yandex.js';
 import {
   GENRES,
@@ -22,6 +36,7 @@ import {
   type Origin,
   type ParseResult,
   type PlansScope,
+  type TaskDraft,
   CATEGORIES,
   type GroupCategory,
   type WatchFilters,
@@ -84,6 +99,54 @@ function findTask(text: string, ctx: Context) {
   }
   return null;
 }
+
+/* ---------- длительность, участники, план ---------- */
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Конец по началу и длительности: «18:00 + 150 мин» → 20:30; через полночь — на следующий день */
+export function endFrom(day: string, start: string, minutes: number): { endDate: string | null; endTime: string } {
+  const [h, m] = start.split(':').map(Number);
+  const total = h * 60 + m + Math.round(minutes);
+  const days = Math.floor(total / 1440);
+  const mm = total % 1440;
+  return { endDate: days ? addDaysIso(day, days) : null, endTime: `${pad2(Math.floor(mm / 60))}:${pad2(mm % 60)}` };
+}
+
+/** Конец дела из ответа модели: дата конца позже начала, время конца позже начала (иначе — следующий день) */
+function endFields(day: string | null, start: string | null, endD: string | null, endT: string | null, minutes: number | null) {
+  if (minutes && minutes > 0 && day && start) return endFrom(day, start, minutes);
+  const endDate = endD && day && endD > day ? endD : null;
+  if (endT && start && day && !endDate && endT <= start) return { endDate: addDaysIso(day, 1), endTime: endT };
+  return { endDate, endTime: endT && (endDate || (start && endT > start)) ? endT : null };
+}
+
+/** Кто занят: «me», «all» (вся текущая группа) и имена → id участников текущей группы */
+function resolvePeople(v: unknown, ctx: Context): string[] {
+  if (!Array.isArray(v)) return [];
+  const members = ctx.groupMembers;
+  const out = new Set<string>();
+  for (const x of v) {
+    const n = str(x);
+    if (!n) continue;
+    if (n === 'all') (members ?? [ctx.me.id]).forEach((id) => out.add(id));
+    else {
+      const id = matchPerson(n, ctx);
+      if (id) out.add(id);
+    }
+  }
+  return [...out].filter((id) => !members || members.includes(id));
+}
+
+/** План, в который попадает подзадача: названный моделью (из существующих дел, не сам подзадача) или открытый на экране */
+function resolveParent(v: unknown, ctx: Context) {
+  const id = str(v).replace(/^task:/, '');
+  const named = id ? ctx.existing.tasks.find((t) => t.id === id && !t.parentId) : null;
+  const cur = ctx.currentParentId ? ctx.existing.tasks.find((t) => t.id === ctx.currentParentId) : null;
+  return named ?? cur ?? null;
+}
+
+const minutesOf = (v: unknown) => (typeof v === 'number' && v > 0 && v <= 60 * 24 * 14 ? v : null);
 
 /* ---------- идеи: темы по названию ---------- */
 
@@ -212,6 +275,8 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
   if (!hasChangeVerb(transcript) && !changesRepeat(transcript)) {
     actions = actions.map((a) => {
       if (!['update', 'mark', 'unmark'].includes(a.intent)) return a;
+      // «Добавь Карину в футбол» — это правка участников существующего дела, а не новое дело
+      if (a.intent === 'update' && Array.isArray(a.people) && a.people.length && !str(a.title)) return a;
       const id = (Array.isArray(a.target) ? a.target : []).map((x) => String(x).replace(/^(task|watch|wish|idea):/, ''))[0];
       const idea = ctx.existing.ideas?.find((x) => x.id === id);
       if (idea) return { intent: 'add', type: 'idea', text: str(a.text) || str(a.query), topic: a.topic } as RawAction;
@@ -265,18 +330,45 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
       });
     } else {
       const t = time(a.time) ?? (looksLikeTask ? spokenTime(transcript) : null);
-      // Время без даты — значит, сегодня
-      items.push({ key, type: 'task', data: { title, date: date(a.date) ?? (t ? ctx.today : null), time: t, note: str(a.note) } });
+      const parent = resolveParent(a.parent, ctx);
+      // Время без даты — значит, сегодня (а у подзадачи плана — первый день плана)
+      const day = date(a.date) ?? (t ? (parent?.date ?? ctx.today) : null);
+      const data: TaskDraft = { title, date: day, time: t, note: str(a.note) };
+      const end = endFields(day, t, date(a.end_date), time(a.end_time), minutesOf(a.duration_min));
+      if (end.endDate) data.endDate = end.endDate;
+      if (end.endTime) data.endTime = end.endTime;
+      const people = resolvePeople(a.people, ctx);
+      if (people.length) data.people = people;
+      if (parent) data.parentId = parent.id;
+      items.push({ key, type: 'task', data });
     }
   }
   // Одно дело — дату, сказанную словами («в следующую субботу»), считаем сами
   const tasks = items.filter((i) => i.type === 'task');
   if (tasks.length === 1 && tasks[0].type === 'task') {
-    const said = spokenPeriod(transcript, ctx.today);
     const d = tasks[0].data;
-    if (said && said.from === said.to) d.date = said.from;
+    // «С 7 по 9 октября», «с пятницы по воскресенье» — многодневное дело
+    const range = spokenDateRange(transcript, ctx.today);
+    const said = range ? null : spokenPeriod(transcript, ctx.today);
+    if (range) {
+      d.date = range.from;
+      if (range.to > range.from) d.endDate = range.to;
+      else delete d.endDate;
+    } else if (said && said.from === said.to) d.date = said.from;
     // «На выходных» — если модель дала дату вне периода, берём его начало
     else if (said && (!d.date || d.date < said.from || d.date > said.to) && addDaysIso(said.from, 1) >= said.to) d.date = said.from;
+    // «С 18 до 20» и «на два часа» считаем сами
+    const span = spokenSpan(transcript);
+    if (span) {
+      d.time = span.start;
+      d.endTime = span.end;
+      d.date ??= ctx.today;
+    } else {
+      const dur = spokenDuration(transcript);
+      if (dur && d.time && d.date) Object.assign(d, endFrom(d.date, d.time, dur));
+    }
+    if (d.endDate === null) delete d.endDate;
+    if (d.endDate && d.date && d.endDate <= d.date) delete d.endDate;
     // Повтор («каждую субботу», «по будням») считаем сами; первый раз — ближайший подходящий день
     const rep = spokenRepeat(transcript, ctx.today);
     if (rep) {
@@ -284,7 +376,9 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
       // «Каждую среду» — начиная с сегодняшнего дня, если он подходит (а не «со следующей среды»).
       // Дату берём из фразы, только если начало названо явно: «с понедельника», «с 5 октября», «завтра», «через неделю»
       const explicit = /(начиная|(^|\s)с\s+(завтра|понедельник|вторник|сред|четверг|пятниц|суббот|воскресен|\d)|завтра|послезавтра|через\s)/i.test(transcript);
+      const span0 = d.endDate && d.date ? Math.round((Date.parse(d.endDate) - Date.parse(d.date)) / 86400000) : 0;
       d.date = firstDate(rep, explicit ? d.date : null, ctx.today);
+      if (span0 && d.date) d.endDate = addDaysIso(d.date, span0);
       d.title = stripRepeat(d.title);
     }
   }
@@ -345,6 +439,37 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
         else if (saidDate && saidDate.from === saidDate.to) patch.date = saidDate.from;
         // Модель вернула «перенос» без изменений по сути — убираем поля, совпадающие со старыми
         if (old && patch.time === old.time && said === null && !('date' in a)) delete patch.time;
+        // Длительность: «футбол теперь с 19 до 21», «продли до 21», «сделай баню на 3 часа»
+        const span = spokenSpan(transcript);
+        const start = () => (patch.time !== undefined ? patch.time : (old?.time ?? null));
+        const day = () => (patch.date !== undefined ? patch.date : (old?.date ?? null)) ?? ctx.today;
+        if (span) {
+          patch.time = span.start;
+          patch.endTime = span.end;
+          patch.endDate = null;
+        } else {
+          const until = spokenUntil(transcript);
+          const dur = spokenDuration(transcript) ?? minutesOf(a.duration_min);
+          if (until && start()) {
+            // «Продли футбол (19:00) до девяти» — 21:00, а не 9 утра следующего дня
+            const [uh, um] = until.split(':').map(Number);
+            const fixed = until <= start()! && uh < 12 && `${pad2(uh + 12)}:${pad2(um)}` > start()! ? `${pad2(uh + 12)}:${pad2(um)}` : until;
+            const e = endFields(day(), start(), null, fixed, null);
+            patch.endTime = e.endTime;
+            patch.endDate = e.endDate;
+          } else if (dur && start()) Object.assign(patch, endFrom(day(), start()!, dur));
+          else if ('end_time' in a || 'end_date' in a) {
+            const e = endFields(day(), start(), date(a.end_date), time(a.end_time), null);
+            patch.endTime = e.endTime;
+            patch.endDate = e.endDate;
+          }
+        }
+        const people = resolvePeople(a.people, ctx);
+        if (people.length) {
+          // «Добавь Карину в футбол» — к тем, кто уже участвует; иначе — новый состав
+          const before = /добав/i.test(transcript) ? (old?.people ?? []).map((n) => matchPerson(n, ctx)).filter((x): x is string => !!x) : [];
+          patch.people = [...new Set([...before, ...people])];
+        }
         // Повтор: «теперь каждое воскресенье» — новый; «больше не повторяй» — снять
         if (stopsRepeat(transcript)) {
           patch.repeat = null;

@@ -11,6 +11,7 @@ import { useStore, type Card } from '@/lib/store';
 import { shortDate, taskWhen } from '@/lib/dates';
 import { INBOX, pastEnd, type ChangeDraft, type DraftItem, type ItemType, type Repeat, type Task } from '@/lib/types';
 import { track } from '@/lib/analytics';
+import { spanLabel } from '@/lib/span';
 import { handleTranscript, startRecording, TAB_FOR } from '@/lib/voice';
 import { font, ICON, size, space, useColors } from '@/theme';
 import { ItemEditor, ItemPreview } from './editors';
@@ -109,6 +110,8 @@ function Draft({ card }: { card: Extract<Card, { items: DraftItem[] }> }) {
     if (!first || card.source === 'edit') return;
     // Идея — сразу в её тему
     if (first.type === 'idea') router.navigate(`/ideas/${res.ideaTopicId ?? INBOX}`);
+    // Подзадача — в её план
+    else if (first.type === 'task' && first.data.parentId) router.navigate(`/tasks/${first.data.parentId}`);
     else router.navigate(TAB_FOR[first.type]);
   };
 
@@ -342,12 +345,24 @@ function actionLabel(ch: ChangeDraft): string {
   if (ch.action === 'unmark') return 'Снять отметку';
   if (ch.action === 'delete') return 'Удалить';
   if (ch.type === 'idea') return 'Перенести в другую тему';
+  if (ch.patch?.people && Object.keys(ch.patch).length === 1) return 'Изменить, кто участвует';
+  if ((ch.patch?.endTime !== undefined || ch.patch?.endDate !== undefined) && ch.patch?.time === undefined && ch.patch?.date === undefined) return 'Изменить длительность';
   if (ch.patch?.repeat === null) return 'Убрать повтор';
   if (ch.patch?.repeat) return 'Изменить повтор';
   return ch.patch?.title !== undefined ? 'Переименовать' : 'Перенести';
 }
 
-type Found = { title: string; date: string | null; time: string | null; repeat?: Repeat | null; topicId?: string | null } | null;
+type Found = {
+  title: string;
+  date: string | null;
+  time: string | null;
+  repeat?: Repeat | null;
+  topicId?: string | null;
+  endDate?: string | null;
+  endTime?: string | null;
+  people?: string[];
+  createdBy?: string;
+} | null;
 
 function useFind() {
   const tasks = useStore((s) => s.tasks);
@@ -366,7 +381,9 @@ function useFind() {
     }
     if (type === 'task') {
       const t = tasks.find((x) => x.id === id);
-      return t ? { title: t.title, date: t.date, time: t.time, repeat: t.repeat ?? null } : null;
+      return t
+        ? { title: t.title, date: t.date, time: t.time, repeat: t.repeat ?? null, endDate: t.endDate ?? null, endTime: t.endTime ?? null, people: t.people, createdBy: t.createdBy }
+        : null;
     }
     const w = (type === 'wish' ? wishes : watch).find((x) => x.id === id);
     return w ? { title: w.title, date: null, time: null } : null;
@@ -428,6 +445,7 @@ function ChangeView({
 }) {
   const c = useColors();
   const topics = useStore((s) => s.topics);
+  const users = useStore((s) => s.users);
   if (!item) return null;
   const p = ch.patch ?? {};
   const diffs: { label: string; from: string; to: string; mono?: boolean }[] = [];
@@ -436,10 +454,18 @@ function ChangeView({
     diffs.push({ label: 'Тема', from: name(item.topicId), to: p.newTopic ? `${p.newTopic} (новая)` : name(p.topicId) });
   }
   if (p.title !== undefined) diffs.push({ label: 'Название', from: item.title, to: p.title });
-  if (p.date !== undefined || p.time !== undefined) {
-    const nd = p.date !== undefined ? p.date : item.date;
-    const nt = p.time !== undefined ? p.time : item.time;
-    diffs.push({ label: 'Когда', from: taskWhen(item.date, item.time) || 'без даты', to: taskWhen(nd, nt) || 'без даты', mono: true });
+  if (p.date !== undefined || p.time !== undefined || p.endDate !== undefined || p.endTime !== undefined) {
+    const next = {
+      date: p.date !== undefined ? p.date : item.date,
+      time: p.time !== undefined ? p.time : item.time,
+      endDate: p.endDate !== undefined ? p.endDate : (item.endDate ?? null),
+      endTime: p.endTime !== undefined ? p.endTime : (item.endTime ?? null),
+    };
+    diffs.push({ label: 'Когда', from: spanLabel(item) || 'без даты', to: spanLabel(next) || 'без даты', mono: true });
+  }
+  if (p.people) {
+    const nm = (ids: string[]) => ids.map((id) => users.find((u) => u.id === id)?.name ?? '—').join(', ');
+    diffs.push({ label: 'Кто', from: nm(item.people?.length ? item.people : item.createdBy ? [item.createdBy] : []), to: nm(p.people) });
   }
   if (p.repeat !== undefined) {
     const start = p.date ?? item.date;

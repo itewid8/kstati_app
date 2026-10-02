@@ -32,6 +32,8 @@ const VoiceMeta = z.object({
   now: z.string().regex(/^\d{2}:\d{2}$/),
   /** Открытая тема идей (если запись начали на её экране) */
   topicId: z.string().max(64).nullable().optional(),
+  /** Открытый план большого дела: новое дело станет его подзадачей */
+  parentId: z.string().max(64).nullable().optional(),
 });
 
 export type Deps = {
@@ -82,7 +84,9 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   /** Контекст для ИИ собирает сервер из базы: люди моих групп, дела текущей группы, мои хотелки */
   async function buildContext(user: User, meta: z.infer<typeof VoiceMeta>): Promise<Context> {
     const { groups, people } = await data.circle(user);
-    if (!groups.some((g) => g.id === meta.groupId)) throw new HttpError(403, 'not_member', 'Нет доступа к группе');
+    const group = groups.find((g) => g.id === meta.groupId);
+    if (!group) throw new HttpError(403, 'not_member', 'Нет доступа к группе');
+    const nameOf = (id: string) => (id === user.id ? user.name : (people.find((p) => p.id === id)?.name ?? ''));
     const [items, wishes, notes] = await Promise.all([
       store.listItems(meta.groupId),
       store.listWishes(user.id),
@@ -102,13 +106,31 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       people: people.map((p) => ({ id: p.id, name: p.name })),
       groups: groups.map((g) => ({ name: g.name, category: g.category })),
       existing: {
-        tasks: items.flatMap((t) => (t.type === 'task' ? [{ id: t.id, title: t.title, date: t.date, time: t.time, done: !!t.doneAt }] : [])),
+        tasks: items.flatMap((t) =>
+          t.type === 'task'
+            ? [
+                {
+                  id: t.id,
+                  title: t.title,
+                  date: t.date,
+                  time: t.time,
+                  done: !!t.doneAt,
+                  endDate: t.endDate ?? null,
+                  endTime: t.endTime ?? null,
+                  people: (t.people?.length ? t.people : [t.createdBy]).map(nameOf).filter(Boolean),
+                  parentId: t.parentId ?? null,
+                },
+              ]
+            : [],
+        ),
         watch: items.flatMap((w) => (w.type === 'watch' ? [{ id: w.id, title: w.title, done: !!w.watchedAt }] : [])),
         wishes: wishes.map((w) => ({ id: w.id, title: w.title, done: !!w.receivedAt })),
         ideas,
       },
       topics,
       currentTopicId: meta.topicId && topics.some((t) => t.id === meta.topicId) ? meta.topicId : null,
+      groupMembers: group.memberIds,
+      currentParentId: meta.parentId && items.some((t) => t.id === meta.parentId && t.type === 'task' && !t.parentId) ? meta.parentId : null,
     };
   }
 

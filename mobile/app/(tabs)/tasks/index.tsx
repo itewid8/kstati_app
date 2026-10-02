@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { usePullRefresh } from '@/components/PullRefresh';
 // Прокрутка из gesture-handler: щипок в календаре может её перехватить
 import { ScrollView } from 'react-native-gesture-handler';
-import { useBottomSpace } from '@/components/BottomBar';
+import { MIC_SIZE, useBottomSpace } from '@/components/BottomBar';
 import { CalendarView } from '@/components/Calendar';
 import { emptyDraft } from '@/components/CardSheet';
 import { Header } from '@/components/Header';
@@ -71,6 +71,22 @@ export default function Tasks() {
       ) : (
         <>
           {calendar && <Segmented value={view} onChange={setTasksView} />}
+          {view === 'day' || view === 'week' ? (
+            // Сетка времени листается сама (часы); над ней — навигация и заголовки дней
+            // Низ сетки уходит под микрофон: последние часы прокручиваются над ним
+            <View style={{ flex: 1, paddingBottom: bottom - MIC_SIZE - 32 }}>
+              <CalendarView
+                tasks={calTasks}
+                zoom={view}
+                onZoom={setTasksView}
+                selected={selected}
+                onSelect={setSelected}
+                onPinching={setPinching}
+                members={group.memberIds}
+                refreshControl={refreshControl}
+              />
+            </View>
+          ) : (
           <ScrollView
             contentContainerStyle={{ paddingBottom: bottom }}
             scrollEnabled={!pinching}
@@ -85,9 +101,11 @@ export default function Tasks() {
                 selected={selected}
                 onSelect={setSelected}
                 onPinching={setPinching}
+                members={group.memberIds}
               />
             )}
           </ScrollView>
+          )}
         </>
       )}
     </View>
@@ -98,6 +116,7 @@ export default function Tasks() {
 function Segmented({ value, onChange }: { value: TasksView; onChange: (v: TasksView) => void }) {
   const c = useColors();
   const items: { key: TasksView; label: string }[] = [
+    { key: 'day', label: 'День' },
     { key: 'week', label: 'Неделя' },
     { key: 'month', label: 'Месяц' },
     { key: 'year', label: 'Год' },
@@ -124,7 +143,9 @@ function ListView({ tasks }: { tasks: Task[] }) {
     const now = new Date();
     // Выполненные остаются на своём месте (затемнены) и исчезают через 30 дней.
     // У серии — один ближайший раз (и сегодняшний, если уже отмечен)
-    const visible = listInstances(tasks, toISODate(now))
+    // Подзадачи живут в плане: в списке — только сам план с прогрессом
+    const ids = new Set(tasks.map((t) => t.id));
+    const visible = listInstances(tasks.filter((t) => !t.parentId || !ids.has(t.parentId)), toISODate(now))
       .filter((t) => !t.doneAt || now.getTime() - new Date(t.doneAt).getTime() < DONE_KEEP_MS)
       .sort((a, b) => sortKey(a.date, a.time).localeCompare(sortKey(b.date, b.time)));
     const by = new Map<Section, Task[]>();

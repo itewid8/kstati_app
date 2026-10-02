@@ -1,10 +1,8 @@
-import { X } from '@/components/icons';
-import React, { useState } from 'react';
-import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
-import { taskWhen } from '@/lib/dates';
-import { toISODate } from '@/lib/dates';
-import { repeatLabel, shiftRepeat } from '@/lib/recur';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
+import { repeatLabel } from '@/lib/recur';
 import { effectiveSpecs, specsSummary } from '@/lib/remind';
+import { spanLabel } from '@/lib/span';
 import { useStore } from '@/lib/store';
 import {
   GENRE_LABEL,
@@ -19,10 +17,7 @@ import {
   type WatchDraft,
   type WishDraft,
 } from '@/lib/types';
-import { ICON, useColors } from '@/theme';
-import { DatePanel, TimePanel } from './pickers';
-import { ReminderEditor } from './ReminderEditor';
-import { RepeatPanel } from './RepeatPanel';
+import { TaskEditor } from './TaskEditor';
 import { Chip, Field, T } from './ui';
 
 /* ================= Просмотр (карточка до «Исправить») ================= */
@@ -34,8 +29,9 @@ export function ItemPreview({ item }: { item: DraftItem }) {
       <View style={{ gap: 2 }}>
         <T weight="medium">{d.title || 'Без названия'}</T>
         <T variant="caption" mono muted>
-          {d.date || d.time ? taskWhen(d.date, d.time) : 'без даты'}
+          {d.date || d.time ? spanLabel(d) : 'без даты'}
         </T>
+        <TaskExtra draft={d} />
         {d.note ? (
           <T variant="caption" muted>
             {d.note}
@@ -102,6 +98,28 @@ export function ItemPreview({ item }: { item: DraftItem }) {
   );
 }
 
+/** Кто занят и в каком плане — в карточке до «Исправить» */
+function TaskExtra({ draft }: { draft: TaskDraft }) {
+  const users = useStore((s) => s.users);
+  const meId = useStore((s) => s.me?.id);
+  const parent = useStore((s) => (draft.parentId ? s.tasks.find((t) => t.id === draft.parentId) : null));
+  const who = (draft.people ?? []).map((id) => (id === meId ? 'я' : (users.find((u) => u.id === id)?.name ?? '—'))).join(', ');
+  return (
+    <>
+      {who ? (
+        <T variant="caption" muted>
+          Кто: {who}
+        </T>
+      ) : null}
+      {parent ? (
+        <T variant="caption" muted>
+          В плане «{parent.title}»
+        </T>
+      ) : null}
+    </>
+  );
+}
+
 /** «Напоминания: накануне в 20:00, за 1 ч до начала» — какие действуют для меня */
 function ReminderLine({ draft }: { draft: TaskDraft }) {
   const settings = useStore((s) => s.reminders);
@@ -116,12 +134,18 @@ function ReminderLine({ draft }: { draft: TaskDraft }) {
 /* ================= Редакторы ================= */
 
 export function ItemEditor({ item, onChange }: { item: DraftItem; onChange: (i: DraftItem) => void }) {
-  if (item.type === 'task') return <TaskEditor value={item.data} onChange={(data) => onChange({ ...item, data })} />;
+  if (item.type === 'task') return <TaskItemEditor item={item} onChange={onChange} />;
   if (item.type === 'wish') return <WishEditor value={item.data} onChange={(data) => onChange({ ...item, data })} />;
   if (item.type === 'idea') return <IdeaEditor value={item.data} onChange={(data) => onChange({ ...item, data })} />;
   if (item.type === 'topic')
     return <Field placeholder="Название темы" value={item.data.title} onChangeText={(title) => onChange({ ...item, data: { title } })} autoFocus={!item.data.title} />;
   return <WatchEditor value={item.data} onChange={(data) => onChange({ ...item, data })} />;
+}
+
+/** Дело: автор нужен, чтобы знать, кто занят, если «Кто» не выбран */
+function TaskItemEditor({ item, onChange }: { item: Extract<DraftItem, { type: 'task' }>; onChange: (i: DraftItem) => void }) {
+  const authorId = useStore((s) => (item.id ? s.tasks.find((t) => t.id === item.id)?.createdBy : undefined) ?? s.me?.id ?? '');
+  return <TaskEditor value={item.data} onChange={(data) => onChange({ ...item, data })} selfId={item.id} authorId={authorId} />;
 }
 
 /** Куда ляжет идея: «Тема», «Новая тема: …» или «Без темы» */
@@ -168,167 +192,6 @@ function IdeaEditor({ value, onChange }: { value: IdeaDraft; onChange: (v: IdeaD
         <Chip label="Новая" selected={creating} onPress={() => set({ topicId: null, newTopic: creating ? null : '' })} />
       </Group>
       {creating && <Field placeholder="Название темы" value={value.newTopic ?? ''} onChangeText={(newTopic) => set({ newTopic })} autoFocus={!value.newTopic} />}
-    </View>
-  );
-}
-
-function TaskEditor({ value, onChange }: { value: TaskDraft; onChange: (v: TaskDraft) => void }) {
-  // Открыт свой выбор даты, времени или повтора (раскрывается под полями)
-  const [open, setOpen] = useState<'date' | 'time' | 'repeat' | null>(null);
-  const set = (p: Partial<TaskDraft>) => onChange({ ...value, ...p });
-  const toggle = (k: 'date' | 'time' | 'repeat') => {
-    Keyboard.dismiss();
-    setOpen(open === k ? null : k);
-  };
-  return (
-    <View style={{ gap: 12 }}>
-      <Field placeholder="Название" value={value.title} onChangeText={(title) => set({ title })} autoFocus={!value.title} />
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <PickerField
-          placeholder="Дата"
-          display={value.date ? taskWhen(value.date, null) : null}
-          active={open === 'date'}
-          onPress={() => toggle('date')}
-          onClear={() => {
-            // Сбрасываем только дату, время остаётся; без даты нет и повтора
-            set({ date: null, repeat: null });
-            setOpen(null);
-          }}
-        />
-        <PickerField
-          placeholder="Время"
-          display={value.time}
-          active={open === 'time'}
-          onPress={() => toggle('time')}
-          onClear={() => {
-            set({ time: null });
-            setOpen(null);
-          }}
-        />
-      </View>
-      {open === 'date' && (
-        <DatePanel
-          value={value.date}
-          // Правило повтора, привязанное к дате («каждую среду»), переезжает вместе с ней
-          onPick={(date) => set({ date, repeat: shiftRepeat(value.repeat, value.date, date) })}
-          onDone={() => setOpen(null)}
-          onClear={() => {
-            set({ date: null, repeat: null });
-            setOpen(null);
-          }}
-        />
-      )}
-      {open === 'time' && (
-        <TimePanel
-          value={value.time}
-          onPick={(time, done) => {
-            // Дата и время независимы: время можно задать и без даты
-            set({ time });
-            if (done) setOpen(null);
-          }}
-        />
-      )}
-      <PickerField
-        placeholder="Не повторяется"
-        display={value.repeat ? repeatLabel(value.repeat, value.date) : null}
-        plain
-        active={open === 'repeat'}
-        onPress={() => toggle('repeat')}
-        onClear={() => {
-          set({ repeat: null });
-          setOpen(null);
-        }}
-      />
-      {open === 'repeat' && (
-        <RepeatPanel
-          value={value.repeat ?? null}
-          start={value.date ?? toISODate(new Date())}
-          // Повтор без даты не бывает: первая дата — сегодня
-          onChange={(repeat) => set({ repeat, ...(repeat && !value.date && { date: toISODate(new Date()) }) })}
-        />
-      )}
-      <Field
-        placeholder="Описание"
-        value={value.note ?? ''}
-        onChangeText={(note) => set({ note })}
-        multiline
-        textAlignVertical="top"
-        style={{ height: undefined, minHeight: 72, paddingTop: 12, paddingBottom: 12 }}
-      />
-      <RemindersBlock value={value} set={set} />
-    </View>
-  );
-}
-
-/**
- * Напоминания дела. «Мне» — личные (видны и срабатывают только у меня),
- * «Всем» — общие для группы (у каждого, кто не настроил свои). Показываем, откуда взялись текущие.
- */
-function RemindersBlock({ value, set }: { value: TaskDraft; set: (p: Partial<TaskDraft>) => void }) {
-  const c = useColors();
-  const settings = useStore((s) => s.reminders);
-  const [scope, setScope] = useState<'me' | 'all'>(value.mine ? 'me' : value.shared ? 'all' : 'me');
-  // Без даты напоминать не о чем — блок не показываем
-  if (!value.date) return null;
-  const task = { time: value.time, reminders: value.shared ?? null };
-  const specs =
-    scope === 'me' ? effectiveSpecs(task, value.mine, settings).specs : (value.shared ?? (value.time ? settings.timed : settings.allDay));
-
-  return (
-    <View style={{ gap: 6 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <T variant="label" muted style={{ flex: 1 }}>
-          Напоминания
-        </T>
-        <Chip label="Для меня" selected={scope === 'me'} onPress={() => setScope('me')} />
-        <Chip label="Для всех" selected={scope === 'all'} onPress={() => setScope('all')} />
-      </View>
-      {!settings.enabled && (
-        <T variant="caption" danger>
-          Напоминания выключены в настройках приложения
-        </T>
-      )}
-      <ReminderEditor
-        value={specs}
-        timed={!!value.time}
-        date={value.repeat ? null : value.date}
-        time={value.time}
-        onChange={(v) => (scope === 'me' ? set({ mine: v }) : set({ shared: v, mine: undefined }))}
-      />
-    </View>
-  );
-}
-
-/** Поле даты или времени: нажатие раскрывает свой выбор под полями */
-function PickerField({
-  placeholder,
-  display,
-  plain,
-  active,
-  onPress,
-  onClear,
-}: {
-  placeholder: string;
-  display: string | null;
-  /** Значение обычным шрифтом, не моноширинным (повтор: «Каждую неделю: сб») */
-  plain?: boolean;
-  active: boolean;
-  onPress: () => void;
-  onClear: () => void;
-}) {
-  const c = useColors();
-  return (
-    <View style={{ flex: 1 }}>
-      <Pressable onPress={onPress} style={[styles.picker, { backgroundColor: c.background, borderColor: active ? c.text : c.border }]}>
-        <T mono={!!display && !plain} muted={!display} variant={display ? 'caption' : 'body'} numberOfLines={1} style={{ flex: 1 }}>
-          {display ?? placeholder}
-        </T>
-        {display ? (
-          <Pressable onPress={onClear} hitSlop={10}>
-            <X size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
-          </Pressable>
-        ) : null}
-      </Pressable>
     </View>
   );
 }
@@ -407,13 +270,4 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 
 const styles = StyleSheet.create({
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  picker: {
-    height: 48,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
 });

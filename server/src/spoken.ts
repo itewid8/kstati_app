@@ -24,7 +24,7 @@ export function normalizeTimes(text: string): string {
 
 /** Есть ли во фразе глагол изменения существующей записи */
 export const hasChangeVerb = (text: string) =>
-  /(перенес|перенос|передвин|сдвин|измени|поменя|переимен|удали|удалить|убери|сотри|отмет|верни|сними отметку|посмотрели|сделал|выполнил|подарили)/.test(
+  /(перенес|перенос|передвин|сдвин|измени|поменя|переимен|удали|удалить|убери|сотри|отмет|верни|сними отметку|посмотрели|сделал|выполнил|подарили|продли|удлини|сократи)/.test(
     norm(text),
   );
 
@@ -51,7 +51,9 @@ export function spokenTime(text: string): string | null {
     // «на 3 октября», «к 5 числу» — это даты, а не время
     .replace(/\d{1,2}\s+(январ|феврал|март|апрел|ма[яй]|июн|июл|август|сентябр|октябр|ноябр|декабр|числ)\S*/g, ' ')
     // «на два дня», «на неделю» — это срок, а не время
-    .replace(/на\s+\S+\s+(дня|дней|недел\S*|месяц\S*|час(а|ов)?\s+(раньше|позже))/g, ' ');
+    .replace(/на\s+\S+\s+(дня|дней|недел\S*|месяц\S*|час(а|ов)?\s+(раньше|позже))/g, ' ')
+    // «на два часа», «на час», «на полчаса», «на 45 минут» — длительность, а не время (если не «на 7 часов вечера»)
+    .replace(/на\s+(?:полчаса|полтора\s+час\S*|(?:\S+\s+)?(?:с\s+половиной\s+)?(?:часов|часа|час|минут\S*))(?![а-я])(?!\s*(?:утра|вечера|дня|ночи))/g, ' ');
   const m =
     t.match(/(?:^|\s)(?:в|на|к)\s+(\d{1,2})(?:[:.](\d{2}))?(?:\s*час(?:а|ов)?)?\s*(утра|вечера|дня|ночи)?(?=\s|$|[,.!?])/) ??
     t.match(new RegExp(`(?:^|\\s)(?:в|на|к)\\s+(${WORDS})(?:\\s+час(?:а|ов)?)?(?:\\s+(утра|вечера|дня|ночи))?(?=\\s|$|[,.!?])`));
@@ -74,6 +76,66 @@ export function spokenTime(text: string): string | null {
   } else if (!part && h >= 1 && h <= 8) h += 12;
   if (h > 23 || min > 59) return null;
   return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+const hhmm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+const hourOf = (digits: string | undefined, mins: string | undefined, word: string | undefined) =>
+  digits !== undefined ? { h: Number(digits), m: mins ? Number(mins) : 0 } : word ? { h: NUM[word], m: 0 } : null;
+const MONTH_RE = '(?:январ|феврал|март|апрел|ма[яй]|июн|июл|август|сентябр|октябр|ноябр|декабр|числ)';
+
+/**
+ * Промежуток времени: «с 18 до 20», «с шести до восьми вечера», «в 9:30 до 11», «с 10 до 2».
+ * Часы 1–8 без «утра» — вечерние; конец раньше начала — значит, это следующие 12 часов («с 8 до 10» → 20:00–22:00).
+ * «С 7 по 9 октября» — это даты, не время.
+ */
+export function spokenSpan(text: string): { start: string; end: string } | null {
+  const t = norm(text);
+  const T = `(?:(\\d{1,2})(?:[:.](\\d{2}))?|(${WORDS}))`;
+  const re = new RegExp(`(?:^|\\s)(?:с|в|от)\\s+${T}(?:\\s*час(?:а|ов)?)?\\s+(?:до|по)\\s+${T}(?:\\s*час(?:а|ов)?)?(?:\\s+(утра|вечера|дня|ночи))?(?!\\s*${MONTH_RE})(?=\\s|$|[,.!?])`);
+  const m = t.match(re);
+  if (!m) return null;
+  const a = hourOf(m[1], m[2], m[3]);
+  const b = hourOf(m[4], m[5], m[6]);
+  if (!a || !b) return null;
+  const part = m[7];
+  for (const x of [a, b]) {
+    if ((part === 'вечера' || part === 'дня') && x.h < 12) x.h += 12;
+    if (part === 'ночи' && x.h === 12) x.h = 0;
+  }
+  if (!part && a.h >= 1 && a.h <= 8) a.h += 12;
+  if (b.h * 60 + b.m <= a.h * 60 + a.m && b.h < 12) b.h += 12;
+  if (a.h > 23 || b.h > 23 || a.m > 59 || b.m > 59) return null;
+  if (b.h * 60 + b.m <= a.h * 60 + a.m) return null;
+  return { start: hhmm(a.h, a.m), end: hhmm(b.h, b.m) };
+}
+
+/** «До 21», «до девяти вечера» — только конец (для «продли футбол до 21») */
+export function spokenUntil(text: string): string | null {
+  const t = norm(text);
+  const m = t.match(new RegExp(`(?:^|\\s)до\\s+(?:(\\d{1,2})(?:[:.](\\d{2}))?|(${WORDS}))(?:\\s*час(?:а|ов)?)?(?:\\s+(утра|вечера|дня|ночи))?(?!\\s*${MONTH_RE})(?=\\s|$|[,.!?])`));
+  if (!m) return null;
+  const x = hourOf(m[1], m[2], m[3]);
+  if (!x) return null;
+  if ((m[4] === 'вечера' || m[4] === 'дня') && x.h < 12) x.h += 12;
+  else if (!m[4] && x.h >= 1 && x.h <= 8) x.h += 12;
+  return x.h <= 23 && x.m <= 59 ? hhmm(x.h, x.m) : null;
+}
+
+const DUR_WORDS: Record<string, number> = { один: 1, одну: 1, два: 2, две: 2, три: 3, четыре: 4, пять: 5, шесть: 6, семь: 7, восемь: 8, девять: 9, десять: 10, пятнадцать: 15, двадцать: 20, тридцать: 30, сорок: 40, пятьдесят: 50 };
+
+/** Длительность в минутах: «на два часа», «на час», «на полтора часа», «на полчаса», «на 45 минут», «на 2,5 часа» */
+export function spokenDuration(text: string): number | null {
+  const t = norm(text);
+  if (/(?:^|\s)на\s+полчаса/.test(t)) return 30;
+  if (/(?:^|\s)на\s+полтора\s+час/.test(t)) return 90;
+  const words = Object.keys(DUR_WORDS).join('|');
+  const m = t.match(
+    new RegExp(`(?:^|\\s)(?:на|длительностью|продолжительностью)\\s+(?:(\\d+(?:[.,]\\d)?)|(${words}))?\\s*(с\\s+половиной\\s+)?(часов|часа|час|минут\\S*)(?![а-я])(?!\\s*(?:утра|вечера|дня|ночи|раньше|позже))`),
+  );
+  if (!m) return null;
+  const n = m[1] ? Number(m[1].replace(',', '.')) : m[2] ? DUR_WORDS[m[2]] : 1;
+  const minutes = m[4].startsWith('минут') ? n : n * 60 + (m[3] ? 30 : 0);
+  return minutes > 0 && minutes <= 60 * 24 * 14 ? Math.round(minutes) : null;
 }
 
 const WEEKDAYS: [RegExp, number][] = [
@@ -209,6 +271,44 @@ export function spokenPeriod(text: string, today: string): Period | null {
     // Ближайший будущий такой день, не сегодня
     const diff = (dow - utc(today).getUTCDay() + 7) % 7 || 7;
     return day(addDays(today, diff));
+  }
+  return null;
+}
+
+/**
+ * Период дат: «с 7 по 9 октября», «с 30 сентября по 2 октября», «с пятницы по воскресенье».
+ * Для многодневных дел: начало и конец.
+ */
+export function spokenDateRange(text: string, today: string): Period | null {
+  const t = norm(text);
+  const M = `(${MONTHS.join('|')})`;
+  const dm = t.match(new RegExp(`${W}с\\s+(\\d{1,2})(?:-?го)?(?:\\s+${M}\\S*)?\\s+(?:по|до)\\s+(\\d{1,2})(?:-?е|-?го)?\\s+${M}`));
+  if (dm) {
+    const mi = (s: string) => MONTHS.findIndex((m) => new RegExp(`^${m}`).test(s));
+    const m2 = mi(dm[4]);
+    const m1 = dm[2] ? mi(dm[2]) : m2;
+    if (m1 < 0 || m2 < 0) return null;
+    let y = Number(today.slice(0, 4));
+    const mk = (yy: number, m: number, d: number) => `${yy}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    let from = mk(y, m1, Number(dm[1]));
+    let to = mk(m2 < m1 ? y + 1 : y, m2, Number(dm[3]));
+    if (to < today) {
+      y++;
+      from = mk(y, m1, Number(dm[1]));
+      to = mk(m2 < m1 ? y + 1 : y, m2, Number(dm[3]));
+    }
+    return from <= to ? { from, to } : null;
+  }
+  const forms = DOW_FORMS.map(([f]) => f).join('|');
+  const wd = t.match(new RegExp(`${W}с\\s+(${forms})\\S*\\s+(?:по|до)\\s+(${forms})`));
+  if (wd) {
+    const dowOf = (s: string) => DOW_FORMS.find(([f]) => new RegExp(`^${f}`).test(s))?.[1] ?? null;
+    const a = dowOf(wd[1]);
+    const b = dowOf(wd[2]);
+    if (a === null || b === null) return null;
+    const from = addDays(today, (a - utc(today).getUTCDay() + 7) % 7);
+    const to = addDays(from, (b - a + 7) % 7);
+    return { from, to };
   }
   return null;
 }

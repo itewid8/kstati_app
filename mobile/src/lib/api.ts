@@ -15,7 +15,7 @@ function meta() {
   const s = useStore.getState();
   const now = new Date();
   // Открытая тема идей: идея без названной темы ляжет в неё
-  return { groupId: s.currentGroupId ?? '', today: toISODate(now), now: toHHMM(now), topicId: s.voiceTopicId };
+  return { groupId: s.currentGroupId ?? '', today: toISODate(now), now: toHHMM(now), topicId: s.voiceTopicId, parentId: s.voiceParentId };
 }
 
 function fail(e: unknown): VoiceFail {

@@ -59,6 +59,10 @@ const TaskIn = z.object({
   doneDates: z.array(Day).max(400).optional(),
   skipDates: z.array(Day).max(400).optional(),
   reminders: z.array(Spec).max(10).nullable().optional(),
+  endDate: Date10.optional(),
+  endTime: Time5.optional(),
+  people: z.array(Id).max(50).optional(),
+  parentId: Id.nullable().optional(),
 });
 const WatchIn = z.object({
   id: Id,
@@ -131,6 +135,8 @@ function taskChanges(a: Task, b: Task): string[] {
     note: t.note ?? '',
     repeat: JSON.stringify(t.repeat ?? null),
     reminders: JSON.stringify(t.reminders ?? null),
+    end: `${t.endDate ?? ''} ${t.endTime ?? ''}`,
+    people: [...(t.people ?? [])].sort().join(','),
   });
   const x = norm(a);
   const y = norm(b);
@@ -224,12 +230,27 @@ export class Data {
     const s = this.store;
     switch (op.op) {
       case 'task.put': {
-        await this.memberGroup(user, op.task.groupId);
+        const g = await this.memberGroup(user, op.task.groupId);
         const old = await s.getItem(op.task.groupId, op.task.id);
         if (old && old.type !== 'task') throw new HttpError(409, 'conflict');
+        // Кто занят — только участники этой группы
+        const people = op.task.people ? [...new Set(op.task.people)].filter((p) => g.memberIds.includes(p)) : undefined;
+        // Подзадача — только у обычного дела той же группы (один уровень вложенности)
+        let parentId = op.task.parentId ?? null;
+        if (parentId) {
+          const parent = parentId === op.task.id ? null : await s.getItem(op.task.groupId, parentId);
+          if (parent?.type !== 'task' || parent.parentId) parentId = null;
+        }
+        // Конец раньше начала не бывает
+        const endDate = op.task.endDate && op.task.date && op.task.endDate > op.task.date ? op.task.endDate : null;
+        const endTime = op.task.endTime && (endDate || (op.task.time && op.task.endTime > op.task.time)) ? op.task.endTime : null;
         const task: Item = {
           type: 'task',
           ...op.task,
+          endDate,
+          endTime,
+          ...(people && { people }),
+          parentId,
           note: op.task.note ?? '',
           createdBy: old?.type === 'task' ? old.createdBy : user.id,
           createdAt: old?.createdAt ?? now,

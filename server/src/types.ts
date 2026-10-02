@@ -15,7 +15,21 @@ export const ORIGINS: Origin[] = ['ru', 'foreign'];
 
 import type { Repeat } from './repeat.js';
 
-export type TaskDraft = { title: string; date: string | null; time: string | null; note: string; repeat?: Repeat | null };
+/**
+ * Дело. Конец: endTime — время окончания, endDate — дата окончания, если не в тот же день (многодневное).
+ * people — кто занят (id участников группы); нет — автор. parentId — дело, внутри плана которого это подзадача.
+ */
+export type TaskDraft = {
+  title: string;
+  date: string | null;
+  time: string | null;
+  note: string;
+  repeat?: Repeat | null;
+  endDate?: string | null;
+  endTime?: string | null;
+  people?: string[];
+  parentId?: string | null;
+};
 export type WishDraft = { title: string; note: string; link: string };
 export type WatchDraft = { title: string; kind: Kind | null; genres: Genre[]; origin: Origin | null; year: number | null };
 
@@ -37,7 +51,17 @@ export type ChangeDraft = {
   type: ItemType;
   candidates: string[];
   chosen: string;
-  patch?: Partial<{ title: string; date: string | null; time: string | null; repeat: Repeat | null; topicId: string | null; newTopic: string | null }>;
+  patch?: Partial<{
+    title: string;
+    date: string | null;
+    time: string | null;
+    repeat: Repeat | null;
+    endDate: string | null;
+    endTime: string | null;
+    people: string[];
+    topicId: string | null;
+    newTopic: string | null;
+  }>;
 };
 
 export type GroupCategory = 'couple' | 'family' | 'parents' | 'friends' | 'other';
@@ -74,7 +98,18 @@ export type Context = {
   /** Мои группы с категориями — для вопросов о планах */
   groups?: { name: string; category: GroupCategory }[];
   existing: {
-    tasks: { id: string; title: string; date: string | null; time: string | null; done?: boolean }[];
+    tasks: {
+      id: string;
+      title: string;
+      date: string | null;
+      time: string | null;
+      done?: boolean;
+      endDate?: string | null;
+      endTime?: string | null;
+      /** Имена участников дела */
+      people?: string[];
+      parentId?: string | null;
+    }[];
     watch: { id: string; title: string; done?: boolean }[];
     wishes: { id: string; title: string; done?: boolean }[];
     /** Мои идеи (последние): для переноса и удаления голосом */
@@ -84,4 +119,8 @@ export type Context = {
   topics?: { id: string; title: string }[];
   /** Тема, открытая на экране: идея без названной темы идёт в неё */
   currentTopicId?: string | null;
+  /** Участники текущей группы (id) — для «мы», «у нас» */
+  groupMembers?: string[];
+  /** План (большое дело), открытый на экране: новое дело без названного плана становится его подзадачей */
+  currentParentId?: string | null;
 };
