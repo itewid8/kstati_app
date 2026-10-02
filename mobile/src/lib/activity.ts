@@ -12,6 +12,8 @@ const FIELD: Record<string, string> = {
   note: 'описание',
   repeat: 'повтор',
   reminders: 'общие напоминания',
+  end: 'длительность',
+  people: 'кто участвует',
 };
 
 const q = (s?: string) => `«${s ?? '—'}»`;

@@ -177,6 +177,26 @@ async function scenario(name: string, store: Store) {
   assert.deepEqual(t5.skipDates, ['2026-10-10']);
   assert.deepEqual(t5.reminders, ['d1@20:00', 'm60']);
 
+  /* ---------- длительность, «Кто» и подзадачи ---------- */
+  await ops(
+    T1,
+    { op: 'task.put', task: { id: 'p1', groupId: 'g1', title: 'Поездка', date: '2026-10-07', time: null, endDate: '2026-10-09', doneAt: null, people: [sasha.me.id, masha.me.id, 'чужой'] } },
+    { op: 'task.put', task: { id: 'p2', groupId: 'g1', title: 'Эрмитаж', date: '2026-10-08', time: '10:00', endTime: '12:00', doneAt: null, parentId: 'p1' } },
+    { op: 'task.put', task: { id: 'p3', groupId: 'g1', title: 'Вложенная', date: null, time: null, doneAt: null, parentId: 'p2' } },
+    { op: 'task.put', task: { id: 'p4', groupId: 'g1', title: 'Кривой конец', date: '2026-10-08', time: '10:00', endTime: '09:00', endDate: '2026-10-01', doneAt: null } },
+  );
+  const items = (await ok('POST', '/sync', {}, T2)).items.g1;
+  const byId = (id: string) => items.find((i: any) => i.id === id);
+  assert.deepEqual(byId('p1').people.sort(), [sasha.me.id, masha.me.id].sort(), 'чужие люди в «Кто» отбрасываются');
+  assert.equal(byId('p1').endDate, '2026-10-09');
+  assert.deepEqual([byId('p2').parentId, byId('p2').endTime], ['p1', '12:00']);
+  assert.equal(byId('p3').parentId, null, 'подзадача подзадачи не бывает');
+  assert.deepEqual([byId('p4').endTime, byId('p4').endDate], [null, null], 'конец раньше начала отбрасывается');
+  await ops(T1, { op: 'task.put', task: { id: 'p2', groupId: 'g1', title: 'Эрмитаж', date: '2026-10-08', time: '10:00', endTime: '13:00', doneAt: null, parentId: 'p1', people: [masha.me.id] } });
+  const feedD = (await ok('GET', '/activity', undefined, T2)).events as any[];
+  assert.ok(feedD.some((e) => e.kind === 'task.edit' && e.title === 'Эрмитаж' && e.fields.includes('end') && e.fields.includes('people')));
+  for (const id of ['p1', 'p2', 'p3', 'p4']) await ops(T1, { op: 'item.delete', groupId: 'g1', id });
+
   /* ---------- личные напоминания: хранятся у человека, видны только ему ---------- */
   assert.equal((await ok('POST', '/sync', {}, T1)).prefs, null, 'пока не присылали — null');
   await ops(T1, { op: 'prefs', reminders: { enabled: true, timed: ['m60'], allDay: ['d1@20:00'] }, overrides: { t1: ['m15'], t5: [] } });

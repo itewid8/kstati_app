@@ -112,6 +112,13 @@ export type Task = {
   skipDates?: string[];
   /** Общие напоминания для всех участников группы; null/нет — у каждого свои настройки по умолчанию */
   reminders?: ReminderSpec[] | null;
+  /** Конец: время (в тот же день) и дата — если дело многодневное */
+  endDate?: string | null;
+  endTime?: string | null;
+  /** Кто занят: участники группы; пусто — автор */
+  people?: ID[];
+  /** Подзадача: id большого дела (плана) в той же группе */
+  parentId?: ID | null;
   /** Только в приложении: дата конкретного повтора, если это «развёрнутый» повтор серии */
   occ?: string;
 };
@@ -271,6 +278,10 @@ export type TaskDraft = {
   mine?: TaskReminderOverride;
   /** Общие напоминания группы (null — у каждого свои по умолчанию) */
   shared?: ReminderSpec[] | null;
+  endDate?: string | null;
+  endTime?: string | null;
+  people?: ID[];
+  parentId?: ID | null;
 };
 export type WishDraft = { title: string; note: string; link: string };
 export type WatchDraft = {

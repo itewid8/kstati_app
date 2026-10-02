@@ -32,10 +32,10 @@ idea — идеи и мысли человека (личный блокнот), 
 Ответ: {"actions": [ ... ]}. Одна фраза может дать несколько действий.
 
 Виды действий:
-1) Добавить дело:   {"intent":"add","type":"task","title":"…","date":"YYYY-MM-DD"|null,"time":"HH:MM"|null,"note":"…"}
+1) Добавить дело:   {"intent":"add","type":"task","title":"…","date":"YYYY-MM-DD"|null,"time":"HH:MM"|null,"note":"…","end_date":"YYYY-MM-DD"|null,"end_time":"HH:MM"|null,"duration_min":число|null,"people":[…],"parent":"id"|null}
 2) Добавить хотелку: {"intent":"add","type":"wish","title":"…","note":"…","link":""}
 3) Добавить в смотреть: {"intent":"add","type":"watch","title":"…","kind":…,"genres":[…],"origin":…,"year":…}
-4) Изменить запись: {"intent":"update","target":["id",…],"title"?:"…","date"?:"YYYY-MM-DD"|null,"time"?:"HH:MM"|null,"query":"как запись названа во фразе"}
+4) Изменить запись: {"intent":"update","target":["id",…],"title"?:"…","date"?:"YYYY-MM-DD"|null,"time"?:"HH:MM"|null,"end_date"?:…,"end_time"?:…,"duration_min"?:число,"people"?:[…],"query":"как запись названа во фразе"}
 5) Отметить:        {"intent":"mark","target":["id",…],"query":"…"}   (сделали / посмотрели / подарили)
 6) Снять отметку:   {"intent":"unmark","target":["id",…],"query":"…"}
 7) Удалить:         {"intent":"delete","target":["id",…],"query":"…"}
@@ -61,6 +61,14 @@ fresh: new (вышло в этом или прошлом году), old (ран�
 - Повтор («каждую субботу», «по будням», «каждый день», «раз в две недели», «каждое 20 число», «каждый год 8 марта») — это одно дело (add task), не несколько.
   Правило повтора приложение вычислит само. В title слов о повторе нет («Баня каждую субботу» → title «Баня»); date — первый раз по календарю (ближайший подходящий день, можно сегодня), time — если сказано.
 - «Баню теперь каждое воскресенье», «зарядка теперь по будням», «больше не повторяй зарядку», «сделай баню разовой» — это update существующей записи (target), а не add.
+- Длительность дела: «с 18 до 20» → time "18:00", end_time "20:00"; «на два часа», «полтора часа», «на 45 минут» → duration_min (120, 90, 45);
+  «с 7 по 9 октября», «с пятницы по воскресенье» — многодневное: date — начало, end_date — конец. Не сказано — null.
+- people — кто занят делом: «я», «мне», «у меня» → ["me"]; «мы», «нам», «у нас» без уточнения → ["all"]; «мы с Кариной» → ["me","Карина"];
+  «Карине к врачу», «Дима идёт в бассейн» → ["Карина"] / ["Дима"]. Имена — в именительном падеже, из списка людей. Не сказано — [].
+- parent — подзадача большого дела (плана, поездки): «в поездку в Питер добавь …», «для дачи: …», «разбей поездку на …» —
+  parent = id этого дела из «Существующих записей»; каждая подзадача — отдельное add. Если открыт план (см. ниже) и другое дело не названо — parent = id открытого плана. Иначе null.
+  Время подзадачи без даты — в дни плана: «в 10 Эрмитаж» в поездке с 7 по 9 октября — date: первый день плана, если день не назван.
+- «Продли футбол до 21», «сделай баню на 3 часа», «футбол теперь с 19 до 21» — update с end_time / duration_min / time. «Добавь Карину в футбол» — update с people.
 - Хотелка: в title — сама вещь, детали (размер, цвет) — в note. Числа словами пиши цифрами: «сорок второй размер» → «42 размер».
 - Смотреть: title — официальное русское название в именительном падеже («Дюну» → «Дюна»). kind, genres (1–3), origin, year заполняй только если уверенно знаешь произведение; иначе null / [].
 - update / mark / unmark / delete — ТОЛЬКО если во фразе есть глагол изменения: перенеси, передвинь, измени, переименуй, удали, убери, отметь, верни, «посмотрели», «сделали», «подарили». Иначе это add, даже если похожая запись уже есть — дубли проверит приложение.
@@ -96,6 +104,9 @@ fresh: new (вышло в этом или прошлом году), old (ран�
 Примеры (сегодня пятница 2026-09-25):
 «В субботу в семь ужин у родителей» → {"actions":[{"intent":"add","type":"task","title":"Ужин у родителей","date":"2026-09-26","time":"19:00"}]}
 «Баня каждую субботу в три» → {"actions":[{"intent":"add","type":"task","title":"Баня","date":"2026-09-26","time":"15:00"}]}
+«Футбол в среду с семи до девяти» → {"actions":[{"intent":"add","type":"task","title":"Футбол","date":"2026-09-30","time":"19:00","end_time":"21:00","people":[]}]}
+«Мы с Кариной едем в Питер с 7 по 9 октября» → {"actions":[{"intent":"add","type":"task","title":"Поездка в Питер","date":"2026-10-07","time":null,"end_date":"2026-10-09","people":["me","Карина"]}]}
+«В поездку в Питер добавь Эрмитаж в пятницу в 10 на два часа» (есть task:t9 | Поездка в Питер) → {"actions":[{"intent":"add","type":"task","title":"Эрмитаж","date":"2026-10-09","time":"10:00","duration_min":120,"parent":"t9"}]}
 «Добавь Дюну и Аватар» → {"actions":[{"intent":"add","type":"watch","title":"Дюна","kind":"movie","genres":["scifi","adventure"],"origin":"foreign","year":2021},{"intent":"add","type":"watch","title":"Аватар","kind":"movie","genres":["scifi","adventure"],"origin":"foreign","year":2009}]}
 «Добавь в мой вишлист кроссовки, сорок второй размер» → {"actions":[{"intent":"add","type":"wish","title":"Кроссовки","note":"42 размер","link":""}]}
 «Что-нибудь смешное зарубежное» → {"actions":[{"intent":"query_watch","kind":[],"genre":["comedy"],"origin":["foreign"],"fresh":[]}]}
@@ -115,8 +126,14 @@ export function buildMessages(text: string, ctx: Context): Msg[] {
   const topics = ctx.topics ?? [];
   const topicTitle = (id: string | null) => topics.find((t) => t.id === id)?.title ?? 'без темы';
   const current = ctx.currentTopicId ? topics.find((t) => t.id === ctx.currentTopicId) : null;
+  const plan = ctx.currentParentId ? ex.tasks.find((t) => t.id === ctx.currentParentId) : null;
   const rows = [
-    ...ex.tasks.map((t) => `task:${t.id} | ${t.title} | ${[t.date, t.time].filter(Boolean).join(' ') || 'без даты'}${t.done ? ' | выполнено' : ''}`),
+    ...ex.tasks.map((t) => {
+      const end = t.endDate || t.endTime ? ` – ${[t.endDate, t.endTime].filter(Boolean).join(' ')}` : '';
+      const who = t.people?.length ? ` | кто: ${t.people.join(', ')}` : '';
+      const plan = t.parentId ? ` | в плане task:${t.parentId}` : '';
+      return `task:${t.id} | ${t.title} | ${[t.date, t.time].filter(Boolean).join(' ') || 'без даты'}${end}${who}${plan}${t.done ? ' | выполнено' : ''}`;
+    }),
     ...ex.watch.map((w) => `watch:${w.id} | ${w.title}${w.done ? ' | посмотрели' : ''}`),
     ...ex.wishes.map((w) => `wish:${w.id} | ${w.title}${w.done ? ' | подарили' : ''}`),
     ...(ex.ideas ?? []).map((i) => `idea:${i.id} | ${i.text} | тема: ${topicTitle(i.topicId)}`),
@@ -131,7 +148,8 @@ ${calendar(ctx.today)}
 Мои группы: ${(ctx.groups ?? []).map((g) => `${g.name} (${g.category})`).join(', ') || '—'}
 
 Мои темы: ${topics.map((t) => `«${t.title}»`).join(', ') || '—'}${current ? `
-Открыта тема «${current.title}» — идея без названной темы идёт в неё.` : ''}
+Открыта тема «${current.title}» — идея без названной темы идёт в неё.` : ''}${plan ? `
+Открыт план task:${plan.id} «${plan.title}» (${[plan.date, plan.endDate].filter(Boolean).join(' – ')}) — новые дела становятся его подзадачами.` : ''}
 
 Существующие записи (тип:id | название | детали):
 ${rows.length ? rows.join('\n') : '— нет —'}

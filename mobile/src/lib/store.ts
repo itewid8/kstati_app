@@ -8,6 +8,7 @@ import { nextOpen } from './recur';
 import { DEFAULT_REMINDERS, migrateRules } from './remind';
 import * as M from './mock';
 import { normTitle } from './dupes';
+import { daysBetween, shiftIso } from './span';
 import type { PlansAnswer } from './plans';
 import {
   emptyFilters,
@@ -63,7 +64,7 @@ export type Card =
     };
 
 export type VoicePhase = 'idle' | 'recording' | 'processing';
-export type TasksView = 'list' | 'week' | 'month' | 'year';
+export type TasksView = 'list' | 'day' | 'week' | 'month' | 'year';
 
 /** Меню действий по долгому нажатию */
 export type MenuAction = { label: string; danger?: boolean; onPress: () => void };
@@ -106,6 +107,8 @@ type State = {
   ideaRevs: Record<ID, string>;
   /** Открытая на экране тема: голос кладёт идеи в неё */
   voiceTopicId: ID | null;
+  /** Открытый план большого дела: голос добавляет подзадачи в него */
+  voiceParentId: ID | null;
   overrides: Record<ID, TaskReminderOverride>;
   reminders: ReminderSettings;
   watchFilters: WatchFilters;
@@ -181,6 +184,7 @@ type Actions = {
   /** Новая тема; если такая уже есть — её id */
   createTopic: (title: string) => ID | null;
   setVoiceTopic: (id: ID | null) => void;
+  setVoiceParent: (id: ID | null) => void;
 
   setReminders: (p: Partial<ReminderSettings>) => void;
   setOverride: (taskId: ID, o: TaskReminderOverride | undefined) => void;
@@ -238,6 +242,7 @@ const initial: State = {
   menu: null,
   calendarDate: toISODate(new Date()),
   voiceTopicId: null,
+  voiceParentId: null,
   theme: 'system',
   micMode: 'tap',
 };
@@ -252,6 +257,60 @@ function toggleOcc(t: Task, occ: string | null, done: boolean): Task {
   const yearAgo = toISODate(new Date(Date.now() - 366 * 86400000));
   return { ...t, doneDates: [...set].filter((d) => d >= yearAgo).sort() };
 }
+/** Конец не раньше начала: дата конца — только если позже даты, время конца — если есть начало или это многодневное */
+function cleanEnd<T extends Pick<Task, 'date' | 'time' | 'endDate' | 'endTime'>>(t: T): T {
+  let endDate = t.endDate && t.date && t.endDate > t.date ? t.endDate : null;
+  // «С 22 до 01» в тот же день — значит, конец ночью следующего дня
+  if (!endDate && t.date && t.time && t.endTime && t.endTime < t.time) endDate = shiftIso(t.date, 1);
+  const endTime = t.endTime && (endDate || (t.time && t.endTime > t.time)) ? t.endTime : null;
+  return { ...t, endDate, endTime };
+}
+
+/** Перенос голосом меняет только начало — конец едет на столько же (длительность не теряется) */
+function keepDuration(old: Task, next: Task, p: { date?: string | null; time?: string | null; endDate?: string | null; endTime?: string | null }): Task {
+  const out = { ...next };
+  if (p.date !== undefined && p.endDate === undefined && old.date && old.endDate && next.date) out.endDate = shiftIso(old.endDate, daysBetween(old.date, next.date));
+  const multi = !!old.endDate && !!old.date && old.endDate > old.date;
+  if (p.time !== undefined && p.endTime === undefined && !multi && old.time && old.endTime && next.time) {
+    const m = (x: string) => Number(x.slice(0, 2)) * 60 + Number(x.slice(3));
+    const e = m(old.endTime) - m(old.time) + m(next.time);
+    out.endTime = e < 24 * 60 ? `${String(Math.floor(e / 60)).padStart(2, '0')}:${String(e % 60).padStart(2, '0')}` : null;
+  }
+  return out;
+}
+
+/** План перенесли на другую дату — подзадачи с датами сдвигаются на столько же дней */
+function shiftChildren(before: Task[], after: Task[]): Task[] {
+  const old = new Map(before.map((t) => [t.id, t]));
+  const delta = new Map<ID, number>();
+  for (const t of after) {
+    const o = old.get(t.id);
+    if (o && o !== t && !t.parentId && o.date && t.date && o.date !== t.date) delta.set(t.id, daysBetween(o.date, t.date));
+  }
+  if (!delta.size) return after;
+  return after.map((t) => {
+    const n = t.parentId ? delta.get(t.parentId) : undefined;
+    if (!n || !t.date) return t;
+    // Подзадачу, которую поправили в той же карточке, не трогаем
+    if (old.get(t.id) !== t) return t;
+    return { ...t, date: shiftIso(t.date, n), endDate: shiftIso(t.endDate, n) };
+  });
+}
+
+/** Все подзадачи плана сделаны — план отмечается сам; подзадачу вернули — план снова открыт */
+function syncParent(tasks: Task[], parentId: ID | null | undefined): Task[] {
+  if (!parentId) return tasks;
+  const kids = tasks.filter((t) => t.parentId === parentId);
+  if (!kids.length) return tasks;
+  const all = kids.every((t) => t.doneAt);
+  return tasks.map((t) => {
+    if (t.id !== parentId || t.repeat) return t;
+    if (all && !t.doneAt) return { ...t, doneAt: new Date().toISOString() };
+    if (!all && t.doneAt) return { ...t, doneAt: null };
+    return t;
+  });
+}
+
 /** Моя тема с таким названием (без учёта регистра и знаков) */
 const ownTopic = (topics: Topic[], meId: ID, title: string) => topics.find((t) => t.ownerId === meId && normTitle(t.title) === normTitle(title));
 
@@ -415,6 +474,7 @@ export const useStore = create<State & Actions>()(
       if (!me) return {};
       const now = new Date().toISOString();
       let { tasks, wishes, watch, overrides, topics, ideas } = get();
+      const tasksBefore = tasks;
       let ideaTopicId: ID | null | undefined;
       // Новая тема из карточки создаётся один раз, даже если её назвали у нескольких идей
       const topicFor = (title: string): ID => {
@@ -430,14 +490,22 @@ export const useStore = create<State & Actions>()(
           const { mine, shared, repeat, ...data } = it.data;
           // Повтор без даты не бывает; повторяющееся дело не отмечается целиком
           const rep = data.date ? (repeat ?? null) : null;
-          const fields = { ...data, repeat: rep, ...(shared !== undefined && { reminders: shared }) };
+          const fields = cleanEnd({ ...data, repeat: rep, ...(shared !== undefined && { reminders: shared }) });
+          // Подзадача живёт в группе своего плана
+          const parent = fields.parentId ? tasks.find((t) => t.id === fields.parentId && !t.parentId) : null;
+          if (!parent) fields.parentId = null;
+          const groupId = parent?.groupId ?? currentGroupId;
           let id = it.id;
+          // Подзадачу вынули из плана или перенесли в другой — прежний план пересчитываем
+          const oldParent = id ? tasks.find((t) => t.id === id)?.parentId : null;
           if (id) {
             tasks = tasks.map((t) => (t.id === id ? { ...t, ...fields, ...(rep && { doneAt: null }) } : t));
-          } else if (currentGroupId) {
+          } else if (groupId) {
             id = uid();
-            tasks = [...tasks, { id, groupId: currentGroupId, createdBy: me.id, doneAt: null, createdAt: now, ...fields }];
+            tasks = [...tasks, { id, groupId, createdBy: me.id, doneAt: null, createdAt: now, ...fields }];
           }
+          if (parent) tasks = syncParent(tasks, parent.id);
+          if (oldParent && oldParent !== parent?.id) tasks = syncParent(tasks, oldParent);
           if (id) {
             overrides = { ...overrides };
             if (mine) overrides[id] = mine;
@@ -462,6 +530,7 @@ export const useStore = create<State & Actions>()(
           if (ideaTopicId === undefined) ideaTopicId = topicId;
         }
       }
+      tasks = shiftChildren(tasksBefore, tasks);
       set({ tasks, wishes, watch, overrides, topics, ideas });
       return ideaTopicId === undefined ? {} : { ideaTopicId };
     },
@@ -476,7 +545,10 @@ export const useStore = create<State & Actions>()(
         const id = ch.chosen;
         if (ch.action === 'delete') {
           deleted++;
-          if (ch.type === 'task') tasks = tasks.filter((t) => t.id !== id);
+          if (ch.type === 'task') {
+            const parentId = tasks.find((t) => t.id === id)?.parentId;
+            tasks = syncParent(tasks.filter((t) => t.id !== id && t.parentId !== id), parentId);
+          }
           if (ch.type === 'wish') wishes = wishes.filter((w) => w.id !== id);
           if (ch.type === 'watch') watch = watch.filter((w) => w.id !== id);
           if (ch.type === 'idea') ideas = ideas.filter((x) => x.id !== id);
@@ -513,6 +585,9 @@ export const useStore = create<State & Actions>()(
                   ...(p.date !== undefined && { date: p.date }),
                   ...(p.time !== undefined && { time: p.time }),
                   ...(p.repeat !== undefined && { repeat: p.repeat, doneAt: null }),
+                  ...(p.endDate !== undefined && { endDate: p.endDate }),
+                  ...(p.endTime !== undefined && { endTime: p.endTime }),
+                  ...(p.people !== undefined && { people: p.people }),
                   ...(stamp !== undefined && { doneAt: stamp }),
                 },
           );
@@ -529,6 +604,16 @@ export const useStore = create<State & Actions>()(
               : { ...w, ...(p.title !== undefined && { title: p.title }), ...(stamp !== undefined && { watchedAt: stamp }) },
           );
       }
+      const prev = new Map(before.tasks.map((t) => [t.id, t]));
+      const patchOf = new Map(changes.filter((ch) => ch.type === 'task' && ch.action === 'update').map((ch) => [ch.chosen, ch.patch ?? {}]));
+      tasks = tasks.map((t) => {
+        const o = prev.get(t.id);
+        if (!o || o === t) return t;
+        const p = patchOf.get(t.id);
+        return cleanEnd(p ? keepDuration(o, t, p) : t);
+      });
+      tasks = shiftChildren(before.tasks, tasks);
+      for (const ch of changes) if (ch.type === 'task' && (ch.action === 'mark' || ch.action === 'unmark')) tasks = syncParent(tasks, tasks.find((t) => t.id === ch.chosen)?.parentId);
       set({ tasks, wishes, watch, topics, ideas });
       if (deleted) withUndo(deleted > 1 ? `Удалено: ${deleted}` : 'Удалено', before);
     },
@@ -548,7 +633,8 @@ export const useStore = create<State & Actions>()(
         }
         return;
       }
-      set({ tasks: get().tasks.map((t) => (t.id === id ? { ...t, doneAt: t.doneAt ? null : new Date().toISOString() } : t)) });
+      const toggled = get().tasks.map((t) => (t.id === id ? { ...t, doneAt: t.doneAt ? null : new Date().toISOString() } : t));
+      set({ tasks: syncParent(toggled, t0.parentId) });
     },
     deleteTask: (id, occ) => {
       const before = { tasks: get().tasks };
@@ -558,8 +644,10 @@ export const useStore = create<State & Actions>()(
         withUndo('Удалён один раз', before);
         return;
       }
-      set({ tasks: before.tasks.filter((t) => t.id !== id) });
-      withUndo('Дело удалено', before);
+      // План удаляется вместе с подзадачами (отмена вернёт всё); удалили подзадачу — план пересчитываем
+      const kids = before.tasks.filter((t) => t.parentId === id).length;
+      set({ tasks: syncParent(before.tasks.filter((t) => t.id !== id && t.parentId !== id), t0?.parentId) });
+      withUndo(kids ? 'План удалён вместе с подзадачами' : 'Дело удалено', before);
     },
     endSeries: (id, lastDate) => {
       const before = { tasks: get().tasks };
@@ -612,6 +700,7 @@ export const useStore = create<State & Actions>()(
       return t.id;
     },
     setVoiceTopic: (voiceTopicId) => set({ voiceTopicId }),
+    setVoiceParent: (voiceParentId) => set({ voiceParentId }),
 
     setReminders: (p) => set({ reminders: { ...get().reminders, ...p } }),
     setOverride: (taskId, o) => {

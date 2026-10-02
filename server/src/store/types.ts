@@ -50,6 +50,13 @@ export type Task = {
   skipDates?: string[];
   /** Общие напоминания для всех участников */
   reminders?: string[] | null;
+  /** Конец: время и (для многодневных) дата */
+  endDate?: string | null;
+  endTime?: string | null;
+  /** Кто занят: участники группы; нет — автор */
+  people?: string[];
+  /** Подзадача плана: id большого дела в той же группе */
+  parentId?: string | null;
   createdAt: string;
   updatedAt: string;
 };

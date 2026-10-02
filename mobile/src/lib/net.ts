@@ -69,6 +69,10 @@ type TaskOp = {
   doneDates: string[];
   skipDates: string[];
   reminders: string[] | null;
+  endDate: string | null;
+  endTime: string | null;
+  people: string[];
+  parentId: string | null;
 };
 type WatchOp = {
   id: string;

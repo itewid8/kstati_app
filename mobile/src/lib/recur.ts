@@ -75,7 +75,9 @@ export function occurrences(task: Pick<Task, 'date' | 'repeat' | 'skipDates'>, f
 /** Повтор серии как отдельное дело: своя дата и своя отметка «сделано» */
 export function instance(task: Task, occ: string): Task {
   const done = task.doneDates?.includes(occ);
-  return { ...task, date: occ, occ, doneAt: done ? `${occ}T12:00:00.000Z` : null };
+  // Многодневное дело: конец сдвигается вместе с началом
+  const endDate = task.endDate && task.date ? isoOf(dayNo(occ) + dayNo(task.endDate) - dayNo(task.date)) : (task.endDate ?? null);
+  return { ...task, date: occ, endDate, occ, doneAt: done ? `${occ}T12:00:00.000Z` : null };
 }
 
 /** Серия в промежутке — как отдельные дела; обычные дела — как есть */

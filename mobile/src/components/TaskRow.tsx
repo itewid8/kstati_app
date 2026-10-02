@@ -1,6 +1,7 @@
+import { router } from 'expo-router';
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { taskWhen } from '@/lib/dates';
+import { peopleOf, spanLabel, timeOn } from '@/lib/span';
 import { userName, useStore } from '@/lib/store';
 import type { Task } from '@/lib/types';
 import { useDelayedMark } from '@/lib/useMark';
@@ -19,32 +20,48 @@ export function TaskRow({
   past,
   whenFormat = 'full',
   markDelay,
+  day,
 }: {
   task: Task;
   past?: boolean;
   whenFormat?: 'full' | 'time';
+  /** День календаря, в котором показана строка (для многодневных: «с 10:00», «весь день») */
+  day?: string;
   /** 0 — отметка сразу, строка остаётся на месте */
   markDelay?: number;
 }) {
   const c = useColors();
   const users = useStore((s) => s.users);
+  // План: сколько подзадач и сколько из них сделано (числа, а не новый массив — иначе бесконечная перерисовка)
+  const kidsCount = useStore((s) => s.tasks.reduce((n, t) => (t.parentId === task.id ? n + 1 : n), 0));
+  const doneKids = useStore((s) => s.tasks.reduce((n, t) => (t.parentId === task.id && t.doneAt ? n + 1 : n), 0));
   const { toggleTask, setCard } = useStore.getState();
   const { marked: done, toggle } = useDelayedMark(!!task.doneAt, () => toggleTask(task.id, task.occ), markDelay);
 
   const edit = () => editTask(task.id, setCard);
   const remove = () => deleteTaskAsk(task);
+  // Большое дело с подзадачами открывается планом; любое обычное дело можно разбить на подзадачи
+  const canPlan = !task.parentId && !task.repeat;
+  const plan = () => openPlan(task.id);
+  const press = kidsCount ? plan : edit;
 
-  const when = whenFormat === 'time' ? (task.time ?? '') : task.date || task.time ? taskWhen(task.date, task.time) : '';
+  const when = whenFormat === 'time' ? timeOn(task, day ?? task.date ?? '') : task.date || task.time ? spanLabel(task) : '';
+  const who = peopleOf(task)
+    .map((id) => userName(users, id))
+    .join(', ');
+  const sub = kidsCount ? `${who} · ${doneKids}/${kidsCount}` : who;
 
   return (
     <SwipeRow onSwipeRight={toggle} onSwipeLeft={remove}>
       <Pressable
-        onPress={edit}
+        onPress={press}
         onLongPress={() =>
           openMenu({
             title: task.title,
             actions: [
               { label: 'Изменить', onPress: edit },
+              ...(canPlan ? [{ label: kidsCount ? 'Открыть план' : 'Разбить на подзадачи', onPress: plan }] : []),
+              ...(task.parentId ? [{ label: 'Открыть план', onPress: () => openPlan(task.parentId!) }] : []),
               ...(task.repeat && task.occ
                 ? [
                     { label: 'Удалить только этот раз', danger: true, onPress: () => useStore.getState().deleteTask(task.id, task.occ) },
@@ -62,8 +79,8 @@ export function TaskRow({
           <T numberOfLines={2} muted={done} style={done ? { textDecorationLine: 'line-through' } : undefined}>
             {task.title}
           </T>
-          <T variant="label" muted>
-            {userName(users, task.createdBy)}
+          <T variant="label" muted numberOfLines={1}>
+            {sub}
           </T>
         </View>
         {task.repeat ? <Repeat size={14} strokeWidth={ICON.stroke} color={c.textMuted} /> : null}
@@ -101,10 +118,27 @@ export function editTask(id: string, setCard = useStore.getState().setCard) {
         key: t.id,
         id: t.id,
         type: 'task',
-        data: { title: t.title, date: t.date, time: t.time, note: t.note ?? '', repeat: t.repeat ?? null, mine: s.overrides[t.id], shared: t.reminders ?? null },
+        data: {
+          title: t.title,
+          date: t.date,
+          time: t.time,
+          note: t.note ?? '',
+          repeat: t.repeat ?? null,
+          mine: s.overrides[t.id],
+          shared: t.reminders ?? null,
+          endDate: t.endDate ?? null,
+          endTime: t.endTime ?? null,
+          people: t.people,
+          parentId: t.parentId ?? null,
+        },
       },
     ],
   });
+}
+
+/** Экран плана большого дела (подзадачи по дням и чек-лист) */
+export function openPlan(id: string) {
+  router.push(`/tasks/${id}`);
 }
 
 /** Удалить: у повтора — спросить, только этот раз или всю серию */

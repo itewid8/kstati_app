@@ -62,6 +62,10 @@ const taskOp = (t: Task): Op => ({
     doneDates: t.doneDates ?? [],
     skipDates: t.skipDates ?? [],
     reminders: t.reminders ?? null,
+    endDate: t.endDate ?? null,
+    endTime: t.endTime ?? null,
+    people: t.people ?? [],
+    parentId: t.parentId ?? null,
   },
 });
 const watchOp = (w: WatchItem): Op => ({
