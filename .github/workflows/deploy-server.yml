@@ -53,6 +53,8 @@ jobs:
         run: |
           echo '${{ secrets.YC_SA_JSON_KEY }}' > "$RUNNER_TEMP/key.json"
           yc config set service-account-key "$RUNNER_TEMP/key.json"
+          # Новые версии yc без yc init не знают адрес API — задаём явно
+          yc config set endpoint api.cloud.yandex.net:443
           yc config set folder-id "${{ vars.FOLDER_ID }}"
           rm "$RUNNER_TEMP/key.json"
 
