@@ -11,7 +11,7 @@
 import { AppState } from 'react-native';
 import { ApiError, NetError, request, type Op, type OpResult } from './net';
 import { DEMO, syncHooks, useStore, type Me, type Revs } from './store';
-import type { Activity, Group, ID, ReminderSettings, Task, TaskReminderOverride, User, WatchItem, Wish } from './types';
+import type { Activity, Group, ID, Idea, ReminderSettings, Task, TaskReminderOverride, Topic, User, WatchItem, Wish } from './types';
 
 type ServerItem = (Task & { type: 'task'; updatedAt?: string }) | (WatchItem & { type: 'watch'; updatedAt?: string });
 type SyncResponse = {
@@ -23,6 +23,9 @@ type SyncResponse = {
   wishes: Record<ID, (Wish & { updatedAt?: string })[]>;
   /** Личные напоминания с сервера; null — ещё ни разу не сохраняли */
   prefs: { reminders: ReminderSettings | null; overrides: Record<ID, TaskReminderOverride> } | null;
+  /** Идеи: ревизии людей и содержимое тех, у кого поменялось (чужие — только открытые нам темы) */
+  ideaRevs?: Record<ID, string>;
+  notes?: Record<ID, { topics: (Topic & { updatedAt?: string; kind?: string })[]; ideas: (Idea & { kind?: string })[] }>;
 };
 
 /** Изменения личных напоминаний → операция prefs (только то, что поменялось) */
@@ -66,6 +69,8 @@ const watchOp = (w: WatchItem): Op => ({
   watch: { id: w.id, groupId: w.groupId, title: w.title, kind: w.kind, genres: w.genres, origin: w.origin, year: w.year, watchedAt: w.watchedAt },
 });
 const wishOp = (w: Wish): Op => ({ op: 'wish.put', wish: { id: w.id, title: w.title, note: w.note, link: w.link, receivedAt: w.receivedAt } });
+const topicOp = (t: Topic): Op => ({ op: 'topic.put', topic: { id: t.id, title: t.title, groupIds: t.groupIds } });
+const ideaOp = (i: Idea): Op => ({ op: 'idea.put', idea: { id: i.id, topicId: i.topicId, text: i.text } });
 
 function diff<T extends { id: string }>(before: T[], after: T[], put: (x: T) => Op, del: (x: T) => Op): Op[] {
   if (before === after) return [];
@@ -91,6 +96,19 @@ useStore.subscribe((s, p) => {
       s.wishes.filter((w) => w.ownerId === meId),
       wishOp,
       (w) => ({ op: 'wish.delete', id: w.id }),
+    ),
+    // Сначала темы: новая идея может ссылаться на только что созданную тему
+    ...diff(
+      p.topics.filter((t) => t.ownerId === meId),
+      s.topics.filter((t) => t.ownerId === meId),
+      topicOp,
+      (t) => ({ op: 'topic.delete', id: t.id }),
+    ),
+    ...diff(
+      p.ideas.filter((i) => i.ownerId === meId),
+      s.ideas.filter((i) => i.ownerId === meId),
+      ideaOp,
+      (i) => ({ op: 'idea.delete', id: i.id }),
     ),
   ];
   const prefs = prefsOp(p, s);
@@ -126,19 +144,24 @@ async function flush(token: string): Promise<boolean> {
 function pendingScopes(outbox: Op[], meId: string | undefined) {
   const groups = new Set<ID>();
   let wishes = false;
+  let ideas = false;
   for (const o of outbox) {
+    if (o.op.startsWith('topic.') || o.op.startsWith('idea.')) {
+      ideas = true;
+      continue;
+    }
     if (o.op === 'task.put') groups.add(o.task.groupId);
     else if (o.op === 'watch.put') groups.add(o.watch.groupId);
     else if (o.op === 'item.delete') groups.add(o.groupId);
     else if (o.op === 'wish.put' || o.op === 'wish.delete') wishes = true;
     else if ('id' in o && typeof o.id === 'string') groups.add(o.id);
   }
-  return { groups, owners: wishes && meId ? new Set([meId]) : new Set<ID>() };
+  return { groups, owners: wishes && meId ? new Set([meId]) : new Set<ID>(), ideaOwners: ideas && meId ? new Set([meId]) : new Set<ID>() };
 }
 
 async function pull(token: string) {
   const s0 = useStore.getState();
-  const res = await request<SyncResponse>('/sync', { token, body: s0.revs });
+  const res = await request<SyncResponse>('/sync', { token, body: { ...s0.revs, ideas: s0.ideaRevs } });
   const s = useStore.getState();
   if (s.session?.token !== token) return; // пока ждали — вышли из аккаунта
   // Правки, сделанные за время запроса, не затираем: эти группы заберём в следующий раз
@@ -162,6 +185,23 @@ async function pull(token: string) {
     ...s.wishes.filter((w) => ownerIds.has(w.ownerId) && !replacedOwners.has(w.ownerId)),
     ...wishFromServer.flatMap(([, list]) => list.map(({ updatedAt: _u, ...w }) => w as Wish)),
   ];
+
+  // Идеи: люди, у которых поменялось, — заменяем целиком; людей не из моих групп — убираем
+  const ideaRevsIn = res.ideaRevs ?? {};
+  const notesIn = Object.entries(res.notes ?? {}).filter(([owner]) => !pending.ideaOwners.has(owner));
+  const notesReplaced = new Set(notesIn.map(([o]) => o));
+  const keepNote = (ownerId: ID) => ownerId in ideaRevsIn && !notesReplaced.has(ownerId);
+  const topics = [
+    ...s.topics.filter((t) => keepNote(t.ownerId)),
+    ...notesIn.flatMap(([, n]) => n.topics.map(({ kind: _k, updatedAt: _u, ...t }) => t as Topic)),
+  ];
+  const ideas = [
+    ...s.ideas.filter((i) => keepNote(i.ownerId)),
+    ...notesIn.flatMap(([, n]) => n.ideas.map(({ kind: _k, ...i }) => i as Idea)),
+  ];
+  const ideaRevs = Object.fromEntries(
+    Object.entries(ideaRevsIn).map(([o, r]) => [o, pending.ideaOwners.has(o) ? (s.ideaRevs[o] ?? '') : r]),
+  );
 
   // Ревизии: для групп с неотправленными правками оставляем старые — заберём их заново
   const revs: Revs = {
@@ -192,6 +232,8 @@ async function pull(token: string) {
       watch: replace(s.watch, 'watch'),
       wishes,
       revs,
+      // Сервер ещё не знает про идеи (старая версия) — ничего не трогаем
+      ...(res.ideaRevs && { topics, ideas, ideaRevs }),
       wishPersonId: s.wishPersonId && ownerIds.has(s.wishPersonId) ? s.wishPersonId : null,
     });
   } finally {

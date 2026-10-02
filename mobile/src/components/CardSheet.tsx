@@ -9,7 +9,7 @@ import { plural, type PlansAnswer } from '@/lib/plans';
 import { uid } from '@/lib/ids';
 import { useStore, type Card } from '@/lib/store';
 import { shortDate, taskWhen } from '@/lib/dates';
-import { pastEnd, type ChangeDraft, type DraftItem, type ItemType, type Repeat, type Task } from '@/lib/types';
+import { INBOX, pastEnd, type ChangeDraft, type DraftItem, type ItemType, type Repeat, type Task } from '@/lib/types';
 import { track } from '@/lib/analytics';
 import { handleTranscript, startRecording, TAB_FOR } from '@/lib/voice';
 import { font, ICON, size, space, useColors } from '@/theme';
@@ -23,7 +23,9 @@ import { Button, Checkbox, Chip, Divider, T, selectionTint } from './ui';
 export function emptyDraft(type: ItemType, title = ''): DraftItem {
   if (type === 'task') return { key: uid(), type, data: { title, date: null, time: null } };
   if (type === 'wish') return { key: uid(), type, data: { title, note: '', link: '' } };
-  return { key: uid(), type, data: { title, kind: null, genres: [], origin: null, year: null } };
+  if (type === 'idea') return { key: uid(), type, data: { title, topicId: null, newTopic: null } };
+  if (type === 'topic') return { key: uid(), type, data: { title } };
+  return { key: uid(), type: 'watch', data: { title, kind: null, genres: [], origin: null, year: null } };
 }
 
 /** Карточка подтверждения: голос, ручное добавление и правка */
@@ -61,6 +63,8 @@ function Draft({ card }: { card: Extract<Card, { items: DraftItem[] }> }) {
   const tasks = useStore((s) => s.tasks);
   const watch = useStore((s) => s.watch);
   const wishes = useStore((s) => s.wishes);
+  const ideas = useStore((s) => s.ideas);
+  const topics = useStore((s) => s.topics);
   const groupId = useStore((s) => s.currentGroupId);
   const meId = useStore((s) => s.me?.id ?? '');
   const users = useStore((s) => s.users);
@@ -68,6 +72,12 @@ function Draft({ card }: { card: Extract<Card, { items: DraftItem[] }> }) {
 
   /** Кто создал запись: для новой — вы, для существующей — автор и дата */
   const authorLine = (it: DraftItem) => {
+    // Идеи и темы — всегда свои: автора не показываем, у идеи — когда записана
+    if (it.type === 'topic') return null;
+    if (it.type === 'idea') {
+      const x = it.id ? ideas.find((i) => i.id === it.id) : null;
+      return x ? `Записали ${shortDate(x.createdAt.slice(0, 10))}` : null;
+    }
     if (!it.id) return `Автор: ${users.find((u) => u.id === meId)?.name ?? 'вы'} (вы)`;
     const rec =
       it.type === 'task'
@@ -85,18 +95,21 @@ function Draft({ card }: { card: Extract<Card, { items: DraftItem[] }> }) {
   // Проверка на дубликаты: такая запись уже есть или повторяется в этой же карточке
   const inside = repeatsInside(card.items);
   const dupOf = (it: DraftItem) =>
-    duplicateOf(it, { tasks, watch, wishes, groupId, meId }) ?? (inside.has(it.key) ? 'Повторяется в этой карточке' : null);
+    duplicateOf(it, { tasks, watch, wishes, topics, groupId, meId }) ?? (inside.has(it.key) ? 'Повторяется в этой карточке' : null);
   const blocked = (it: DraftItem) => !!dupOf(it) && !it.force;
   const toSave = card.items.filter((i) => !blocked(i));
   const canSave = toSave.length > 0 && toSave.every((i) => i.data.title.trim());
 
   const save = () => {
-    saveItems(toSave.map((i) => ({ ...i, data: { ...i.data, title: i.data.title.trim() } }) as DraftItem));
+    const res = saveItems(toSave.map((i) => ({ ...i, data: { ...i.data, title: i.data.title.trim() } }) as DraftItem));
     for (const i of toSave) track('save', { type: i.type, source: card.source });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     setCard(null);
     const first = toSave[0];
-    if (first && card.source !== 'edit') router.navigate(TAB_FOR[first.type]);
+    if (!first || card.source === 'edit') return;
+    // Идея — сразу в её тему
+    if (first.type === 'idea') router.navigate(`/ideas/${res.ideaTopicId ?? INBOX}`);
+    else router.navigate(TAB_FOR[first.type]);
   };
 
   return (
@@ -185,6 +198,7 @@ function Problem({ card }: { card: Extract<Card, { problem: string }> }) {
             <Button title="Дело" style={{ flex: 1 }} onPress={() => addAs('task')} />
             <Button title="Хотелку" style={{ flex: 1 }} onPress={() => addAs('wish')} />
             <Button title="Фильм" style={{ flex: 1 }} onPress={() => addAs('watch')} />
+            <Button title="Идею" style={{ flex: 1 }} onPress={() => addAs('idea')} />
           </View>
         </>
       );
@@ -319,24 +333,37 @@ const MARK_LABEL: Record<ItemType, string> = {
   task: 'Отметить выполненным',
   watch: 'Отметить: посмотрели',
   wish: 'Отметить: подарили',
+  idea: '',
+  topic: '',
 };
 
 function actionLabel(ch: ChangeDraft): string {
   if (ch.action === 'mark') return MARK_LABEL[ch.type];
   if (ch.action === 'unmark') return 'Снять отметку';
   if (ch.action === 'delete') return 'Удалить';
+  if (ch.type === 'idea') return 'Перенести в другую тему';
   if (ch.patch?.repeat === null) return 'Убрать повтор';
   if (ch.patch?.repeat) return 'Изменить повтор';
   return ch.patch?.title !== undefined ? 'Переименовать' : 'Перенести';
 }
 
-type Found = { title: string; date: string | null; time: string | null; repeat?: Repeat | null } | null;
+type Found = { title: string; date: string | null; time: string | null; repeat?: Repeat | null; topicId?: string | null } | null;
 
 function useFind() {
   const tasks = useStore((s) => s.tasks);
   const wishes = useStore((s) => s.wishes);
   const watch = useStore((s) => s.watch);
+  const ideas = useStore((s) => s.ideas);
+  const topics = useStore((s) => s.topics);
   return (type: ItemType, id: string): Found => {
+    if (type === 'idea') {
+      const x = ideas.find((i) => i.id === id);
+      return x ? { title: x.text, date: null, time: null, topicId: x.topicId } : null;
+    }
+    if (type === 'topic') {
+      const t = topics.find((x) => x.id === id);
+      return t ? { title: t.title, date: null, time: null } : null;
+    }
     if (type === 'task') {
       const t = tasks.find((x) => x.id === id);
       return t ? { title: t.title, date: t.date, time: t.time, repeat: t.repeat ?? null } : null;
@@ -400,9 +427,14 @@ function ChangeView({
   onRemove?: () => void;
 }) {
   const c = useColors();
+  const topics = useStore((s) => s.topics);
   if (!item) return null;
   const p = ch.patch ?? {};
   const diffs: { label: string; from: string; to: string; mono?: boolean }[] = [];
+  if (ch.type === 'idea' && (p.topicId !== undefined || p.newTopic)) {
+    const name = (id: string | null | undefined) => (id ? (topics.find((t) => t.id === id)?.title ?? 'Без темы') : 'Без темы');
+    diffs.push({ label: 'Тема', from: name(item.topicId), to: p.newTopic ? `${p.newTopic} (новая)` : name(p.topicId) });
+  }
   if (p.title !== undefined) diffs.push({ label: 'Название', from: item.title, to: p.title });
   if (p.date !== undefined || p.time !== undefined) {
     const nd = p.date !== undefined ? p.date : item.date;
@@ -420,7 +452,9 @@ function ChangeView({
         <T variant="label" muted={ch.action !== 'delete'} danger={ch.action === 'delete'}>
           {actionLabel(ch)}
         </T>
-        <T weight="medium">{item.title}</T>
+        <T weight="medium" numberOfLines={ch.type === 'idea' ? 3 : undefined}>
+          {item.title}
+        </T>
         {ch.type === 'task' && diffs.length === 0 && (item.date || item.time) ? (
           <T variant="caption" mono muted>
             {taskWhen(item.date, item.time)}

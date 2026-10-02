@@ -47,6 +47,7 @@ export default function ActivityScreen() {
       s.setWishPerson(e.actor);
       return router.navigate('/wishes');
     }
+    if (e.kind === 'topic.share' && e.itemId) return router.navigate(`/ideas/${e.itemId}`);
     if (e.groupId && s.groups.some((g) => g.id === e.groupId)) {
       s.selectGroup(e.groupId);
       if (e.kind.startsWith('watch.')) return router.navigate('/watch');

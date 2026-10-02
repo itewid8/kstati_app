@@ -1,0 +1,32 @@
+R_DEF: Internal format may change without notice
+local
+dimen kstati_gap
+dimen kstati_mic
+dimen kstati_pad
+dimen kstati_pad_row
+dimen kstati_widget_radius
+drawable kstati_card
+drawable kstati_circle
+drawable kstati_mic
+font kstati_geist
+font kstati_geist_mono
+id kstati_card
+id kstati_list
+id kstati_mic
+id kstati_mic_bg
+id kstati_mic_icon
+id kstati_time
+id kstati_title
+layout kstati_item_empty
+layout kstati_item_inline
+layout kstati_item_stacked
+layout kstati_mic_button
+layout kstati_widget_mic
+layout kstati_widget_preview
+layout kstati_widget_row
+layout kstati_widget_tall
+string kstati_widget_description
+string kstati_widget_empty
+string kstati_widget_label
+style Theme.KstatiWidgetConfig
+xml kstati_widget_info

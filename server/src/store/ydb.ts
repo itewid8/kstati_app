@@ -8,10 +8,11 @@
  *   items    groupId (S) + id (S)     — дела и «Смотреть» группы
  *   wishes   ownerId (S) + id (S)     — хотелки человека
  *   activity scope (S) + id (S)       — лента активности (id = «время#случайное»), срок жизни — exp
+ *   ideas    ownerId (S) + id (S)     — идеи человека: темы и записи (поле kind в объекте)
  * Сам объект лежит в атрибуте v (JSON-строка), счётчик — в n, срок жизни временной записи — в exp.
  */
 import { signV4 } from '../sigv4.js';
-import type { Activity, Group, Item, Prefs, Store, User, Wish } from './types.js';
+import type { Activity, Group, Item, Note, Prefs, Store, User, Wish } from './types.js';
 
 type AV = { S?: string; N?: string };
 type Row = Record<string, AV>;
@@ -32,12 +33,12 @@ const S = (s: string): AV => ({ S: s });
 const chunk = <T>(xs: T[], n: number) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 
 export class YdbStore implements Store {
-  private t: { kv: string; members: string; items: string; wishes: string; activity: string };
+  private t: { kv: string; members: string; items: string; wishes: string; activity: string; ideas: string };
 
   constructor(private cfg: YdbConfig) {
     // Имена таблиц: не короче 3 символов (требование Document API), поэтому с приставкой: kstati_kv, kstati_items…
     const p = cfg.prefix ?? 'kstati_';
-    this.t = { kv: `${p}kv`, members: `${p}members`, items: `${p}items`, wishes: `${p}wishes`, activity: `${p}activity` };
+    this.t = { kv: `${p}kv`, members: `${p}members`, items: `${p}items`, wishes: `${p}wishes`, activity: `${p}activity`, ideas: `${p}ideas` };
   }
 
   /** Один вызов Document API: Target — имя операции DynamoDB (PutItem, Query…) */
@@ -220,6 +221,22 @@ export class YdbStore implements Store {
     await this.call('DeleteItem', { TableName: this.t.wishes, Key: { ownerId: S(ownerId), id: S(id) } });
   }
 
+  /* ---------- идеи ---------- */
+
+  async listNotes(ownerId: string) {
+    return (await this.query(this.t.ideas, 'ownerId', ownerId)).map((r) => JSON.parse(r.v.S!) as Note);
+  }
+  async getNote(ownerId: string, id: string) {
+    const r = await this.call<{ Item?: Row }>('GetItem', { TableName: this.t.ideas, Key: { ownerId: S(ownerId), id: S(id) }, ConsistentRead: true });
+    return this.parse<Note>(r.Item);
+  }
+  async putNote(n: Note) {
+    await this.call('PutItem', { TableName: this.t.ideas, Item: { ownerId: S(n.ownerId), id: S(n.id), v: S(JSON.stringify(n)) } });
+  }
+  async deleteNote(ownerId: string, id: string) {
+    await this.call('DeleteItem', { TableName: this.t.ideas, Key: { ownerId: S(ownerId), id: S(id) } });
+  }
+
   /* ---------- личные настройки ---------- */
 
   async getPrefs(userId: string) {
@@ -311,6 +328,7 @@ export class YdbStore implements Store {
       [this.t.items, ['groupId', 'id']],
       [this.t.wishes, ['ownerId', 'id']],
       [this.t.activity, ['scope', 'id']],
+      [this.t.ideas, ['ownerId', 'id']],
     ];
     for (const [name, [hash, range]] of specs) {
       if (have.has(name)) {

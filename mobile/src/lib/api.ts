@@ -8,13 +8,14 @@ export type VoiceProblem = 'offline' | 'server' | 'limit';
 type VoiceFail = { ok: false; problem: VoiceProblem; detail: string };
 
 /**
- * Что знает сервер для разбора фразы: какая группа открыта и который час у человека.
+ * Что знает сервер для разбора фразы: какая группа и тема идей открыты и который час у человека.
  * Остальное (люди, дела группы, хотелки) сервер берёт из базы сам.
  */
 function meta() {
   const s = useStore.getState();
   const now = new Date();
-  return { groupId: s.currentGroupId ?? '', today: toISODate(now), now: toHHMM(now) };
+  // Открытая тема идей: идея без названной темы ляжет в неё
+  return { groupId: s.currentGroupId ?? '', today: toISODate(now), now: toHHMM(now), topicId: s.voiceTopicId };
 }
 
 function fail(e: unknown): VoiceFail {

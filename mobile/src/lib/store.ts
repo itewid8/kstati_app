@@ -7,6 +7,7 @@ import { shortDate, toISODate } from './dates';
 import { nextOpen } from './recur';
 import { DEFAULT_REMINDERS, migrateRules } from './remind';
 import * as M from './mock';
+import { normTitle } from './dupes';
 import type { PlansAnswer } from './plans';
 import {
   emptyFilters,
@@ -20,6 +21,8 @@ import {
   type DraftItem,
   type Group,
   type ID,
+  type Idea,
+  type Topic,
   type ReminderRule,
   type ReminderSettings,
   type Task,
@@ -96,6 +99,13 @@ type State = {
   tasks: Task[];
   wishes: Wish[];
   watch: WatchItem[];
+  /** Идеи: мои темы и темы, которые мне открыли другие (только чтение) */
+  topics: Topic[];
+  ideas: Idea[];
+  /** Какие ревизии идей людей уже скачаны (строки сервера) */
+  ideaRevs: Record<ID, string>;
+  /** Открытая на экране тема: голос кладёт идеи в неё */
+  voiceTopicId: ID | null;
   overrides: Record<ID, TaskReminderOverride>;
   reminders: ReminderSettings;
   watchFilters: WatchFilters;
@@ -151,7 +161,8 @@ type Actions = {
   renameGroup: (id: ID, name: string) => void;
   leaveGroup: (id: ID) => void;
 
-  saveItems: (items: DraftItem[]) => void;
+  /** Сохранить карточку. Возвращает тему первой идеи (куда перейти после сохранения) */
+  saveItems: (items: DraftItem[]) => { ideaTopicId?: ID | null };
   applyChanges: (changes: ChangeDraft[]) => void;
   /** occ — дата повтора: у серии отмечается только этот раз */
   toggleTask: (id: ID, occ?: string) => void;
@@ -163,6 +174,13 @@ type Actions = {
   toggleWish: (id: ID) => void;
   toggleWatched: (id: ID) => void;
   deleteWatch: (id: ID) => void;
+  /** Идеи: удалить идею, тему (вместе с её идеями), переименовать / открыть группам */
+  deleteIdea: (id: ID) => void;
+  deleteTopic: (id: ID) => void;
+  updateTopic: (id: ID, patch: Partial<Pick<Topic, 'title' | 'groupIds'>>) => void;
+  /** Новая тема; если такая уже есть — её id */
+  createTopic: (title: string) => ID | null;
+  setVoiceTopic: (id: ID | null) => void;
 
   setReminders: (p: Partial<ReminderSettings>) => void;
   setOverride: (taskId: ID, o: TaskReminderOverride | undefined) => void;
@@ -197,6 +215,9 @@ const emptyData = () => ({
   tasks: [] as Task[],
   wishes: [] as Wish[],
   watch: [] as WatchItem[],
+  topics: [] as Topic[],
+  ideas: [] as Idea[],
+  ideaRevs: {} as Record<ID, string>,
   overrides: {} as Record<ID, TaskReminderOverride>,
   wishPersonId: null as ID | null,
   lastMe: null as User | null,
@@ -216,6 +237,7 @@ const initial: State = {
   tasksView: 'list',
   menu: null,
   calendarDate: toISODate(new Date()),
+  voiceTopicId: null,
   theme: 'system',
   micMode: 'tap',
 };
@@ -230,6 +252,9 @@ function toggleOcc(t: Task, occ: string | null, done: boolean): Task {
   const yearAgo = toISODate(new Date(Date.now() - 366 * 86400000));
   return { ...t, doneDates: [...set].filter((d) => d >= yearAgo).sort() };
 }
+/** Моя тема с таким названием (без учёта регистра и знаков) */
+const ownTopic = (topics: Topic[], meId: ID, title: string) => topics.find((t) => t.ownerId === meId && normTitle(t.title) === normTitle(title));
+
 const lastDone = (t: Task) => (t.doneDates?.length ? t.doneDates[t.doneDates.length - 1] : null);
 
 export const useStore = create<State & Actions>()(
@@ -387,9 +412,19 @@ export const useStore = create<State & Actions>()(
 
     saveItems: (items) => {
       const { me, currentGroupId } = get();
-      if (!me) return;
+      if (!me) return {};
       const now = new Date().toISOString();
-      let { tasks, wishes, watch, overrides } = get();
+      let { tasks, wishes, watch, overrides, topics, ideas } = get();
+      let ideaTopicId: ID | null | undefined;
+      // Новая тема из карточки создаётся один раз, даже если её назвали у нескольких идей
+      const topicFor = (title: string): ID => {
+        const name = title.trim();
+        const found = ownTopic(topics, me.id, name);
+        if (found) return found.id;
+        const t: Topic = { id: uid(), ownerId: me.id, title: name, groupIds: [], createdAt: now };
+        topics = [...topics, t];
+        return t.id;
+      };
       for (const it of items) {
         if (it.type === 'task') {
           const { mine, shared, repeat, ...data } = it.data;
@@ -411,18 +446,30 @@ export const useStore = create<State & Actions>()(
         } else if (it.type === 'wish') {
           if (it.id) wishes = wishes.map((w) => (w.id === it.id ? { ...w, ...it.data } : w));
           else wishes = [{ id: uid(), ownerId: me.id, receivedAt: null, createdAt: now, ...it.data }, ...wishes];
-        } else {
+        } else if (it.type === 'watch') {
           if (it.id) watch = watch.map((w) => (w.id === it.id ? { ...w, ...it.data } : w));
           else if (currentGroupId)
             watch = [{ id: uid(), groupId: currentGroupId, addedBy: me.id, watchedAt: null, createdAt: now, ...it.data }, ...watch];
+        } else if (it.type === 'topic') {
+          const title = it.data.title.trim();
+          if (it.id) topics = topics.map((t) => (t.id === it.id ? { ...t, title } : t));
+          else topicFor(title);
+        } else {
+          const topicId = it.data.newTopic?.trim() ? topicFor(it.data.newTopic) : it.data.topicId;
+          const text = it.data.title.trim();
+          if (it.id) ideas = ideas.map((x) => (x.id === it.id ? { ...x, text, topicId, updatedAt: now } : x));
+          else ideas = [{ id: uid(), ownerId: me.id, topicId, text, createdAt: now, updatedAt: now }, ...ideas];
+          if (ideaTopicId === undefined) ideaTopicId = topicId;
         }
       }
-      set({ tasks, wishes, watch, overrides });
+      set({ tasks, wishes, watch, overrides, topics, ideas });
+      return ideaTopicId === undefined ? {} : { ideaTopicId };
     },
 
     applyChanges: (changes) => {
-      const before = { tasks: get().tasks, wishes: get().wishes, watch: get().watch };
-      let { tasks, wishes, watch } = before;
+      const before = { tasks: get().tasks, wishes: get().wishes, watch: get().watch, topics: get().topics, ideas: get().ideas };
+      let { tasks, wishes, watch, topics, ideas } = before;
+      const meId = get().me?.id;
       const now = new Date().toISOString();
       let deleted = 0;
       for (const ch of changes) {
@@ -432,6 +479,23 @@ export const useStore = create<State & Actions>()(
           if (ch.type === 'task') tasks = tasks.filter((t) => t.id !== id);
           if (ch.type === 'wish') wishes = wishes.filter((w) => w.id !== id);
           if (ch.type === 'watch') watch = watch.filter((w) => w.id !== id);
+          if (ch.type === 'idea') ideas = ideas.filter((x) => x.id !== id);
+          continue;
+        }
+        // Перенос идеи в другую тему (новая тема создаётся)
+        if (ch.type === 'idea') {
+          const p = ch.patch ?? {};
+          let topicId = p.topicId ?? null;
+          if (p.newTopic?.trim() && meId) {
+            const found = ownTopic(topics, meId, p.newTopic);
+            if (found) topicId = found.id;
+            else {
+              const t: Topic = { id: uid(), ownerId: meId, title: p.newTopic.trim(), groupIds: [], createdAt: now };
+              topics = [...topics, t];
+              topicId = t.id;
+            }
+          }
+          if (p.topicId !== undefined || p.newTopic) ideas = ideas.map((x) => (x.id === id ? { ...x, topicId, updatedAt: now } : x));
           continue;
         }
         const stamp = ch.action === 'mark' ? now : ch.action === 'unmark' ? null : undefined;
@@ -465,7 +529,7 @@ export const useStore = create<State & Actions>()(
               : { ...w, ...(p.title !== undefined && { title: p.title }), ...(stamp !== undefined && { watchedAt: stamp }) },
           );
       }
-      set({ tasks, wishes, watch });
+      set({ tasks, wishes, watch, topics, ideas });
       if (deleted) withUndo(deleted > 1 ? `Удалено: ${deleted}` : 'Удалено', before);
     },
 
@@ -525,6 +589,29 @@ export const useStore = create<State & Actions>()(
       set({ watch: before.watch.filter((w) => w.id !== id) });
       withUndo('Удалено', before);
     },
+
+    deleteIdea: (id) => {
+      const before = { ideas: get().ideas };
+      set({ ideas: before.ideas.filter((x) => x.id !== id) });
+      withUndo('Идея удалена', before);
+    },
+    deleteTopic: (id) => {
+      const before = { topics: get().topics, ideas: get().ideas };
+      set({ topics: before.topics.filter((t) => t.id !== id), ideas: before.ideas.filter((x) => x.topicId !== id) });
+      withUndo('Тема удалена', before);
+    },
+    updateTopic: (id, patch) => set({ topics: get().topics.map((t) => (t.id === id ? { ...t, ...patch } : t)) }),
+    createTopic: (title) => {
+      const me = get().me;
+      const name = title.trim();
+      if (!me || !name) return null;
+      const found = ownTopic(get().topics, me.id, name);
+      if (found) return found.id;
+      const t: Topic = { id: uid(), ownerId: me.id, title: name, groupIds: [], createdAt: new Date().toISOString() };
+      set({ topics: [...get().topics, t] });
+      return t.id;
+    },
+    setVoiceTopic: (voiceTopicId) => set({ voiceTopicId }),
 
     setReminders: (p) => set({ reminders: { ...get().reminders, ...p } }),
     setOverride: (taskId, o) => {
@@ -628,6 +715,9 @@ export const useStore = create<State & Actions>()(
       tasks: s.tasks,
       wishes: s.wishes,
       watch: s.watch,
+      topics: s.topics,
+      ideas: s.ideas,
+      ideaRevs: s.ideaRevs,
       overrides: s.overrides,
       reminders: s.reminders,
       tasksView: s.tasksView,

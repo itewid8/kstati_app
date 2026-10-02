@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Совсем узкий виджет: только микрофон по центру -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@android:id/background"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent">
+  <ImageView
+    android:id="@+id/kstati_card"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no"
+    android:scaleType="fitXY"
+    android:src="@drawable/kstati_card" />
+  <include
+    layout="@layout/kstati_mic_button"
+    android:layout_width="@dimen/kstati_mic"
+    android:layout_height="@dimen/kstati_mic"
+    android:layout_gravity="center" />
+</FrameLayout>

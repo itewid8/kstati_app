@@ -83,6 +83,33 @@ export type Wish = {
 };
 
 /**
+ * Идеи: темы и записи в них. Принадлежат человеку (как хотелки) и по умолчанию видны только ему.
+ * Тему можно открыть группам (groupIds) — участники видят её и идеи в ней, но менять не могут.
+ * Идея без темы (topicId: null) — во «Без темы».
+ */
+export type Topic = {
+  kind: 'topic';
+  id: string;
+  ownerId: string;
+  title: string;
+  groupIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Idea = {
+  kind: 'idea';
+  id: string;
+  ownerId: string;
+  topicId: string | null;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Note = Topic | Idea;
+
+/**
  * Личные настройки человека, общие для всех его телефонов: напоминания по умолчанию
  * и личные напоминания для отдельных дел (id дела → список, [] — не напоминать).
  */
@@ -108,7 +135,8 @@ export type ActivityKind =
   | 'member.join'
   | 'member.leave'
   | 'member.remove'
-  | 'group.rename';
+  | 'group.rename'
+  | 'topic.share';
 
 /**
  * Запись ленты. scope — чья лента: id группы (дела, «Смотреть», участники) или «u:<id>» (хотелки человека).
@@ -166,6 +194,12 @@ export interface Store {
   putWish(w: Wish): Promise<void>;
   deleteWish(ownerId: string, id: string): Promise<void>;
 
+  /** Идеи человека: темы и записи (одна таблица, различаются полем kind) */
+  listNotes(ownerId: string): Promise<Note[]>;
+  getNote(ownerId: string, id: string): Promise<Note | null>;
+  putNote(n: Note): Promise<void>;
+  deleteNote(ownerId: string, id: string): Promise<void>;
+
   /** Атомарно +1 к счётчику, возвращает новое значение */
   incr(counter: string): Promise<number>;
   /** Значения счётчиков (нет — 0) */
@@ -190,3 +224,5 @@ export interface Store {
 
 export const grev = (groupId: string) => `grev#${groupId}`;
 export const urev = (userId: string) => `urev#${userId}`;
+/** Ревизия идей человека: меняется при любой правке его тем и идей */
+export const irev = (userId: string) => `irev#${userId}`;

@@ -173,29 +173,6 @@
           ]
         }
       ],
-      [
-        "react-native-android-widget",
-        {
-          "fonts": [
-            "./node_modules/@expo-google-fonts/geist/400Regular/Geist_400Regular.ttf",
-            "./node_modules/@expo-google-fonts/geist-mono/400Regular/GeistMono_400Regular.ttf"
-          ],
-          "widgets": [
-            {
-              "name": "Kstati",
-              "label": "Кстати",
-              "description": "Ближайшие дела и микрофон",
-              "minWidth": "110dp",
-              "minHeight": "40dp",
-              "targetCellWidth": 2,
-              "targetCellHeight": 1,
-              "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000,
-              "widgetFeatures": "reconfigurable|configuration_optional"
-            }
-          ]
-        }
-      ],
       "./plugins/withoutPushEntitlement",
       "./plugins/withWorkManagerFix",
       "expo-background-task"

@@ -4,6 +4,7 @@
  * POST /sync — телефон присылает, какие ревизии групп и людей у него есть;
  *   сервер отвечает списком групп и людей и полностью отдаёт дела/«Смотреть» только тех групп
  *   и хотелки только тех людей, где ревизия поменялась. Данных у пары мало — так проще и надёжнее.
+ *   Идеи (темы и записи) — так же по ревизиям людей: свои целиком, чужие — только темы, открытые нашим общим группам.
  * POST /ops — пачка изменений по порядку (офлайн-очередь телефона). id записей придумывает телефон,
  *   поэтому повтор той же операции безопасен.
  * Все права проверяются здесь: телефону доверять нельзя.
@@ -12,7 +13,7 @@ import { randomInt } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
-import { grev, publicUser, urev, type Activity, type Group, type Item, type Store, type Task, type User, type Wish } from './store/index.js';
+import { grev, irev, publicUser, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type Wish } from './store/index.js';
 import { CATEGORIES } from './types.js';
 
 const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
@@ -77,12 +78,29 @@ const WishIn = z.object({
   receivedAt: Stamp,
 });
 
+/** Тема идей: название и группы, которым она открыта (только чтение) */
+const TopicIn = z.object({
+  id: Id,
+  title: z.string().trim().min(1).max(80),
+  groupIds: z.array(Id).max(20),
+});
+/** Идея: текст и тема (null — «Без темы») */
+const IdeaIn = z.object({
+  id: Id,
+  topicId: Id.nullable(),
+  text: z.string().trim().min(1).max(4000),
+});
+
 const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('task.put'), task: TaskIn }),
   z.object({ op: z.literal('watch.put'), watch: WatchIn }),
   z.object({ op: z.literal('item.delete'), groupId: Id, id: Id }),
   z.object({ op: z.literal('wish.put'), wish: WishIn }),
   z.object({ op: z.literal('wish.delete'), id: Id }),
+  z.object({ op: z.literal('topic.put'), topic: TopicIn }),
+  z.object({ op: z.literal('topic.delete'), id: Id }),
+  z.object({ op: z.literal('idea.put'), idea: IdeaIn }),
+  z.object({ op: z.literal('idea.delete'), id: Id }),
   z.object({ op: z.literal('group.create'), group: z.object({ id: Id, name: z.string().trim().min(1).max(40), category: z.enum(CATEGORIES as [string, ...string[]]) }) }),
   z.object({ op: z.literal('group.update'), id: Id, name: z.string().trim().min(1).max(40).optional(), category: z.enum(CATEGORIES as [string, ...string[]]).optional() }),
   z.object({ op: z.literal('group.join'), code: z.string().trim().min(4).max(12) }),
@@ -288,6 +306,55 @@ export class Data {
         if (old) await this.log(user, { scope: `u:${user.id}`, itemId: op.id, title: old.title, kind: 'wish.delete' });
         return {};
       }
+      case 'topic.put': {
+        const old = await s.getNote(user.id, op.topic.id);
+        if (old && old.kind !== 'topic') throw new HttpError(409, 'conflict');
+        // Открыть тему можно только своим группам
+        const mine = new Set(await s.listMemberships(user.id));
+        const groupIds = [...new Set(op.topic.groupIds)].filter((g) => mine.has(g));
+        const t: Topic = {
+          kind: 'topic',
+          id: op.topic.id,
+          ownerId: user.id,
+          title: op.topic.title,
+          groupIds,
+          createdAt: old?.createdAt ?? now,
+          updatedAt: now,
+        };
+        await s.putNote(t);
+        await s.incr(irev(user.id));
+        // В ленту — только момент, когда темой поделились с группой
+        const before = new Set(old?.kind === 'topic' ? old.groupIds : []);
+        for (const gid of groupIds.filter((g) => !before.has(g)))
+          await this.log(user, { scope: gid, groupId: gid, itemId: t.id, title: t.title, kind: 'topic.share' });
+        return {};
+      }
+      case 'topic.delete': {
+        // Тема удаляется вместе со своими идеями
+        const all = await s.listNotes(user.id);
+        for (const n of all) if (n.id === op.id || (n.kind === 'idea' && n.topicId === op.id)) await s.deleteNote(user.id, n.id);
+        await s.incr(irev(user.id));
+        return {};
+      }
+      case 'idea.put': {
+        const old = await s.getNote(user.id, op.idea.id);
+        if (old && old.kind !== 'idea') throw new HttpError(409, 'conflict');
+        // Тему могли удалить на другом телефоне — тогда идея уходит во «Без темы», а не теряется
+        let topicId = op.idea.topicId;
+        if (topicId) {
+          const t = await s.getNote(user.id, topicId);
+          if (t?.kind !== 'topic') topicId = null;
+        }
+        const idea: Idea = { kind: 'idea', id: op.idea.id, ownerId: user.id, topicId, text: op.idea.text, createdAt: old?.createdAt ?? now, updatedAt: now };
+        await s.putNote(idea);
+        await s.incr(irev(user.id));
+        return {};
+      }
+      case 'idea.delete': {
+        await s.deleteNote(user.id, op.id);
+        await s.incr(irev(user.id));
+        return {};
+      }
       case 'group.create': {
         const exists = await s.getGroup(op.group.id);
         if (exists) {
@@ -396,26 +463,52 @@ export class Data {
   }
 
   /** Всё, что телефону нужно знать; содержимое — только там, где ревизия поменялась */
-  async sync(user: User, known: { groups: Record<string, number>; owners: Record<string, number> }) {
+  /**
+   * Идеи человека owner глазами user: свои — все; чужие — темы, открытые общим группам, и идеи в них.
+   * common — id общих групп (для чужих)
+   */
+  private visibleNotes(notes: Note[], own: boolean, common: Set<string>) {
+    const topics = notes.filter((n): n is Topic => n.kind === 'topic' && (own || n.groupIds.some((g) => common.has(g))));
+    const ids = new Set(topics.map((t) => t.id));
+    const ideas = notes.filter((n): n is Idea => n.kind === 'idea' && (own || (!!n.topicId && ids.has(n.topicId))));
+    // Чужим не показываем, каким ещё группам открыта тема
+    return { topics: own ? topics : topics.map((t) => ({ ...t, groupIds: t.groupIds.filter((g) => common.has(g)) })), ideas };
+  }
+
+  async sync(user: User, known: { groups: Record<string, number>; owners: Record<string, number>; ideas?: Record<string, string> }) {
     const s = this.store;
     const groups = await s.getGroups(await s.listMemberships(user.id));
     const mine = groups.filter((g) => g.memberIds.includes(user.id));
     const peopleIds = [...new Set([user.id, ...mine.flatMap((g) => g.memberIds)])];
     const [users, counters] = await Promise.all([
       s.getUsers(peopleIds),
-      s.getCounters([...mine.map((g) => grev(g.id)), ...peopleIds.map(urev)]),
+      s.getCounters([...mine.map((g) => grev(g.id)), ...peopleIds.map(urev), ...peopleIds.map(irev)]),
     ]);
+    // Ревизия идей: счётчик человека и общие с ним группы (вышли из группы — чужие темы надо убрать)
+    const commonWith = (id: string) => new Set(mine.filter((g) => g.memberIds.includes(id)).map((g) => g.id));
+    const ideaRevs = Object.fromEntries(
+      peopleIds.map((id) => [id, id === user.id ? `${counters[irev(id)] ?? 0}` : `${counters[irev(id)] ?? 0}|${[...commonWith(id)].sort().join(',')}`]),
+    );
+    // Старые версии приложения идей не знают (не присылают ideas) — им и не отдаём
+    const knownIdeas = known.ideas ?? {};
+    const changedIdeaOwners = known.ideas ? peopleIds.filter((id) => knownIdeas[id] !== ideaRevs[id]) : [];
     const revs = {
       groups: Object.fromEntries(mine.map((g) => [g.id, counters[grev(g.id)] ?? 0])),
       owners: Object.fromEntries(peopleIds.map((id) => [id, counters[urev(id)] ?? 0])),
     };
     const changedGroups = mine.filter((g) => known.groups[g.id] !== revs.groups[g.id]);
     const changedOwners = peopleIds.filter((id) => known.owners[id] !== revs.owners[id]);
-    const [itemLists, wishLists, prefs] = await Promise.all([
+    const [itemLists, wishLists, prefs, noteLists] = await Promise.all([
       Promise.all(changedGroups.map((g) => s.listItems(g.id))),
       Promise.all(changedOwners.map((id) => s.listWishes(id))),
       s.getPrefs(user.id),
+      // Идеи не должны ломать остальную синхронизацию (например, пока таблица создаётся после обновления)
+      Promise.all(changedIdeaOwners.map((id) => s.listNotes(id))).catch((e) => {
+        console.warn('Идеи:', (e as Error).message);
+        return null;
+      }),
     ]);
+    const ideaOwners = noteLists ? changedIdeaOwners : [];
     return {
       me: meView(user),
       groups: mine.map((g) => groupView(g, user.id)),
@@ -425,6 +518,9 @@ export class Data {
       wishes: Object.fromEntries(changedOwners.map((id, i) => [id, wishLists[i]])),
       // Личные напоминания — всегда целиком (их немного); null — телефон ещё ни разу не присылал
       prefs,
+      // Идеи: ревизии (не смогли прочитать — прежние, чтобы телефон спросил ещё раз) и содержимое изменившихся
+      ideaRevs: noteLists ? ideaRevs : Object.fromEntries(peopleIds.map((id) => [id, knownIdeas[id] ?? ''])),
+      notes: Object.fromEntries(ideaOwners.map((id, i) => [id, this.visibleNotes(noteLists![i], id === user.id, commonWith(id))])),
     };
   }
 
@@ -437,6 +533,7 @@ export class Data {
       else await s.removeMembership(user.id, gid);
     }
     for (const w of await s.listWishes(user.id)) await s.deleteWish(user.id, w.id);
+    for (const n of await s.listNotes(user.id)) await s.deleteNote(user.id, n.id);
     await s.deletePrefs(user.id);
     if (user.email) await s.deleteKey(`email#${user.email}`);
     if (user.vkId) await s.deleteKey(`vk#${user.vkId}`);
@@ -458,7 +555,7 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
   app.post('/sync', async (req) => {
     const user = await requireUser(req, store);
     const known = z
-      .object({ groups: z.record(z.number()).default({}), owners: z.record(z.number()).default({}) })
+      .object({ groups: z.record(z.number()).default({}), owners: z.record(z.number()).default({}), ideas: z.record(z.string().max(2000)).optional() })
       .parse(req.body ?? {});
     return data.sync(user, known);
   });

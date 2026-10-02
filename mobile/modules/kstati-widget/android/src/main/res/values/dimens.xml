@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Скругление карточки виджета; на Android 12+ — системное (как у остальных виджетов), см. values-v31 -->
+  <dimen name="kstati_widget_radius">24dp</dimen>
+  <dimen name="kstati_pad">14dp</dimen>
+  <dimen name="kstati_pad_row">10dp</dimen>
+  <dimen name="kstati_gap">10dp</dimen>
+  <dimen name="kstati_mic">40dp</dimen>
+</resources>

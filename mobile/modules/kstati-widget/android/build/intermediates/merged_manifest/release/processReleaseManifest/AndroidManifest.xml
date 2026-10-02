@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="expo.modules.kstatiwidget" >
+
+    <uses-sdk android:minSdkVersion="24" />
+
+    <application>
+
+        <!-- Виджет на рабочем столе -->
+        <receiver
+            android:name="expo.modules.kstatiwidget.KstatiWidgetProvider"
+            android:exported="false"
+            android:label="@string/kstati_widget_label" >
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/kstati_widget_info" />
+        </receiver>
+
+        <!-- Настройки виджета: прозрачное окно поверх рабочего стола (экран на React Native) -->
+        <activity
+            android:name="expo.modules.kstatiwidget.KstatiWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.KstatiWidgetConfig" >
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

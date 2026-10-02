@@ -32,7 +32,9 @@ async function scenario(name: string, store: Store) {
     recognize: async () => 'хочу наушники',
     toOgg: async () => ({ ogg: Buffer.from('ogg'), seconds: 1.2 }),
     parse: async (text, ctx) => {
-      parsed.push(`${text} | people=${ctx.people.map((p) => p.name).join(',')} | tasks=${ctx.existing.tasks.length} | wishes=${ctx.existing.wishes.length}`);
+      parsed.push(
+        `${text} | people=${ctx.people.map((p) => p.name).join(',')} | tasks=${ctx.existing.tasks.length} | wishes=${ctx.existing.wishes.length} | ideas=${ctx.existing.ideas?.length ?? 0} | topics=${(ctx.topics ?? []).map((t) => t.title).join(',')} | current=${ctx.currentTopicId ?? ''}`,
+      );
       return { result: { type: 'unknown' }, raw: '{}', usage: { input: 1, output: 1, total: 2 }, attempts: 1 };
     },
   });
@@ -203,6 +205,49 @@ async function scenario(name: string, store: Store) {
   const later = (await ok('GET', '/activity?since=' + encodeURIComponent(feed2[0].id), undefined, T2)).events;
   assert.equal(later.length, 0, 'since отсекает уже виденное');
 
+  /* ---------- идеи: личные темы, открытие группе только на чтение ---------- */
+  const ir = await ops(
+    T1,
+    { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи для приложения', groupIds: [] } },
+    { op: 'topic.put', topic: { id: 'tp2', title: 'Подарки Маше', groupIds: [] } },
+    { op: 'idea.put', idea: { id: 'i1', topicId: 'tp1', text: 'Погода в виджете' } },
+    { op: 'idea.put', idea: { id: 'i2', topicId: 'tp2', text: 'Кофемолка' } },
+    { op: 'idea.put', idea: { id: 'i3', topicId: null, text: 'Просто мысль' } },
+    { op: 'idea.put', idea: { id: 'i4', topicId: null, text: '   ' } },
+  );
+  assert.deepEqual(ir.map((x) => x.ok), [true, true, true, true, true, false], 'пустая идея отклоняется');
+  const n1 = await ok('POST', '/sync', { ideas: {} }, T1);
+  assert.deepEqual(n1.notes[sasha.me.id].topics.map((t: any) => t.id).sort(), ['tp1', 'tp2']);
+  assert.deepEqual(n1.notes[sasha.me.id].ideas.map((i: any) => i.id).sort(), ['i1', 'i2', 'i3']);
+  const n2 = await ok('POST', '/sync', { ideas: {} }, T2);
+  assert.deepEqual(n2.notes[sasha.me.id], { topics: [], ideas: [] }, 'личные идеи Саши Маше не видны');
+  assert.deepEqual((await ok('POST', '/sync', {}, T2)).notes, {}, 'старое приложение идей не получает');
+  // Саша открывает тему группе (чужую группу добавить нельзя — молча отбрасывается)
+  await ops(T1, { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи для приложения', groupIds: ['g1', 'чужая'] } });
+  const n3 = await ok('POST', '/sync', { ideas: n2.ideaRevs }, T2);
+  assert.deepEqual(n3.notes[sasha.me.id].topics.map((t: any) => [t.id, t.groupIds]), [['tp1', ['g1']]]);
+  assert.deepEqual(n3.notes[sasha.me.id].ideas.map((i: any) => i.id), ['i1'], 'видны только идеи открытой темы');
+  assert.deepEqual((await ok('POST', '/sync', { ideas: n3.ideaRevs }, T2)).notes, {}, 'без изменений — без содержимого');
+  // Маша писать в тему Саши не может: её идея остаётся у неё, без темы
+  await ops(T2, { op: 'idea.put', idea: { id: 'i9', topicId: 'tp1', text: 'Моя идея' } });
+  const n4 = await ok('POST', '/sync', { ideas: {} }, T2);
+  assert.deepEqual(n4.notes[masha.me.id].ideas.map((i: any) => [i.id, i.topicId]), [['i9', null]]);
+  assert.deepEqual(n4.notes[sasha.me.id].ideas.map((i: any) => i.id), ['i1'], 'тема Саши не изменилась');
+  // В ленте — момент, когда тему открыли группе
+  const feedI = (await ok('GET', '/activity', undefined, T2)).events as any[];
+  assert.ok(feedI.some((e) => e.kind === 'topic.share' && e.title === 'Идеи для приложения'));
+  assert.equal(feedI.filter((e) => e.kind === 'topic.share').length, 1, 'повторное сохранение темы в ленту не попадает');
+  await ops(T1, { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи для приложения', groupIds: ['g1'] } });
+  assert.equal((await ok('GET', '/activity', undefined, T2)).events.filter((e: any) => e.kind === 'topic.share').length, 1);
+  // Удаление темы удаляет её идеи
+  await ops(T1, { op: 'topic.delete', id: 'tp2' });
+  const n5 = (await ok('POST', '/sync', { ideas: {} }, T1)).notes[sasha.me.id];
+  assert.deepEqual(n5.ideas.map((i: any) => i.id).sort(), ['i1', 'i3']);
+  // Голос знает мои темы и открытую тему
+  const before = parsed.length;
+  await ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'запиши идею', topicId: 'tp1' }, T1);
+  assert.match(parsed[before], /ideas=2 \| topics=Идеи для приложения \| current=tp1/);
+
   /* ---------- ник и профиль ---------- */
   assert.equal((await ok('GET', '/nick/check?nick=' + encodeURIComponent('саша'), undefined, T2)).status, 'free');
   assert.equal((await ops(T1, { op: 'profile', nick: 'Саша', gender: 'm' }))[0].ok, true);
@@ -215,7 +260,7 @@ async function scenario(name: string, store: Store) {
   const v = await ok('POST', '/voice', { groupId: 'g1', today: '2026-09-26', now: '12:00', audio: Buffer.from('m4a').toString('base64') }, T2);
   assert.equal(v.transcript, 'хочу наушники');
   assert.equal(v.left, 2);
-  assert.match(parsed[0], /people=Саша \| tasks=3 \| wishes=0/);
+  assert.match(parsed.at(-1)!, /people=Саша \| tasks=3 \| wishes=0/);
   assert.equal((await call('POST', '/voice/text', { groupId: 'nope', today: '2026-09-26', now: '12:00', text: 'x' }, T2)).status, 403);
   await ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'купить хлеб' }, T2);
   await ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'купить молоко' }, T2);

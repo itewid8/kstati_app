@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Кнопка записи: круг (цвет из кода) и значок микрофона -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/kstati_mic"
+  android:layout_width="@dimen/kstati_mic"
+  android:layout_height="@dimen/kstati_mic"
+  android:contentDescription="Записать">
+  <ImageView
+    android:id="@+id/kstati_mic_bg"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no"
+    android:src="@drawable/kstati_circle" />
+  <ImageView
+    android:id="@+id/kstati_mic_icon"
+    android:layout_width="18dp"
+    android:layout_height="18dp"
+    android:layout_gravity="center"
+    android:importantForAccessibility="no"
+    android:src="@drawable/kstati_mic" />
+</FrameLayout>

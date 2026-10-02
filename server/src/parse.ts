@@ -85,6 +85,64 @@ function findTask(text: string, ctx: Context) {
   return null;
 }
 
+/* ---------- идеи: темы по названию ---------- */
+
+const normName = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/[^а-яa-z0-9]+/g, ' ').trim();
+// Слова, по которым темы не различаются: «идеи для подарков» и «подарки» — одна тема
+const TOPIC_STOP = new Set(['идея', 'идеи', 'идей', 'идею', 'для', 'тема', 'тему', 'темы', 'мои', 'мой', 'моя', 'наши', 'наш', 'список', 'заметки', 'мысли', 'мысль', 'про']);
+const topicStems = (s: string) =>
+  normName(s)
+    .split(' ')
+    .filter((w) => w.length >= 3 && !TOPIC_STOP.has(w))
+    .map((w) => w.slice(0, Math.max(3, Math.min(5, w.length - 1))));
+const stemHit = (a: string, b: string) => a.startsWith(b) || b.startsWith(a);
+
+/** Тема из списка по названию, как его сказали или переписала модель: сначала точное совпадение, потом по основам слов */
+export function findTopic(name: string, topics: { id: string; title: string }[]) {
+  const n = normName(name);
+  if (!n) return null;
+  const exact = topics.find((t) => normName(t.title) === n);
+  if (exact) return exact;
+  const want = topicStems(name);
+  let best: { id: string; title: string } | null = null;
+  let bestScore = 0;
+  for (const t of topics) {
+    const have = topicStems(t.title);
+    const score = want.filter((w) => have.some((h) => stemHit(w, h))).length;
+    if (score > bestScore) {
+      best = t;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/** Прозвучало ли название темы во фразе (модель иногда сама придумывает тему, которую человек не называл) */
+function mentioned(title: string, transcript: string) {
+  if (normName(transcript).includes(normName(title))) return true;
+  const said = topicStems(transcript);
+  const want = topicStems(title);
+  return want.length > 0 && want.some((w) => said.some((x) => stemHit(w, x)));
+}
+
+/**
+ * Куда положить идею. Названа существующая тема — в неё; названа новая — создастся при сохранении;
+ * не названа — тема, открытая на экране, иначе «Без темы» (или тема, которую модель подобрала по смыслу).
+ */
+function resolveTopic(name: string, ctx: Context, transcript: string): { topicId: string | null; newTopic: string | null } {
+  const topics = ctx.topics ?? [];
+  const cur = ctx.currentTopicId && topics.some((t) => t.id === ctx.currentTopicId) ? ctx.currentTopicId : null;
+  if (!name || /^без тем/i.test(name)) return { topicId: cur, newTopic: null };
+  const hit = findTopic(name, topics);
+  if (hit) {
+    // В открытой теме идея идёт в неё, если другая тема во фразе не прозвучала
+    if (cur && hit.id !== cur && !mentioned(hit.title, transcript)) return { topicId: cur, newTopic: null };
+    return { topicId: hit.id, newTopic: null };
+  }
+  if (mentioned(name, transcript)) return { topicId: null, newTopic: cap(name) };
+  return { topicId: cur, newTopic: null };
+}
+
 /* ---------- сборка результата ---------- */
 
 export function normalize(input: RawAction[], ctx: Context, transcript: string): ParseResult {
@@ -126,6 +184,16 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     return { type: 'queryPlans', plans: { scope, from, to, query: str(qp2.query) } };
   }
 
+  // «Покажи идеи для подарков» — открыть тему
+  const qi = actions.find((a) => a.intent === 'query_ideas');
+  if (qi) {
+    const name = str(qi.topic);
+    if (!name) return { type: 'queryIdeas', topicId: null };
+    if (/^без тем/i.test(name)) return { type: 'queryIdeas', topicId: 'inbox' };
+    const hit = findTopic(name, ctx.topics ?? []);
+    return hit ? { type: 'queryIdeas', topicId: hit.id } : { type: 'notFound', query: name };
+  }
+
   // «Баню теперь каждое воскресенье», «больше не повторяй зарядку» — правка повтора существующего дела,
   // даже если модель решила, что это новое дело
   if (changesRepeat(transcript)) {
@@ -144,7 +212,9 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
   if (!hasChangeVerb(transcript) && !changesRepeat(transcript)) {
     actions = actions.map((a) => {
       if (!['update', 'mark', 'unmark'].includes(a.intent)) return a;
-      const id = (Array.isArray(a.target) ? a.target : []).map((x) => String(x).replace(/^(task|watch|wish):/, ''))[0];
+      const id = (Array.isArray(a.target) ? a.target : []).map((x) => String(x).replace(/^(task|watch|wish|idea):/, ''))[0];
+      const idea = ctx.existing.ideas?.find((x) => x.id === id);
+      if (idea) return { intent: 'add', type: 'idea', text: str(a.text) || str(a.query), topic: a.topic } as RawAction;
       const w = ctx.existing.watch.find((x) => x.id === id);
       if (w) return { intent: 'add', type: 'watch', title: w.title } as RawAction;
       const wi = ctx.existing.wishes.find((x) => x.id === id);
@@ -160,9 +230,19 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
   // 2. Добавление
   const items: DraftItem[] = [];
   for (const a of actions.filter((x) => x.intent === 'add')) {
+    const key = randomUUID();
+    // Идея: текст как сказали, тема — по названию или по смыслу
+    if (a.type === 'idea') {
+      const text = cap(str(a.text) || str(a.title));
+      if (text) items.push({ key, type: 'idea', data: { title: text, ...resolveTopic(str(a.topic), ctx, transcript) } });
+      continue;
+    }
     const title = cap(str(a.title));
     if (!title) continue;
-    const key = randomUUID();
+    if (a.type === 'topic') {
+      items.push({ key, type: 'topic', data: { title } });
+      continue;
+    }
     // «Добавь сегодня в 18:00 футбол» — модель может принять за передачу в «Смотреть».
     // Есть дата или время и нет слов про фильм/сериал/«посмотреть» — это дело
     const looksLikeTask =
@@ -218,22 +298,34 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
   ctx.existing.tasks.forEach((t) => index.set(t.id, 'task'));
   ctx.existing.watch.forEach((w) => index.set(w.id, 'watch'));
   ctx.existing.wishes.forEach((w) => index.set(w.id, 'wish'));
+  ctx.existing.ideas?.forEach((i) => index.set(i.id, 'idea'));
 
   const changes: ChangeDraft[] = [];
   let missing = '';
   for (const a of actions.filter((x) => ['update', 'mark', 'unmark', 'delete'].includes(x.intent))) {
     // Только реально существующие id; модель могла дописать префикс «task:»
     const ids = (Array.isArray(a.target) ? a.target : [])
-      .map((x) => String(x).replace(/^(task|watch|wish):/, ''))
+      .map((x) => String(x).replace(/^(task|watch|wish|idea):/, ''))
       .filter((id) => index.has(id));
     if (!ids.length) {
       missing ||= str(a.query) || transcript;
       continue;
     }
     const type = index.get(ids[0])!;
+    // Идеи не отмечаются — только переносятся и удаляются
+    if (type === 'idea' && (a.intent === 'mark' || a.intent === 'unmark')) continue;
     const candidates = [...new Set(ids.filter((id) => index.get(id) === type))].slice(0, 3);
     const change: ChangeDraft = { key: randomUUID(), action: a.intent as ChangeAction, type, candidates, chosen: candidates[0] };
 
+    if (a.intent === 'update' && type === 'idea') {
+      // Перенос идеи в другую тему (существующую, новую или «Без темы»)
+      const name = str(a.topic);
+      if (!name) continue;
+      const hit = /^без тем/i.test(name) ? null : findTopic(name, ctx.topics ?? []);
+      change.patch = hit ? { topicId: hit.id } : /^без тем/i.test(name) ? { topicId: null } : { topicId: null, newTopic: cap(name) };
+      changes.push(change);
+      continue;
+    }
     if (a.intent === 'update') {
       const patch: ChangeDraft['patch'] = {};
       if (str(a.title)) patch.title = cap(str(a.title));
