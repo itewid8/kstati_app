@@ -13,7 +13,7 @@ import { randomInt } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
-import { grev, irev, publicUser, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type Wish } from './store/index.js';
+import { grev, irev, PERSON_COLORS, publicUser, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type Wish } from './store/index.js';
 import { CATEGORIES } from './types.js';
 
 const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
@@ -122,6 +122,7 @@ const Op = z.discriminatedUnion('op', [
     name: z.string().trim().min(1).max(40).optional(),
     nick: z.string().trim().max(20).nullable().optional(),
     gender: z.enum(['m', 'f']).nullable().optional(),
+    color: z.enum(PERSON_COLORS).nullable().optional(),
   }),
 ]);
 export type OpIn = z.infer<typeof Op>;
@@ -476,6 +477,7 @@ export class Data {
         }
         if (op.name) user.name = op.name;
         if (op.gender !== undefined) user.gender = op.gender ?? undefined;
+        if (op.color !== undefined) user.color = op.color ?? undefined;
         await s.putUser(user);
         await s.incr(urev(user.id));
         return { me: meView(user) };

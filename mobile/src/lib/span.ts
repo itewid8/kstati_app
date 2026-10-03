@@ -20,7 +20,7 @@ export const fromMin = (m: number) => `${pad(Math.floor(m / 60) % 24)}:${pad(m %
 /** Кто занят делом: отмеченные участники, иначе автор */
 export const peopleOf = (t: Pick<Task, 'people' | 'createdBy'>): ID[] => (t.people?.length ? t.people : [t.createdBy]);
 
-const isMulti = (t: Pick<Task, 'date' | 'endDate'>) => !!t.endDate && !!t.date && t.endDate > t.date;
+export const isMulti = (t: Pick<Task, 'date' | 'endDate'>) => !!t.endDate && !!t.date && t.endDate > t.date;
 
 /** Начало и конец дела в минутах от 1970 года; без времени — весь день, без конца — 30 минут */
 function bounds(t: Pick<Task, 'date' | 'time' | 'endDate' | 'endTime'>): [number, number] | null {
@@ -100,6 +100,14 @@ export function spanLabel(t: Pick<Task, 'date' | 'time' | 'endDate' | 'endTime'>
   const b = dm(t.endDate!);
   if (!t.time && !t.endTime) return a.m === b.m ? `${a.d}–${b.d} ${b.m}` : `${a.d} ${a.m} – ${b.d} ${b.m}`;
   return `${a.d} ${a.m}${t.time ? ` ${t.time}` : ''} – ${b.d} ${b.m}${t.endTime ? ` ${t.endTime}` : ''}`;
+}
+
+/** Та же подпись двумя строками для узких блоков сетки: «ср 7 окт» + «18:00–20:00», «7 окт 06:00» + «– 10 окт 12:00» */
+export function spanParts(t: Pick<Task, 'date' | 'time' | 'endDate' | 'endTime'>): string[] {
+  if (!isMulti(t)) return spanLabel(t).split(' · ').filter(Boolean);
+  const a = dm(t.date!);
+  const b = dm(t.endDate!);
+  return [`${a.d} ${a.m}${t.time ? ` ${t.time}` : ''}`, `– ${b.d} ${b.m}${t.endTime ? ` ${t.endTime}` : ''}`];
 }
 
 /** Пересекаются ли дела по времени. Дела без времени на весь день не считаем занятостью */

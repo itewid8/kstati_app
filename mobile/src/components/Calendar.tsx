@@ -1,9 +1,9 @@
-import * as Haptics from 'expo-haptics';
 import { ChevronLeft, ChevronRight } from '@/components/icons';
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions, type RefreshControlProps } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { Pressable, StyleSheet, View, type RefreshControlProps } from 'react-native';
+// Прокрутка из gesture-handler: щипок слоёв может её перехватить
+import { ScrollView } from 'react-native-gesture-handler';
+import { tint, usePalette } from '@/lib/colors';
 import {
   addDays,
   fromISODate,
@@ -18,17 +18,17 @@ import {
   WEEKDAYS_SHORT,
   weekTitle,
 } from '@/lib/dates';
-import { daysOf, fromMin, peopleOf } from '@/lib/span';
+import { daysOf, fromMin, minutesOn, peopleOf } from '@/lib/span';
 import { useStore } from '@/lib/store';
 import type { ID, Task } from '@/lib/types';
 import { font, ICON, space, useColors } from '@/theme';
 import { uid } from '@/lib/ids';
+import { CalendarLayers } from './CalendarLayers';
 import { DayHeader, TimeGrid, type GridColumn } from './TimeGrid';
-import { editTask, openPlan, TaskRow } from './TaskRow';
+import { editTask, openPlan, TaskRow, taskMenu } from './TaskRow';
 import { Button, Divider, T } from './ui';
 
 export type Zoom = 'day' | 'week' | 'month' | 'year';
-const ZOOMS: Zoom[] = ['day', 'week', 'month', 'year'];
 const MONTH_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
@@ -59,11 +59,11 @@ function useByDate(tasks: Task[]) {
 }
 
 /**
- * Календарь дел с тремя масштабами.
- *   Свайп влево/вправо по сетке — следующий/предыдущий период.
- *   Щипок двумя пальцами в любом месте календаря: свести — крупнее период (неделя → месяц → год), развести — мельче.
- *   Пока на экране два пальца, прокрутка и свайп не срабатывают (onPinching сообщает об этом экрану).
- *   Тап по заголовку — на масштаб крупнее, тап по месяцу в годовом виде — открыть месяц.
+ * Календарь дел: день, неделя, месяц, год — и слои людей поверх любого из них.
+ *   Неделя — семь колонок, раскрыт выбранный день, остальные свёрнуты в полоски; нажатие на свёрнутый — раскрыть,
+ *   на заголовок раскрытого — открыть день целиком.
+ *   Слои (CalendarLayers): общий лист или лист каждого человека; щипок склеивает и раскладывает.
+ *   Свайп влево/вправо — соседний период.
  */
 export function CalendarView({
   tasks,
@@ -76,9 +76,9 @@ export function CalendarView({
   refreshControl,
 }: {
   tasks: Task[];
-  /** Обновление потягиванием — для сетки времени, которая листается сама */
+  /** Обновление потягиванием — для общего листа */
   refreshControl?: React.ReactElement<RefreshControlProps>;
-  /** Участники группы — колонки «дня по людям» */
+  /** Участники группы — у каждого свой лист */
   members?: ID[];
   zoom: Zoom;
   onZoom: (z: Zoom) => void;
@@ -86,85 +86,18 @@ export function CalendarView({
   onSelect: (iso: string) => void;
   onPinching?: (v: boolean) => void;
 }) {
-  const { width } = useWindowDimensions();
-  const byDate = useByDate(tasks);
+  const meId = useStore((s) => s.me?.id);
   const today = toISODate(new Date());
   const sel = fromISODate(selected);
-
-  const tx = useSharedValue(0);
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-  /** В этом касании был второй палец — свайп игнорируем */
-  const twoFingers = useSharedValue(false);
-  /** Масштаб уже переключён в этом щипке — второй раз не переключаем */
-  const fired = useSharedValue(false);
+  // Листы: я — первым, дальше по порядку вступления
+  const key = members.join(',');
+  const people = useMemo(
+    () => (meId && members.includes(meId) ? [meId, ...members.filter((id) => id !== meId)] : members),
+    [key, meId], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const perPerson = useMemo(() => new Map(people.map((id) => [id, tasks.filter((t) => peopleOf(t).includes(id))])), [tasks, people]);
 
   const go = (dir: 1 | -1) => onSelect(shift(selected, zoom, dir));
-  const zoomBy = (step: 1 | -1) => {
-    const next = ZOOMS[ZOOMS.indexOf(zoom) + step];
-    if (!next) return;
-    Haptics.selectionAsync().catch(() => {});
-    onZoom(next);
-  };
-  const setPinching = (v: boolean) => onPinching?.(v);
-
-  const slide = Gesture.Pan()
-    .maxPointers(1)
-    .activeOffsetX([-20, 20])
-    .failOffsetY([-14, 14])
-    .onUpdate((e) => {
-      if (twoFingers.value) return;
-      tx.value = e.translationX * 0.5;
-    })
-    .onEnd((e) => {
-      const dx = e.translationX;
-      if (twoFingers.value || (Math.abs(dx) < 70 && Math.abs(e.velocityX) < 600)) {
-        tx.value = withTiming(0, { duration: 150 });
-        return;
-      }
-      const dir = dx < 0 ? 1 : -1;
-      const off = width * 0.35;
-      opacity.value = withTiming(0, { duration: 120 });
-      tx.value = withTiming(-dir * off, { duration: 120 }, () => {
-        runOnJS(go)(dir as 1 | -1);
-        tx.value = dir * off;
-        tx.value = withTiming(0, { duration: 160 });
-        opacity.value = withTiming(1, { duration: 160 });
-      });
-    });
-
-  // Масштаб переключается сразу, как только пальцы свели/развели на ~12%, а не по отпусканию
-  const pinch = Gesture.Pinch()
-    .onBegin(() => {
-      twoFingers.value = false;
-      fired.value = false;
-    })
-    .onTouchesDown((e) => {
-      if (e.numberOfTouches >= 2 && !twoFingers.value) {
-        twoFingers.value = true;
-        tx.value = withTiming(0, { duration: 100 });
-        runOnJS(setPinching)(true);
-      }
-    })
-    .onUpdate((e) => {
-      scale.value = Math.max(0.92, Math.min(1.08, 1 + (e.scale - 1) * 0.5));
-      if (fired.value) return;
-      if (e.scale < 0.88) {
-        fired.value = true;
-        runOnJS(zoomBy)(1);
-      } else if (e.scale > 1.14) {
-        fired.value = true;
-        runOnJS(zoomBy)(-1);
-      }
-    })
-    .onFinalize(() => {
-      scale.value = withTiming(1, { duration: 150 });
-      if (twoFingers.value) runOnJS(setPinching)(false);
-    });
-
-  const slideWithPinch = slide.simultaneousWithExternalGesture(pinch);
-  const anim = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ translateX: tx.value }, { scale: scale.value }] }));
-
   const title =
     zoom === 'day'
       ? cap(shortDate(selected))
@@ -173,78 +106,113 @@ export function CalendarView({
         : zoom === 'month'
           ? monthTitle(sel)
           : String(sel.getFullYear());
-  const grid = zoom === 'day' || zoom === 'week';
 
   return (
-    <GestureDetector gesture={pinch}>
-      <View collapsable={false} style={grid ? { flex: 1 } : undefined}>
-        <NavRow
-          title={title}
-          onTitle={zoom === 'year' ? undefined : () => zoomBy(1)}
-          onPrev={() => go(-1)}
-          onNext={() => go(1)}
-          onToday={() => onSelect(today)}
-        />
-        <GestureDetector gesture={slideWithPinch}>
-          <Animated.View style={[{ paddingBottom: grid ? 0 : 8 }, grid ? { flex: 1 } : null, anim]}>
-            {zoom === 'week' && (
-              <WeekGrid
-                byDate={byDate}
-                selected={selected}
-                refreshControl={refreshControl}
-                onDay={(iso) => {
-                  onSelect(iso);
-                  onZoom('day');
-                }}
-              />
-            )}
-            {zoom === 'day' && (
-              <>
-                <WeekStrip byDate={byDate} selected={selected} today={today} onSelect={onSelect} />
-                <PeopleDay byDate={byDate} day={selected} members={members} refreshControl={refreshControl} />
-              </>
-            )}
-            {zoom === 'month' && <MonthGrid byDate={byDate} selected={selected} today={today} onSelect={onSelect} />}
-            {zoom === 'year' && (
-              <YearGrid
-                byDate={byDate}
-                year={sel.getFullYear()}
-                today={today}
-                onPickMonth={(m) => {
-                  const now = new Date();
-                  const day = now.getFullYear() === sel.getFullYear() && now.getMonth() === m ? now.getDate() : 1;
-                  onSelect(toISODate(new Date(sel.getFullYear(), m, day)));
-                  onZoom('month');
-                }}
-              />
-            )}
-          </Animated.View>
-        </GestureDetector>
-
-        {zoom === 'month' && <DayTasks byDate={byDate} day={selected} today={today} />}
-      </View>
-    </GestureDetector>
+    <View style={{ flex: 1 }}>
+      <NavRow title={title} onPrev={() => go(-1)} onNext={() => go(1)} onToday={() => onSelect(today)} />
+      <CalendarLayers
+        members={people.length > 1 ? people : []}
+        period={`${zoom}|${selected}`}
+        onSwipe={go}
+        onPinching={onPinching}
+        render={(person, pinching) => (
+          <CalendarBody
+            tasks={person ? (perPerson.get(person) ?? []) : tasks}
+            person={person}
+            people={people}
+            zoom={zoom}
+            onZoom={onZoom}
+            selected={selected}
+            onSelect={onSelect}
+            today={today}
+            pinching={pinching}
+            refreshControl={person ? undefined : refreshControl}
+          />
+        )}
+      />
+    </View>
   );
 }
+
+/** Один лист календаря: все дела (person = null) или дела одного человека */
+const CalendarBody = React.memo(function CalendarBody({
+  tasks,
+  person,
+  people,
+  zoom,
+  onZoom,
+  selected,
+  onSelect,
+  today,
+  pinching,
+  refreshControl,
+}: {
+  tasks: Task[];
+  person: ID | null;
+  people: ID[];
+  zoom: Zoom;
+  onZoom: (z: Zoom) => void;
+  selected: string;
+  onSelect: (iso: string) => void;
+  today: string;
+  pinching: boolean;
+  refreshControl?: React.ReactElement<RefreshControlProps>;
+}) {
+  const byDate = useByDate(tasks);
+  const sel = fromISODate(selected);
+  if (zoom === 'week') {
+    return (
+      <WeekAccordion byDate={byDate} selected={selected} person={person} onSelect={onSelect} onZoom={onZoom} pinching={pinching} refreshControl={refreshControl} />
+    );
+  }
+  if (zoom === 'day') {
+    return (
+      <>
+        <WeekStrip byDate={byDate} selected={selected} today={today} onSelect={onSelect} />
+        <DayGrid byDate={byDate} day={selected} person={person} pinching={pinching} refreshControl={refreshControl} />
+      </>
+    );
+  }
+  return (
+    <ScrollView scrollEnabled={!pinching} refreshControl={refreshControl} contentContainerStyle={{ paddingBottom: 8 }}>
+      {zoom === 'month' ? (
+        <>
+          <MonthGrid byDate={byDate} selected={selected} today={today} onSelect={onSelect} lanes={person ? [person] : people} />
+          <DayTasks byDate={byDate} day={selected} today={today} />
+        </>
+      ) : (
+        <YearGrid
+          byDate={byDate}
+          year={sel.getFullYear()}
+          today={today}
+          onPickMonth={(m) => {
+            const now = new Date();
+            const day = now.getFullYear() === sel.getFullYear() && now.getMonth() === m ? now.getDate() : 1;
+            onSelect(toISODate(new Date(sel.getFullYear(), m, day)));
+            onZoom('month');
+          }}
+        />
+      )}
+    </ScrollView>
+  );
+});
 
 /* ---------------- Навигация: ‹ заголовок › · Сегодня ---------------- */
 
 function NavRow({
   title,
-  onTitle,
   onPrev,
   onNext,
   onToday,
 }: {
   title: string;
-  onTitle?: () => void;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
 }) {
   const c = useColors();
   const arrow = (dir: 'l' | 'r', fn: () => void) => (
-    <Pressable onPress={fn} hitSlop={10} style={({ pressed }) => [styles.arrow, { opacity: pressed ? 0.5 : 1 }]}>
+    <Pressable onPress={fn} hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }} style={({ pressed }) => [styles.arrow, { opacity: pressed ? 0.5 : 1 }]}>
       {dir === 'l' ? (
         <ChevronLeft size={ICON.size} strokeWidth={ICON.stroke} color={c.text} />
       ) : (
@@ -255,11 +223,10 @@ function NavRow({
   return (
     <View style={styles.nav}>
       {arrow('l', onPrev)}
-      <Pressable onPress={onTitle} disabled={!onTitle} hitSlop={6} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
-        <T weight="medium" style={{ minWidth: 150, textAlign: 'center' }}>
-          {title}
-        </T>
-      </Pressable>
+      {/* Заголовок не нажимается: масштаб — переключателем сверху, иначе промах мимо стрелки уводил в месяц */}
+      <T weight="medium" style={{ minWidth: 140, textAlign: 'center' }}>
+        {title}
+      </T>
       {arrow('r', onNext)}
       <View style={{ flex: 1 }} />
       <Button kind="text" title="Сегодня" color={c.textMuted} onPress={onToday} style={{ height: 32 }} />
@@ -339,62 +306,95 @@ function newAt(day: string, minutes: number, people?: ID[]) {
   });
 }
 
-/** Неделя сеткой, как в Outlook: 7 колонок, часы сверху вниз; нажатие на день — день по людям */
-function WeekGrid({
+/**
+ * Неделя сеткой: раскрыт выбранный день, остальные шесть — узкие колонки, где дела — полоски своего цвета.
+ * Нажатие на узкую колонку раскрывает её, на заголовок раскрытой — день целиком
+ */
+function WeekAccordion({
   byDate,
   selected,
-  onDay,
+  person,
+  onSelect,
+  onZoom,
+  pinching,
   refreshControl,
 }: {
   byDate: Map<string, Task[]>;
   selected: string;
-  onDay: (iso: string) => void;
+  person: ID | null;
+  onSelect: (iso: string) => void;
+  onZoom: (z: Zoom) => void;
+  pinching: boolean;
   refreshControl?: React.ReactElement<RefreshControlProps>;
 }) {
-  const start = startOfWeek(fromISODate(selected));
-  const columns: GridColumn[] = Array.from({ length: 7 }, (_, i) => {
-    const d = addDays(start, i);
-    const iso = toISODate(d);
-    return { key: iso, day: iso, header: <DayHeader date={d} label={WEEKDAYS_SHORT[i]} />, onHeader: () => onDay(iso), tasks: byDate.get(iso) ?? [] };
-  });
-  return <TimeGrid columns={columns} onTask={openTask} onSlot={(col, m) => newAt(col.day, m)} refreshControl={refreshControl} />;
+  const columns = useMemo<GridColumn[]>(() => {
+    const start = startOfWeek(fromISODate(selected));
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = addDays(start, i);
+      const iso = toISODate(d);
+      const compact = iso !== selected;
+      return {
+        key: iso,
+        day: iso,
+        compact,
+        header: <DayHeader date={d} label={WEEKDAYS_SHORT[i]} compact={compact} />,
+        onHeader: compact ? undefined : () => onZoom('day'),
+        tasks: byDate.get(iso) ?? [],
+      };
+    });
+  }, [byDate, selected, onZoom]);
+  return (
+    <TimeGrid
+      columns={columns}
+      scrollEnabled={!pinching}
+      onTask={openTask}
+      onLongTask={taskMenu}
+      onColumn={(col) => onSelect(col.day)}
+      onSlot={(col, m) => newAt(col.day, m, person ? [person] : undefined)}
+      refreshControl={refreshControl}
+    />
+  );
 }
 
-/** День по людям: колонка на каждого участника группы, в ней — дела, где он занят */
-function PeopleDay({
+/** День одной колонкой на всю ширину */
+function DayGrid({
   byDate,
   day,
-  members,
+  person,
+  pinching,
   refreshControl,
 }: {
   byDate: Map<string, Task[]>;
   day: string;
-  members: ID[];
+  person: ID | null;
+  pinching: boolean;
   refreshControl?: React.ReactElement<RefreshControlProps>;
 }) {
-  const users = useStore((s) => s.users);
-  const meId = useStore((s) => s.me?.id);
-  const list = byDate.get(day) ?? [];
-  // Я — первым, дальше по алфавиту
-  const people = [...members].sort((a, b) =>
-    a === meId ? -1 : b === meId ? 1 : (users.find((u) => u.id === a)?.name ?? '').localeCompare(users.find((u) => u.id === b)?.name ?? '', 'ru'),
+  const columns = useMemo<GridColumn[]>(() => [{ key: day, day, header: null, tasks: byDate.get(day) ?? [] }], [byDate, day]);
+  return (
+    <TimeGrid
+      columns={columns}
+      scrollEnabled={!pinching}
+      headless
+      onTask={openTask}
+      onLongTask={taskMenu}
+      onSlot={(_, m) => newAt(day, m, person ? [person] : undefined)}
+      refreshControl={refreshControl}
+    />
   );
-  const columns: GridColumn[] = (people.length ? people : [meId ?? '']).map((id) => ({
-    key: id,
-    day,
-    header: (
-      <T variant="caption" weight="medium" numberOfLines={1}>
-        {id === meId ? 'Я' : (users.find((u) => u.id === id)?.name ?? '—')}
-      </T>
-    ),
-    tasks: list.filter((t) => peopleOf(t).includes(id)),
-  }));
-  return <TimeGrid columns={columns} onTask={openTask} onSlot={(col, m) => newAt(day, m, [col.key])} refreshControl={refreshControl} />;
 }
 
 /* ---------------- Месяц ---------------- */
 
-function MonthGrid(p: GridProps) {
+/** Мини-таймлайн клетки месяца: часы 6–24 сверху вниз, у каждого человека своя дорожка */
+const TL_FROM = 6 * 60;
+const TL_SPAN = 18 * 60;
+const TL_TOP = 24;
+const TL_H = 34;
+
+function MonthGrid(p: GridProps & { lanes: ID[] }) {
+  const all = useStore((s) => s.tasks);
+  const planIds = useMemo(() => new Set(all.filter((t) => t.parentId).map((t) => t.parentId!)), [all]);
   const month = startOfMonth(fromISODate(p.selected));
   const days = monthGrid(month);
   const weeks = days[35].getMonth() === month.getMonth() ? 6 : 5;
@@ -404,11 +404,82 @@ function MonthGrid(p: GridProps) {
       {Array.from({ length: weeks }, (_, wi) => (
         <View key={wi} style={styles.week}>
           {days.slice(wi * 7, wi * 7 + 7).map((d) => (
-            <DayCell key={d.toISOString()} d={d} inPeriod={d.getMonth() === month.getMonth()} {...p} />
+            <MonthCell key={d.toISOString()} d={d} inPeriod={d.getMonth() === month.getMonth()} planIds={planIds} {...p} />
           ))}
         </View>
       ))}
     </View>
+  );
+}
+
+/**
+ * Клетка месяца: число и дела штрихами на своём времени — видно, кто когда занят.
+ * Дело без времени — штрих сверху; план — лента цвета человека по верху клеток своих дней
+ */
+function MonthCell({
+  d,
+  inPeriod,
+  byDate,
+  selected,
+  today,
+  onSelect,
+  lanes,
+  planIds,
+}: GridProps & { d: Date; inPeriod: boolean; lanes: ID[]; planIds: Set<ID> }) {
+  const c = useColors();
+  const pal = usePalette();
+  const iso = toISODate(d);
+  const isToday = iso === today;
+  const isSel = iso === selected;
+  const list = inPeriod ? (byDate.get(iso) ?? []) : [];
+  const n = Math.max(1, lanes.length);
+  const plan = list.find((t) => planIds.has(t.id));
+  return (
+    <Pressable onPress={() => onSelect(iso)} style={[styles.mCell, { borderColor: c.border }, isSel && { backgroundColor: c.surface }]}>
+      {plan ? <View style={[styles.mPlan, { backgroundColor: pal.task(plan)[0] }]} /> : null}
+      {plan ? <View style={[StyleSheet.absoluteFill, { backgroundColor: tint(pal.task(plan)[0], pal.bodyAlpha * 0.35) }]} /> : null}
+      <View style={[styles.mNum, isToday && { backgroundColor: c.event }]}>
+        <T
+          style={{
+            fontFamily: isToday || isSel ? font.semibold : font.mono,
+            fontSize: 11,
+            lineHeight: 14,
+            color: isToday ? c.onEvent : inPeriod ? c.text : c.textMuted,
+            opacity: inPeriod ? 1 : 0.5,
+          }}
+        >
+          {d.getDate()}
+        </T>
+      </View>
+      <View style={styles.mLanes} pointerEvents="none">
+        {list.flatMap((t) => {
+          if (t === plan) return [];
+          const m = minutesOn(t, iso);
+          const top = m ? TL_TOP + (Math.max(0, m[0] - TL_FROM) / TL_SPAN) * TL_H : TL_TOP - 4;
+          const h = m ? Math.max(3, ((Math.min(m[1], TL_FROM + TL_SPAN) - Math.max(m[0], TL_FROM)) / TL_SPAN) * TL_H) : 2;
+          const who = peopleOf(t);
+          return lanes
+            .map((id, k) => (who.includes(id) ? k : -1))
+            .filter((k) => k >= 0)
+            .map((k) => (
+              <View
+                key={`${t.id}@${t.occ ?? ''}-${k}`}
+                style={[
+                  styles.mBar,
+                  {
+                    top: Math.min(top, TL_TOP + TL_H - 3),
+                    height: h,
+                    left: `${(k * 100) / n}%`,
+                    width: `${100 / n - (n > 1 ? 6 : 0)}%`,
+                    backgroundColor: pal.of(lanes[k]),
+                    opacity: t.doneAt ? 0.4 : 1,
+                  },
+                ]}
+              />
+            ));
+        })}
+      </View>
+    </Pressable>
   );
 }
 
@@ -527,13 +598,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.side - 6,
     paddingBottom: 4,
   },
-  arrow: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  arrow: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
   grid: { paddingHorizontal: space.side - 4 },
   week: { flexDirection: 'row' },
   weekday: { flex: 1, textAlign: 'center', paddingVertical: 6 },
   cell: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center' },
   ring: { width: 38, height: 38, borderRadius: 19, borderWidth: 1.5, padding: 2, alignItems: 'center', justifyContent: 'center' },
   num: { width: 31, height: 31, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  mCell: { flex: 1, height: 64, borderTopWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  mPlan: { position: 'absolute', left: 0, right: 0, top: 0, height: 3 },
+  mNum: { position: 'absolute', left: 3, top: 3, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'center' },
+  mLanes: { position: 'absolute', left: 4, right: 4, top: 0, bottom: 0 },
+  mBar: { position: 'absolute', borderRadius: 1.5 },
   dayLabel: { paddingHorizontal: space.side, paddingTop: 16, paddingBottom: 4 },
   dayHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: space.side, paddingVertical: 10 },
   year: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: space.side - 8 },

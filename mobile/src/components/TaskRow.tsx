@@ -40,10 +40,8 @@ export function TaskRow({
 
   const edit = () => editTask(task.id, setCard);
   const remove = () => deleteTaskAsk(task);
-  // Большое дело с подзадачами открывается планом; любое обычное дело можно разбить на подзадачи
-  const canPlan = !task.parentId && !task.repeat;
-  const plan = () => openPlan(task.id);
-  const press = kidsCount ? plan : edit;
+  // Большое дело с подзадачами открывается планом
+  const press = kidsCount ? () => openPlan(task.id) : edit;
 
   const when = whenFormat === 'time' ? timeOn(task, day ?? task.date ?? '') : task.date || task.time ? spanLabel(task) : '';
   const who = peopleOf(task)
@@ -55,23 +53,7 @@ export function TaskRow({
     <SwipeRow onSwipeRight={toggle} onSwipeLeft={remove}>
       <Pressable
         onPress={press}
-        onLongPress={() =>
-          openMenu({
-            title: task.title,
-            actions: [
-              { label: 'Изменить', onPress: edit },
-              ...(canPlan ? [{ label: kidsCount ? 'Открыть план' : 'Разбить на подзадачи', onPress: plan }] : []),
-              ...(task.parentId ? [{ label: 'Открыть план', onPress: () => openPlan(task.parentId!) }] : []),
-              ...(task.repeat && task.occ
-                ? [
-                    { label: 'Удалить только этот раз', danger: true, onPress: () => useStore.getState().deleteTask(task.id, task.occ) },
-                    { label: 'Завершить повторы после этого раза', onPress: () => useStore.getState().endSeries(task.id, task.occ!) },
-                    { label: 'Удалить всю серию', danger: true, onPress: () => useStore.getState().deleteTask(task.id) },
-                  ]
-                : [{ label: 'Удалить', danger: true, onPress: remove }]),
-            ],
-          })
-        }
+        onLongPress={() => taskMenu(task)}
         delayLongPress={350}
         style={({ pressed }) => [styles.row, { backgroundColor: pressed ? c.surface : c.background }]}>
         <Checkbox checked={done} onPress={toggle} />
@@ -132,6 +114,33 @@ export function editTask(id: string, setCard = useStore.getState().setCard) {
           parentId: t.parentId ?? null,
         },
       },
+    ],
+  });
+}
+
+/** Можно ли разбить дело на подзадачи: не подзадача и не повтор */
+export const canPlan = (t: Pick<Task, 'parentId' | 'repeat'>) => !t.parentId && !t.repeat;
+
+/**
+ * Меню дела по долгому нажатию — одно и то же в списке, календаре и сетке:
+ * изменить, разбить на подзадачи / открыть план, удалить (у повтора — варианты).
+ */
+export function taskMenu(task: Task) {
+  const s = useStore.getState();
+  const kids = s.tasks.filter((t) => t.parentId === task.id).length;
+  openMenu({
+    title: task.title,
+    actions: [
+      { label: 'Изменить', onPress: () => editTask(task.id) },
+      ...(canPlan(task) ? [{ label: kids ? 'Открыть план' : 'Разбить на подзадачи', onPress: () => openPlan(task.id) }] : []),
+      ...(task.parentId ? [{ label: 'Открыть план', onPress: () => openPlan(task.parentId!) }] : []),
+      ...(task.repeat && task.occ
+        ? [
+            { label: 'Удалить только этот раз', danger: true, onPress: () => s.deleteTask(task.id, task.occ) },
+            { label: 'Завершить повторы после этого раза', onPress: () => s.endSeries(task.id, task.occ!) },
+            { label: 'Удалить всю серию', danger: true, onPress: () => s.deleteTask(task.id) },
+          ]
+        : [{ label: 'Удалить', danger: true, onPress: () => deleteTaskAsk(task) }]),
     ],
   });
 }

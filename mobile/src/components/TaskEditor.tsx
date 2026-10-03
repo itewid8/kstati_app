@@ -14,12 +14,13 @@ import { lastDay, overlaps, peopleOf, spanLabel, timeOn } from '@/lib/span';
 import { useStore } from '@/lib/store';
 import type { ID, TaskDraft } from '@/lib/types';
 import { ICON, useColors } from '@/theme';
+import { openPlan } from './TaskRow';
 import { DatePanel, TimePanel } from './pickers';
 import { ReminderEditor } from './ReminderEditor';
 import { RepeatPanel } from './RepeatPanel';
 import { Chip, Field, T } from './ui';
 
-type Open = 'date' | 'time' | 'end' | 'repeat' | 'who' | 'remind' | 'note' | null;
+type Open = 'start' | 'end' | 'repeat' | 'who' | 'remind' | 'note' | null;
 
 const plusHour = (t: string) => {
   const [h, m] = t.split(':').map(Number);
@@ -82,17 +83,29 @@ export function TaskEditor({
 
   const reminderSpecs = effectiveSpecs({ time: value.time, reminders: value.shared ?? null }, value.mine, settings).specs;
 
-  const chips: { key: Exclude<Open, null>; label: string; filled: boolean; mono?: boolean; clear?: () => void; hidden?: boolean }[] = [
-    { key: 'date', label: value.date ? shortDate(value.date) : 'Дата', filled: !!value.date, mono: true, clear: () => set({ date: null, repeat: null, endDate: null }) },
-    { key: 'time', label: value.time ?? 'Время', filled: !!value.time, mono: true, clear: () => set({ time: null, endTime: multi ? value.endTime : null }) },
-    {
-      key: 'end',
-      label: multi ? `до ${shortDate(value.endDate!)}${value.endTime ? ` ${value.endTime}` : ''}` : value.endTime ? `до ${value.endTime}` : 'Конец',
-      filled: multi || !!value.endTime,
-      mono: true,
-      clear: () => set({ endDate: null, endTime: null }),
-      hidden: !value.date && !value.time,
-    },
+  // Конец задан или его только что добавили (ещё без значения)
+  const [endOn, setEndOn] = useState(multi || !!value.endTime);
+  const hasEnd = endOn || multi || !!value.endTime;
+  const endDay = multi ? value.endDate! : value.date;
+  const addEnd = () => {
+    Keyboard.dismiss();
+    setEndOn(true);
+    // Со временем — конец через час; без времени — многодневное: до следующего дня
+    if (value.time) {
+      const t = plusHour(value.time);
+      set({ endTime: t, endDate: value.date && t < value.time ? addIso(value.date, 1) : null });
+    } else if (value.date) {
+      set({ endDate: addIso(value.date, 1) });
+    }
+    setOpen('end');
+  };
+  const clearEnd = () => {
+    setEndOn(false);
+    set({ endDate: null, endTime: null });
+    if (open === 'end') setOpen(null);
+  };
+
+  const chips: { key: Exclude<Open, null>; label: string; filled: boolean; mono?: boolean; clear?: () => void; hidden?: boolean; onPress?: () => void }[] = [
     { key: 'repeat', label: value.repeat ? repeatLabel(value.repeat, value.date) : 'Повтор', filled: !!value.repeat, clear: () => set({ repeat: null }), hidden: !!parent },
     {
       key: 'who',
@@ -108,8 +121,11 @@ export function TaskEditor({
       clear: () => set({ mine: undefined, shared: null }),
       hidden: !value.date,
     },
-    { key: 'note', label: value.note?.trim() ? 'Описание' : 'Описание', filled: !!value.note?.trim(), clear: () => set({ note: '' }) },
+    { key: 'note', label: 'Описание', filled: !!value.note?.trim(), clear: () => set({ note: '' }) },
   ];
+  // Подзадачи — у сохранённого обычного дела: открывает его план
+  const kidsCount = selfId ? tasks.filter((t) => t.parentId === selfId).length : 0;
+  const planChip = selfId && !value.parentId && !value.repeat;
 
   return (
     <View style={{ gap: 12 }}>
@@ -121,7 +137,41 @@ export function TaskEditor({
         </T>
       ) : null}
 
+      {/* Начало и конец — одинаково: одна ячейка «дата · время»; без конца — дело без длительности */}
+      <View style={[styles.chips, { alignItems: 'center' }]}>
+        <AttrChip
+          label={whenText(value.date, value.time) || 'Когда'}
+          filled={!!(value.date || value.time)}
+          mono
+          active={open === 'start'}
+          onPress={() => toggle('start')}
+          onClear={() => {
+            setEndOn(false);
+            set({ date: null, time: null, repeat: null, endDate: null, endTime: null });
+          }}
+        />
+        {hasEnd ? (
+          <>
+            <T muted>→</T>
+            <AttrChip label={whenText(endDay, value.endTime) || 'Конец'} filled mono active={open === 'end'} onPress={() => toggle('end')} onClear={clearEnd} />
+          </>
+        ) : value.date || value.time ? (
+          <AttrChip label="Конец" filled={false} active={false} onPress={addEnd} />
+        ) : null}
+      </View>
+
       <View style={styles.chips}>
+        {planChip ? (
+          <AttrChip
+            label={kidsCount ? `Подзадачи · ${kidsCount}` : 'Подзадачи'}
+            filled={kidsCount > 0}
+            active={false}
+            onPress={() => {
+              useStore.getState().setCard(null);
+              openPlan(selfId!);
+            }}
+          />
+        ) : null}
         {chips
           .filter((x) => !x.hidden)
           .map((x) => (
@@ -129,33 +179,45 @@ export function TaskEditor({
           ))}
       </View>
 
-      {open === 'date' && (
-        <DatePanel
-          value={value.date}
-          onPick={(date) => {
+      {open === 'start' && (
+        <WhenPanel
+          date={value.date}
+          time={value.time}
+          onDate={(date) => {
             // Многодневное дело переезжает целиком; правило повтора — вместе с датой
             const len = multi ? dayDiff(value.date!, value.endDate!) : 0;
             set({ date, repeat: shiftRepeat(value.repeat, value.date, date), endDate: len ? addIso(date, len) : value.endDate && value.endDate > date ? value.endDate : null });
           }}
-          onDone={() => setOpen(null)}
-          onClear={() => {
-            set({ date: null, repeat: null, endDate: null });
-            setOpen(null);
+          onClearDate={() => {
+            setEndOn(false);
+            set({ date: null, repeat: null, endDate: null, endTime: null });
           }}
-        />
-      )}
-      {open === 'time' && (
-        <TimePanel
-          value={value.time}
-          onPick={(time, done) => {
+          onTime={(time) => {
+            if (!time) return set({ time: null, endTime: multi ? value.endTime : null });
             // Конец не может оказаться раньше начала: длительность сохраняется
             const end = !multi && value.endTime && value.time ? shiftEnd(value.time, value.endTime, time) : value.endTime;
-            set({ time, date: value.date ?? (parent?.date ?? null), endTime: end ?? null });
-            if (done) setOpen(null);
+            set({ time, date: value.date ?? (parent?.date ?? toISODate(new Date())), endTime: end ?? null });
           }}
         />
       )}
-      {open === 'end' && <EndPanel value={value} set={set} />}
+      {open === 'end' && (
+        <WhenPanel
+          date={endDay ?? null}
+          time={value.endTime ?? null}
+          defaultTime={value.time ? plusHour(value.time) : undefined}
+          onDate={(d) => {
+            // Конец в день начала — дело в пределах дня; позже — многодневное
+            if (!value.date || d <= value.date) set({ endDate: null });
+            else set({ endDate: d });
+          }}
+          onTime={(endTime) => {
+            if (!endTime) return set({ endTime: null });
+            // Конец раньше начала в тот же день — это ночь следующего дня
+            const night = !multi && value.date && value.time && endTime < value.time;
+            set({ endTime, ...(night && { endDate: addIso(value.date!, 1) }) });
+          }}
+        />
+      )}
       {open === 'repeat' && (
         <RepeatPanel
           value={value.repeat ?? null}
@@ -166,16 +228,17 @@ export function TaskEditor({
       {open === 'who' && (
         <View style={styles.chips}>
           {members.map((id) => {
-            const on = who.includes(id);
+            // Выбор явный: пусто — занят автор (чип «Кто» пустой), нажатие добавляет или убирает человека
+            const chosen = value.people ?? [];
+            const on = chosen.includes(id);
             return (
               <Chip
                 key={id}
                 label={name(id)}
                 selected={on}
                 onPress={() => {
-                  const next = on ? who.filter((x) => x !== id) : [...who, id];
-                  // Хотя бы один человек занят всегда
-                  if (next.length) set({ people: next });
+                  const next = on ? chosen.filter((x) => x !== id) : [...chosen, id];
+                  set({ people: next.length ? next : undefined });
                 }}
               />
             );
@@ -232,36 +295,43 @@ function shiftEnd(oldStart: string, oldEnd: string, newStart: string): string | 
   return `${String(Math.floor(e / 60)).padStart(2, '0')}:${String(e % 60).padStart(2, '0')}`;
 }
 
+/** «пт 9 окт · 15:00», «пт 9 окт», «15:00» */
+const whenText = (date: string | null | undefined, time: string | null | undefined) => [date ? shortDate(date) : '', time ?? ''].filter(Boolean).join(' · ');
+
 /**
- * Конец дела: время окончания (колесо) и, если надо, другой день — тогда дело многодневное.
- * Без времени начала конец — только дата (поездка на несколько дней).
+ * Дата и время в одной панели — одинаково для начала и конца:
+ * календарь, под ним время (колесо) или «+ Время»; «Без времени» — убрать время.
  */
-function EndPanel({ value, set }: { value: TaskDraft; set: (p: Partial<TaskDraft>) => void }) {
-  const multi = !!value.endDate && !!value.date && value.endDate > value.date;
-  const [pickDay, setPickDay] = useState(!value.time);
+function WhenPanel({
+  date,
+  time,
+  defaultTime,
+  onDate,
+  onClearDate,
+  onTime,
+}: {
+  date: string | null;
+  time: string | null;
+  defaultTime?: string;
+  onDate: (iso: string) => void;
+  onClearDate?: () => void;
+  onTime: (t: string | null) => void;
+}) {
   return (
     <View style={{ gap: 10 }}>
-      <View style={styles.chips}>
-        {value.time ? <Chip label="В тот же день" selected={!multi && !pickDay} onPress={() => { set({ endDate: null }); setPickDay(false); }} /> : null}
-        <Chip label={multi ? shortDate(value.endDate!) : 'Другой день'} selected={multi || pickDay} onPress={() => setPickDay(true)} />
-      </View>
-      {pickDay && value.date ? (
-        <DatePanel
-          value={value.endDate ?? null}
-          onPick={(endDate) => {
-            if (endDate > value.date!) set({ endDate });
-            else set({ endDate: null });
-            if (value.time) setPickDay(false);
-          }}
-        />
-      ) : null}
-      {value.time && !pickDay ? (
-        <TimePanel
-          value={value.endTime ?? plusHour(value.time)}
-          // Конец раньше начала в тот же день — это ночь следующего дня
-          onPick={(endTime) => set({ endTime, endDate: !multi && value.date && endTime < value.time! ? addIso(value.date, 1) : multi ? value.endDate : null })}
-        />
-      ) : null}
+      <DatePanel value={date} onPick={onDate} onClear={onClearDate} />
+      {time ? (
+        <>
+          <TimePanel value={time} onPick={(t) => onTime(t)} />
+          <View style={styles.chips}>
+            <Chip label="Без времени" onPress={() => onTime(null)} />
+          </View>
+        </>
+      ) : (
+        <View style={styles.chips}>
+          <Chip label="+ Время" onPress={() => onTime(defaultTime ?? '09:00')} />
+        </View>
+      )}
     </View>
   );
 }

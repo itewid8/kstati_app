@@ -1,10 +1,10 @@
-import { CalendarDays, List } from '@/components/icons';
+import { CalendarDays, LayerOne, Layers, List } from '@/components/icons';
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { usePullRefresh } from '@/components/PullRefresh';
 // Прокрутка из gesture-handler: щипок в календаре может её перехватить
 import { ScrollView } from 'react-native-gesture-handler';
-import { MIC_SIZE, useBottomSpace } from '@/components/BottomBar';
+import { useBottomSpace } from '@/components/BottomBar';
 import { CalendarView } from '@/components/Calendar';
 import { emptyDraft } from '@/components/CardSheet';
 import { Header } from '@/components/Header';
@@ -34,10 +34,12 @@ export default function Tasks() {
 
   const groupTasks = useMemo(() => allTasks.filter((t) => t.groupId === group?.id), [allTasks, group?.id]);
   // В календаре повторы серий разворачиваются в отдельные дни (на год с небольшим вокруг выбранной даты)
+  // Пересчитываем при смене месяца, а не дня: иначе каждое нажатие на день недели разворачивало бы все повторы заново
+  const month = selected.slice(0, 7);
   const calTasks = useMemo(() => {
-    const d = fromISODate(selected);
-    return expandTasks(groupTasks, toISODate(addDays(d, -400)), toISODate(addDays(d, 400)));
-  }, [groupTasks, selected]);
+    const d = fromISODate(`${month}-01`);
+    return expandTasks(groupTasks, toISODate(addDays(d, -400)), toISODate(addDays(d, 430)));
+  }, [groupTasks, month]);
   const calendar = view !== 'list';
 
   // Во время щипка по календарю обновление выключено, чтобы жест не превращался в «потянуть»
@@ -51,7 +53,7 @@ export default function Tasks() {
 
   const toggle = (
     <Pressable
-      onPress={() => setTasksView(calendar ? 'list' : 'month')}
+      onPress={() => setTasksView(calendar ? 'list' : 'week')}
       hitSlop={10}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
@@ -70,11 +72,10 @@ export default function Tasks() {
         <NoGroup />
       ) : (
         <>
-          {calendar && <Segmented value={view} onChange={setTasksView} />}
-          {view === 'day' || view === 'week' ? (
-            // Сетка времени листается сама (часы); над ней — навигация и заголовки дней
-            // Низ сетки уходит под микрофон: последние часы прокручиваются над ним
-            <View style={{ flex: 1, paddingBottom: bottom - MIC_SIZE - 32 }}>
+          {calendar && <Segmented value={view} onChange={setTasksView} layers={group.memberIds.length > 1} />}
+          {calendar ? (
+            // Календарь целиком над микрофоном и вкладками: сетки помещаются на экран, месяц и год листаются внутри листа
+            <View style={{ flex: 1, paddingBottom: bottom }}>
               <CalendarView
                 tasks={calTasks}
                 zoom={view}
@@ -87,24 +88,9 @@ export default function Tasks() {
               />
             </View>
           ) : (
-          <ScrollView
-            contentContainerStyle={{ paddingBottom: bottom }}
-            scrollEnabled={!pinching}
-            refreshControl={refreshControl}
-          >
-            {view === 'list' && <ListView tasks={groupTasks} />}
-            {view !== 'list' && (
-              <CalendarView
-                tasks={calTasks}
-                zoom={view}
-                onZoom={setTasksView}
-                selected={selected}
-                onSelect={setSelected}
-                onPinching={setPinching}
-                members={group.memberIds}
-              />
-            )}
-          </ScrollView>
+            <ScrollView contentContainerStyle={{ paddingBottom: bottom }} refreshControl={refreshControl}>
+              <ListView tasks={groupTasks} />
+            </ScrollView>
           )}
         </>
       )}
@@ -112,8 +98,8 @@ export default function Tasks() {
   );
 }
 
-/** «Неделя · Месяц» — текстовый переключатель в стиле таб-бара */
-function Segmented({ value, onChange }: { value: TasksView; onChange: (v: TasksView) => void }) {
+/** «День · Неделя · Месяц · Год» — текстовый переключатель в стиле таб-бара; справа — слои: вместе или стопкой */
+function Segmented({ value, onChange, layers }: { value: TasksView; onChange: (v: TasksView) => void; layers: boolean }) {
   const c = useColors();
   const items: { key: TasksView; label: string }[] = [
     { key: 'day', label: 'День' },
@@ -134,6 +120,37 @@ function Segmented({ value, onChange }: { value: TasksView; onChange: (v: TasksV
           </Pressable>
         );
       })}
+      {layers && <LayersSwitch />}
+    </View>
+  );
+}
+
+/** Слои: склеенный общий календарь или календари людей стопкой */
+function LayersSwitch() {
+  const c = useColors();
+  const mode = useStore((s) => s.layers);
+  const setLayers = useStore((s) => s.setLayers);
+  const together = mode.kind === 'together';
+  const item = (on: boolean, label: string, icon: React.ReactNode, onPress: () => void) => (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: on }}
+      hitSlop={{ top: 6, bottom: 6 }}
+      style={[styles.layerBtn, on && { backgroundColor: c.primary }]}
+    >
+      {icon}
+    </Pressable>
+  );
+  return (
+    <View style={[styles.layerSwitch, { borderColor: c.border }]}>
+      {item(together, 'Вместе', <LayerOne size={18} strokeWidth={ICON.stroke} color={together ? c.onPrimary : c.text} />, () =>
+        setLayers({ kind: 'together' }),
+      )}
+      {item(!together, 'Слоями', <Layers size={18} strokeWidth={ICON.stroke} color={!together ? c.onPrimary : c.text} />, () =>
+        setLayers({ kind: 'stack' }),
+      )}
     </View>
   );
 }
@@ -181,9 +198,12 @@ function ListView({ tasks }: { tasks: Task[] }) {
 }
 
 const styles = StyleSheet.create({
+  layerSwitch: { marginLeft: 'auto', flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 18, padding: 2, gap: 2 },
+  layerBtn: { width: 36, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   segment: {
     flexDirection: 'row',
-    gap: 20,
+    alignItems: 'center',
+    gap: 16,
     paddingHorizontal: space.side,
     paddingBottom: 8,
   },
