@@ -3,7 +3,7 @@
  * Ошибки: ApiError — сервер ответил отказом (status, code, message); NetError — нет связи.
  */
 import { API_URL } from './config';
-import type { ReminderSettings, Repeat } from './types';
+import type { PersonColor, ReminderSettings, Repeat } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -102,7 +102,7 @@ export type Op =
   | { op: 'group.leave'; id: string }
   | { op: 'group.admin'; id: string; userId: string; admin: boolean }
   | { op: 'group.remove'; id: string; userId: string }
-  | { op: 'profile'; name?: string; nick?: string | null; gender?: 'm' | 'f' | null }
+  | { op: 'profile'; name?: string; nick?: string | null; gender?: 'm' | 'f' | null; color?: PersonColor | null }
   /** Личные напоминания: по умолчанию и для отдельных дел (null — убрать своё) */
   | { op: 'prefs'; reminders?: ReminderSettings; overrides?: Record<string, string[] | null> };
 

@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 import { ChevronRight } from '@/components/icons';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, useColorScheme, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackHeader } from '@/components/Header';
 import { Button, Chip, Divider, Field, ListRow, SectionLabel, T } from '@/components/ui';
 import { useStore, type NickStatus } from '@/lib/store';
-import type { Gender } from '@/lib/types';
+import { PERSON_COLORS, type Gender } from '@/lib/types';
+import { colorHex } from '@/lib/colors';
 import { ICON, space, useColors } from '@/theme';
 
 const GENDERS: { key: Gender | null; label: string }[] = [
@@ -162,6 +163,9 @@ export default function Settings() {
           </View>
         )}
 
+        <SectionLabel>Цвет в календаре</SectionLabel>
+        <ColorPicker />
+
         <SectionLabel> </SectionLabel>
         <Divider />
         <ListRow label="Настройки приложения" onPress={() => router.push('/settings/app')} right={chevron} />
@@ -202,6 +206,9 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({
+  colors: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingHorizontal: space.side, paddingVertical: 8 },
+  swatchRing: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  swatch: { width: 28, height: 28, borderRadius: 14 },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -212,3 +219,33 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
 });
+
+/** Свой цвет: «Авто» или стикер из палитры. Меняется сразу */
+function ColorPicker() {
+  const c = useColors();
+  const dark = useColorScheme() === 'dark';
+  const color = useStore((s) => s.me?.color);
+  const setColor = useStore((s) => s.setColor);
+  const pick = async (next: (typeof PERSON_COLORS)[number] | null) => {
+    if (next === (color ?? null)) return;
+    const err = await setColor(next);
+    if (err) Alert.alert('Не удалось сохранить', err);
+  };
+  return (
+    <View style={styles.colors}>
+      <Chip label="Авто" selected={!color} onPress={() => pick(null)} />
+      {PERSON_COLORS.map((k) => (
+        <Pressable
+          key={k}
+          onPress={() => pick(k)}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityState={{ selected: color === k }}
+          style={[styles.swatchRing, { borderColor: color === k ? c.text : 'transparent' }]}
+        >
+          <View style={[styles.swatch, { backgroundColor: colorHex(k, dark) }]} />
+        </Pressable>
+      ))}
+    </View>
+  );
+}

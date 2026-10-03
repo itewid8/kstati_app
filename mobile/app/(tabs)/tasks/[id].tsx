@@ -3,15 +3,15 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { openMenu } from '@/components/ActionMenu';
-import { MIC_SIZE, useBottomSpace } from '@/components/BottomBar';
+import { useBottomSpace } from '@/components/BottomBar';
 import { ChevronLeft, Ellipsis, Plus } from '@/components/icons';
 import { usePullRefresh } from '@/components/PullRefresh';
 import { DayHeader, TimeGrid, type GridColumn } from '@/components/TimeGrid';
-import { deleteTaskAsk, editTask, TaskRow } from '@/components/TaskRow';
+import { deleteTaskAsk, editTask, TaskRow, taskMenu } from '@/components/TaskRow';
 import { Divider, SectionLabel, T } from '@/components/ui';
 import { fromISODate, shortDate, sortKey, WEEKDAYS_SHORT } from '@/lib/dates';
 import { uid } from '@/lib/ids';
-import { daysOf, fromMin, minutesOn, spanLabel } from '@/lib/span';
+import { daysOf, fromMin, spanLabel } from '@/lib/span';
 import { useStore } from '@/lib/store';
 import type { Task } from '@/lib/types';
 import { ICON, space, useColors } from '@/theme';
@@ -81,10 +81,6 @@ export default function PlanScreen() {
     );
   }
 
-  // Часы сетки: обычный день, но шире, если подзадачи раньше 8 или позже 22
-  const mins = kids.flatMap((t) => days.map((d) => minutesOn(t, d)).filter((m): m is [number, number] => !!m));
-  const fromHour = Math.max(0, Math.min(8, ...mins.map((m) => Math.floor(m[0] / 60))));
-  const toHour = Math.min(24, Math.max(22, ...mins.map((m) => Math.ceil(m[1] / 60))));
   const columns: GridColumn[] = days.map((d) => {
     const date = fromISODate(d);
     return {
@@ -156,7 +152,7 @@ export default function PlanScreen() {
       )}
 
       {mode === 'grid' && days.length > 0 ? (
-        <View style={{ flex: 1, paddingBottom: bottom - MIC_SIZE - 32 }}>
+        <View style={{ flex: 1, paddingBottom: bottom }}>
           {other.length > 0 && (
             <Pressable onPress={() => setMode('list')} style={({ pressed }) => [styles.other, { opacity: pressed ? 0.6 : 1 }]}>
               <T variant="caption" muted>
@@ -166,11 +162,9 @@ export default function PlanScreen() {
           )}
           <TimeGrid
             columns={columns}
-            fromHour={fromHour}
-            toHour={toHour}
-            scrollToHour={fromHour}
             minColumnWidth={days.length > 4 ? 96 : undefined}
             onTask={(t) => editTask(t.id)}
+            onLongTask={taskMenu}
             onSlot={(col, m) => add(col.day, m)}
             refreshControl={refreshControl}
           />

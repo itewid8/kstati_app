@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -34,9 +35,32 @@ export function Sheet({
   const { height } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const y = useRef(new Animated.Value(1)).current;
+  // Смахивание вниз: шторка едет за пальцем, дальше 100 px или быстро — закрывается
+  const drag = useRef(new Animated.Value(0)).current;
+  const scrollY = useRef(0);
+  const sheetTop = useRef(0);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const pan = useMemo(() => {
+    // Тянуть можно за верх шторки (ручка, первая строка), когда содержимое не прокручено:
+    // ниже — поля и колёса выбора времени, их жесты не перехватываем
+    const grab = (pageY: number, dy: number, dx: number) =>
+      dy > 10 && Math.abs(dy) > Math.abs(dx) * 1.5 && scrollY.current <= 0 && pageY - dy - sheetTop.current < 120;
+    return PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (e, g) => grab(e.nativeEvent.pageY, g.dy, g.dx),
+      onMoveShouldSetPanResponder: (e, g) => grab(e.nativeEvent.pageY, g.dy, g.dx),
+      onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 100 || g.vy > 0.8) closeRef.current();
+        else Animated.timing(drag, { toValue: 0, duration: motion.fast, useNativeDriver: true }).start();
+      },
+      onPanResponderTerminate: () => Animated.timing(drag, { toValue: 0, duration: motion.fast, useNativeDriver: true }).start(),
+    });
+  }, [drag]);
 
   useEffect(() => {
     if (visible) {
+      drag.setValue(0);
       setMounted(true);
       Animated.timing(y, { toValue: 0, duration: motion.base, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     } else if (mounted) {
@@ -49,7 +73,7 @@ export function Sheet({
 
   if (!mounted) return null;
 
-  const translateY = y.interpolate({ inputRange: [0, 1], outputRange: [0, height * 0.6] });
+  const translateY = Animated.add(y.interpolate({ inputRange: [0, 1], outputRange: [0, height * 0.6] }), drag);
   const opacity = y.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
   return (
@@ -60,13 +84,21 @@ export function Sheet({
         </Animated.View>
         <View style={{ flex: 1 }} pointerEvents="box-none" />
         <Animated.View
+          {...pan.panHandlers}
+          onLayout={(e) => (sheetTop.current = e.nativeEvent.layout.y)}
           style={[
             styles.sheet,
             { backgroundColor: c.surface, maxHeight: height * 0.88, paddingBottom: Math.max(insets.bottom, 12), transform: [{ translateY }] },
           ]}
         >
           <View style={[styles.handle, { backgroundColor: c.border }]} />
-          <ScrollView bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 8 }}
+            scrollEventThrottle={32}
+            onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)}
+          >
             {children}
           </ScrollView>
           {footer}

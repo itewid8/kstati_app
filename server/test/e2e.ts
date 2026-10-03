@@ -275,6 +275,13 @@ async function scenario(name: string, store: Store) {
   assert.equal((await ops(T2, { op: 'profile', nick: 'саша' }))[0].error, 'nick_taken');
   assert.equal((await ops(T1, { op: 'profile', nick: 'sasha_k' }))[0].ok, true);
   assert.equal((await ok('GET', '/nick/check?nick=' + encodeURIComponent('саша'), undefined, T2)).status, 'free', 'старый ник освободился');
+  // Цвет в календаре: виден другим участникам; null — снова подбирается сам; чужого цвета нет
+  assert.equal((await ops(T1, { op: 'profile', color: 'pink' }))[0].ok, true);
+  const sc = await ok('POST', '/sync', {}, T2);
+  assert.equal(sc.users.find((u: any) => u.nick === 'sasha_k').color, 'pink', 'цвет Саши виден Маше');
+  assert.equal((await ops(T1, { op: 'profile', color: 'brown' }))[0].ok, false, 'цвета нет в палитре');
+  assert.equal((await ops(T1, { op: 'profile', color: null }))[0].ok, true);
+  assert.equal((await ok('POST', '/sync', {}, T1)).me.color, undefined);
 
   /* ---------- голос ---------- */
   const v = await ok('POST', '/voice', { groupId: 'g1', today: '2026-09-26', now: '12:00', audio: Buffer.from('m4a').toString('base64') }, T2);

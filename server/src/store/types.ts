@@ -7,11 +7,16 @@ import type { GroupCategory } from '../types.js';
 
 export type Gender = 'm' | 'f';
 
+/** Цвет человека в календаре — из палитры стикеров (mobile/src/lib/colors.ts); нет — подбирается сам */
+export const PERSON_COLORS = ['blue', 'pink', 'green', 'yellow', 'orange', 'violet', 'teal'] as const;
+export type PersonColor = (typeof PERSON_COLORS)[number];
+
 export type User = {
   id: string;
   name: string;
   nick?: string;
   gender?: Gender;
+  color?: PersonColor;
   email?: string;
   /** scrypt: соль и хеш */
   passHash?: string;
@@ -20,8 +25,8 @@ export type User = {
 };
 
 /** То, что видят другие участники групп */
-export type PublicUser = Pick<User, 'id' | 'name' | 'nick' | 'gender'>;
-export const publicUser = (u: User): PublicUser => ({ id: u.id, name: u.name, nick: u.nick, gender: u.gender });
+export type PublicUser = Pick<User, 'id' | 'name' | 'nick' | 'gender' | 'color'>;
+export const publicUser = (u: User): PublicUser => ({ id: u.id, name: u.name, nick: u.nick, gender: u.gender, color: u.color });
 
 export type Group = {
   id: string;
