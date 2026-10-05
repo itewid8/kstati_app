@@ -8,9 +8,9 @@ import { useMemo } from 'react';
 import { useColorScheme } from 'react-native';
 import { peopleOf } from './span';
 import { useCurrentGroup, useStore } from './store';
-import { PERSON_COLORS, type ID, type PersonColor, type Task, type User } from './types';
+import { PERSON_COLORS, type ID, type PaletteKey, type PersonColor, type Task, type User } from './types';
 
-const HEX: Record<PersonColor, { light: string; dark: string }> = {
+const HEX: Record<PaletteKey, { light: string; dark: string }> = {
   blue: { light: '#2F6BDB', dark: '#5B8DEF' },
   pink: { light: '#E2407E', dark: '#F06A9B' },
   green: { light: '#1F9D57', dark: '#3DBE76' },
@@ -20,7 +20,39 @@ const HEX: Record<PersonColor, { light: string; dark: string }> = {
   teal: { light: '#0E9AA7', dark: '#2CC0CC' },
 };
 
-export const colorHex = (key: PersonColor, dark: boolean) => HEX[key][dark ? 'dark' : 'light'];
+/** Цвет на экране: из палитры — под тему, свой — как есть */
+export const colorHex = (key: PersonColor, dark: boolean) => (key.startsWith('#') ? key : HEX[key as PaletteKey][dark ? 'dark' : 'light']);
+
+/** Цвет полосы спектра: оттенок 0–360 при насыщенности и яркости, в которых ярлыки читаются в обеих темах */
+export function hueHex(hue: number): `#${string}` {
+  const s = 0.68;
+  const l = 0.5;
+  const k = (n: number) => (n + hue / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const h = (x: number) => Math.round(x * 255).toString(16).padStart(2, '0');
+  return `#${h(f(0))}${h(f(8))}${h(f(4))}`;
+}
+
+/** Оттенок своего цвета (для ползунка спектра) */
+export function hexHue(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (!d) return 0;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+/** Текст поверх цвета: тёмный на светлых (жёлтый), белый на остальных */
+export function inkOn(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  return lum > 170 ? '#1A1A1A' : '#FFFFFF';
+}
 
 /** Цвет каждого участника: свой, если не занят раньше вступившим, иначе первый свободный */
 export function memberColors(memberIds: ID[], users: User[]): Map<ID, PersonColor> {
@@ -38,7 +70,7 @@ export function memberColors(memberIds: ID[], users: User[]): Map<ID, PersonColo
     if (out.has(id)) continue;
     const free = PERSON_COLORS.find((k) => !used.has(k));
     // Людей больше, чем цветов — идём по кругу
-    const key = free ?? PERSON_COLORS[next++ % PERSON_COLORS.length];
+    const key: PersonColor = free ?? PERSON_COLORS[next++ % PERSON_COLORS.length];
     out.set(id, key);
     used.add(key);
   }
@@ -69,7 +101,8 @@ export function usePalette(): Palette {
   return useMemo(() => {
     const map = memberColors(memberIds ?? [], users);
     const of = (id: ID) => {
-      const key = map.get(id);
+      // Не в группе (или групп нет) — свой цвет человека, иначе серый
+      const key = map.get(id) ?? users.find((u) => u.id === id)?.color;
       return key ? colorHex(key, dark) : dark ? '#8B8B8B' : '#6B6B6B';
     };
     return { of, task: (t) => peopleOf(t).map(of), bodyAlpha: dark ? 0.24 : 0.15 };

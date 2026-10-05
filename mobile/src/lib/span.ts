@@ -32,6 +32,15 @@ function bounds(t: Pick<Task, 'date' | 'time' | 'endDate' | 'endTime'>): [number
   return [d0, d0 + 1440];
 }
 
+/** Длительность в минутах (без времени — сутки на каждый день, без конца — 30 минут) */
+export const durationMin = (t: Pick<Task, 'date' | 'time' | 'endDate' | 'endTime'>) => {
+  const b = bounds(t);
+  return b ? b[1] - b[0] : 0;
+};
+
+/** Дело длиннее суток: в сетке недели — полосой сверху, а не в днях */
+export const isLong = (t: Pick<Task, 'date' | 'time' | 'endDate' | 'endTime'>) => durationMin(t) > 1440;
+
 /**
  * Последний день дела. Многодневное, которое кончается ровно в 00:00 («в 20:00 на 4 часа»),
  * следующий день не занимает.

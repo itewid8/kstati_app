@@ -7,9 +7,12 @@ import type { GroupCategory } from '../types.js';
 
 export type Gender = 'm' | 'f';
 
-/** Цвет человека в календаре — из палитры стикеров (mobile/src/lib/colors.ts); нет — подбирается сам */
+/**
+ * Цвет человека в календаре и на иконке: ключ палитры стикеров (mobile/src/lib/colors.ts)
+ * или свой цвет «#rrggbb» с полосы спектра; нет — подбирается сам
+ */
 export const PERSON_COLORS = ['blue', 'pink', 'green', 'yellow', 'orange', 'violet', 'teal'] as const;
-export type PersonColor = (typeof PERSON_COLORS)[number];
+export type PersonColor = (typeof PERSON_COLORS)[number] | `#${string}`;
 
 export type User = {
   id: string;
@@ -17,6 +20,8 @@ export type User = {
   nick?: string;
   gender?: Gender;
   color?: PersonColor;
+  /** Символ на иконке: буква или эмодзи; нет — первая буква имени */
+  avatar?: string;
   email?: string;
   /** scrypt: соль и хеш */
   passHash?: string;
@@ -25,8 +30,8 @@ export type User = {
 };
 
 /** То, что видят другие участники групп */
-export type PublicUser = Pick<User, 'id' | 'name' | 'nick' | 'gender' | 'color'>;
-export const publicUser = (u: User): PublicUser => ({ id: u.id, name: u.name, nick: u.nick, gender: u.gender, color: u.color });
+export type PublicUser = Pick<User, 'id' | 'name' | 'nick' | 'gender' | 'color' | 'avatar'>;
+export const publicUser = (u: User): PublicUser => ({ id: u.id, name: u.name, nick: u.nick, gender: u.gender, color: u.color, avatar: u.avatar });
 
 export type Group = {
   id: string;

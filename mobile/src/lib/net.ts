@@ -102,7 +102,7 @@ export type Op =
   | { op: 'group.leave'; id: string }
   | { op: 'group.admin'; id: string; userId: string; admin: boolean }
   | { op: 'group.remove'; id: string; userId: string }
-  | { op: 'profile'; name?: string; nick?: string | null; gender?: 'm' | 'f' | null; color?: PersonColor | null }
+  | { op: 'profile'; name?: string; nick?: string | null; gender?: 'm' | 'f' | null; color?: PersonColor | null; avatar?: string | null }
   /** Личные напоминания: по умолчанию и для отдельных дел (null — убрать своё) */
   | { op: 'prefs'; reminders?: ReminderSettings; overrides?: Record<string, string[] | null> };
 

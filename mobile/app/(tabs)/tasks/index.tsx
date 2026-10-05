@@ -1,17 +1,17 @@
-import { CalendarDays, LayerOne, Layers, List } from '@/components/icons';
+import { CalendarDays, ChevronDown, List } from '@/components/icons';
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { usePullRefresh } from '@/components/PullRefresh';
 // Прокрутка из gesture-handler: щипок в календаре может её перехватить
 import { ScrollView } from 'react-native-gesture-handler';
-import { useBottomSpace } from '@/components/BottomBar';
+import { useBottomSpace, useTabBarSpace } from '@/components/BottomBar';
 import { CalendarView } from '@/components/Calendar';
 import { emptyDraft } from '@/components/CardSheet';
 import { Header } from '@/components/Header';
 import { NoGroup } from '@/components/NoGroup';
 import { LayoutAnimationConfig, ListItem } from '@/components/ListItem';
 import { TaskRow } from '@/components/TaskRow';
-import { Divider, SectionLabel, T } from '@/components/ui';
+import { Divider, T } from '@/components/ui';
 import { addDays, fromISODate, SECTION_ORDER, SECTION_TITLE, sectionFor, sortKey, toISODate, type Section } from '@/lib/dates';
 import { expandTasks, listInstances, taskKey } from '@/lib/recur';
 import { useCurrentGroup, useStore, type TasksView } from '@/lib/store';
@@ -27,6 +27,7 @@ export default function Tasks() {
   const view = useStore((s) => s.tasksView);
   const { setCard, setTasksView } = useStore.getState();
   const bottom = useBottomSpace();
+  const tabBar = useTabBarSpace();
   // Два пальца на календаре — прокрутку выключаем, чтобы щипок не превращался в прокрутку
   const [pinching, setPinching] = useState(false);
   const selected = useStore((st) => st.calendarDate);
@@ -72,10 +73,10 @@ export default function Tasks() {
         <NoGroup />
       ) : (
         <>
-          {calendar && <Segmented value={view} onChange={setTasksView} layers={group.memberIds.length > 1} />}
+          {calendar && <Segmented value={view} onChange={setTasksView} />}
           {calendar ? (
-            // Календарь целиком над микрофоном и вкладками: сетки помещаются на экран, месяц и год листаются внутри листа
-            <View style={{ flex: 1, paddingBottom: bottom }}>
+            // Календарь тянется до вкладок, микрофон — поверх; месяц и год листаются внутри листа
+            <View style={{ flex: 1, paddingBottom: tabBar }}>
               <CalendarView
                 tasks={calTasks}
                 zoom={view}
@@ -98,8 +99,8 @@ export default function Tasks() {
   );
 }
 
-/** «День · Неделя · Месяц · Год» — текстовый переключатель в стиле таб-бара; справа — слои: вместе или стопкой */
-function Segmented({ value, onChange, layers }: { value: TasksView; onChange: (v: TasksView) => void; layers: boolean }) {
+/** «День · Неделя · Месяц · Год» — текстовый переключатель в стиле таб-бара */
+function Segmented({ value, onChange }: { value: TasksView; onChange: (v: TasksView) => void }) {
   const c = useColors();
   const items: { key: TasksView; label: string }[] = [
     { key: 'day', label: 'День' },
@@ -120,49 +121,21 @@ function Segmented({ value, onChange, layers }: { value: TasksView; onChange: (v
           </Pressable>
         );
       })}
-      {layers && <LayersSwitch />}
     </View>
   );
 }
 
-/** Слои: склеенный общий календарь или календари людей стопкой */
-function LayersSwitch() {
-  const c = useColors();
-  const mode = useStore((s) => s.layers);
-  const setLayers = useStore((s) => s.setLayers);
-  const together = mode.kind === 'together';
-  const item = (on: boolean, label: string, icon: React.ReactNode, onPress: () => void) => (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: on }}
-      hitSlop={{ top: 6, bottom: 6 }}
-      style={[styles.layerBtn, on && { backgroundColor: c.primary }]}
-    >
-      {icon}
-    </Pressable>
-  );
-  return (
-    <View style={[styles.layerSwitch, { borderColor: c.border }]}>
-      {item(together, 'Вместе', <LayerOne size={18} strokeWidth={ICON.stroke} color={together ? c.onPrimary : c.text} />, () =>
-        setLayers({ kind: 'together' }),
-      )}
-      {item(!together, 'Слоями', <Layers size={18} strokeWidth={ICON.stroke} color={!together ? c.onPrimary : c.text} />, () =>
-        setLayers({ kind: 'stack' }),
-      )}
-    </View>
-  );
-}
-
+/** Список по разделам; раздел сворачивается нажатием на заголовок (по умолчанию свёрнуто «Прошло») */
 function ListView({ tasks }: { tasks: Task[] }) {
+  const c = useColors();
+  const collapsed = useStore((s) => s.collapsedSections);
+  const toggleSection = useStore((s) => s.toggleSection);
   const sections = useMemo(() => {
     const now = new Date();
     // Выполненные остаются на своём месте (затемнены) и исчезают через 30 дней.
     // У серии — один ближайший раз (и сегодняшний, если уже отмечен)
-    // Подзадачи живут в плане: в списке — только сам план с прогрессом
-    const ids = new Set(tasks.map((t) => t.id));
-    const visible = listInstances(tasks.filter((t) => !t.parentId || !ids.has(t.parentId)), toISODate(now))
+    // Все дела, в том числе подзадачи планов — отдельными строками
+    const visible = listInstances(tasks, toISODate(now))
       .filter((t) => !t.doneAt || now.getTime() - new Date(t.doneAt).getTime() < DONE_KEEP_MS)
       .sort((a, b) => sortKey(a.date, a.time).localeCompare(sortKey(b.date, b.time)));
     const by = new Map<Section, Task[]>();
@@ -182,28 +155,48 @@ function ListView({ tasks }: { tasks: Task[] }) {
           Дел нет
         </T>
       )}
-      {sections.map((s) => (
-        <ListItem key={s.key}>
-          <SectionLabel>{SECTION_TITLE[s.key]}</SectionLabel>
-          {s.items.map((t, i) => (
-            <ListItem key={taskKey(t)}>
-              {i > 0 && <Divider inset={space.side + 36} />}
-              <TaskRow task={t} past={s.key === 'past'} markDelay={0} />
-            </ListItem>
-          ))}
-        </ListItem>
-      ))}
+      {sections.map((s) => {
+        const open = !collapsed.includes(s.key);
+        return (
+          <ListItem key={s.key}>
+            <Pressable
+              onPress={() => toggleSection(s.key)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: open }}
+              style={({ pressed }) => [styles.sectionHead, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <T variant="caption" muted>
+                {SECTION_TITLE[s.key]}
+              </T>
+              {!open && (
+                <T variant="caption" muted mono>
+                  {s.items.length}
+                </T>
+              )}
+              <View style={{ transform: [{ rotate: open ? '0deg' : '-90deg' }] }}>
+                <ChevronDown size={14} strokeWidth={ICON.stroke} color={c.textMuted} />
+              </View>
+            </Pressable>
+            {open &&
+              s.items.map((t, i) => (
+                <ListItem key={taskKey(t)}>
+                  {i > 0 && <Divider inset={space.side + 36} />}
+                  <TaskRow task={t} past={s.key === 'past'} markDelay={0} />
+                </ListItem>
+              ))}
+          </ListItem>
+        );
+      })}
     </LayoutAnimationConfig>
   );
 }
 
 const styles = StyleSheet.create({
-  layerSwitch: { marginLeft: 'auto', flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 18, padding: 2, gap: 2 },
-  layerBtn: { width: 36, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  sectionHead: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, paddingHorizontal: space.side, paddingTop: 20, paddingBottom: 6, minHeight: 44 },
   segment: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 20,
     paddingHorizontal: space.side,
     paddingBottom: 8,
   },

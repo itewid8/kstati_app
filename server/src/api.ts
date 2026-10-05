@@ -122,7 +122,12 @@ const Op = z.discriminatedUnion('op', [
     name: z.string().trim().min(1).max(40).optional(),
     nick: z.string().trim().max(20).nullable().optional(),
     gender: z.enum(['m', 'f']).nullable().optional(),
-    color: z.enum(PERSON_COLORS).nullable().optional(),
+    color: z
+      .union([z.enum(PERSON_COLORS), z.string().regex(/^#[0-9a-fA-F]{6}$/).transform((v) => v.toLowerCase() as `#${string}`)])
+      .nullable()
+      .optional(),
+    // Буква или эмодзи (эмодзи бывает из нескольких символов, например флаг или семья)
+    avatar: z.string().trim().max(16).nullable().optional(),
   }),
 ]);
 export type OpIn = z.infer<typeof Op>;
@@ -478,6 +483,7 @@ export class Data {
         if (op.name) user.name = op.name;
         if (op.gender !== undefined) user.gender = op.gender ?? undefined;
         if (op.color !== undefined) user.color = op.color ?? undefined;
+        if (op.avatar !== undefined) user.avatar = op.avatar || undefined;
         await s.putUser(user);
         await s.incr(urev(user.id));
         return { me: meView(user) };

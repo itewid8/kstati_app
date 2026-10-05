@@ -7,15 +7,19 @@ export type User = {
   nick?: string;
   /** Пол — для правильных слов: «её дела», «добавила» */
   gender?: Gender;
-  /** Свой цвет в календаре; нет — подбирается сам (lib/colors.ts) */
+  /** Свой цвет в календаре и на иконке; нет — подбирается сам (lib/colors.ts) */
   color?: PersonColor;
+  /** Символ на иконке: буква или эмодзи; нет — первая буква имени */
+  avatar?: string;
 };
 
 export type Gender = 'm' | 'f';
 
 /** Палитра людей — цвета стикеров-закладок. Порядок — порядок автоподбора */
 export const PERSON_COLORS = ['blue', 'pink', 'green', 'yellow', 'orange', 'violet', 'teal'] as const;
-export type PersonColor = (typeof PERSON_COLORS)[number];
+/** Цвет из палитры или свой «#rrggbb» с полосы спектра */
+export type PersonColor = (typeof PERSON_COLORS)[number] | `#${string}`;
+export type PaletteKey = (typeof PERSON_COLORS)[number];
 
 /** «его» / «её» / «его или её» */
 export const hisHer = (u?: Pick<User, 'gender'> | null) => (u?.gender === 'f' ? 'её' : u?.gender === 'm' ? 'его' : 'его или её');

@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '@/lib/store';
 import { ICON, space, useColors } from '@/theme';
+import { Avatar } from './Avatar';
 import { T } from './ui';
 
 /** Шапка: слева название группы со стрелкой (или заголовок), справа «+» и инициал. */
@@ -54,11 +55,11 @@ export function Header({
         <Pressable
           onPress={() => router.push('/settings')}
           hitSlop={8}
-          style={({ pressed }) => [styles.avatar, { borderColor: c.border, opacity: pressed ? 0.6 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Настройки"
+          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
         >
-          <T variant="caption" weight="medium">
-            {me?.name?.[0]?.toUpperCase() ?? '·'}
-          </T>
+          {me ? <Avatar id={me.id} size={32} /> : null}
         </Pressable>
       </View>
     </View>
@@ -91,12 +92,4 @@ const styles = StyleSheet.create({
   title: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   right: { flexDirection: 'row', alignItems: 'center', gap: 20 },
   badge: { position: 'absolute', top: -1, right: -1, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5 },
-  avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });

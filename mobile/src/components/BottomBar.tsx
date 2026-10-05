@@ -15,6 +15,10 @@ export const TAB_BAR_HEIGHT = 52;
 export const MIC_SIZE = 64;
 /** Сколько места снизу оставлять под таб-бар и микрофон */
 export const useBottomSpace = () => useSafeAreaInsets().bottom + TAB_BAR_HEIGHT + MIC_SIZE + 32;
+/** Только вкладки снизу: календари тянутся под микрофон до них */
+export const useTabBarSpace = () => useSafeAreaInsets().bottom + TAB_BAR_HEIGHT;
+/** Сколько места снизу закрывает микрофон над вкладками */
+export const MIC_SPACE = MIC_SIZE + 32;
 
 type Props = {
   state: { index: number; routes: { key: string; name: string }[] };
