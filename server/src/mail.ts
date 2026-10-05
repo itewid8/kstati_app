@@ -15,7 +15,8 @@ export async function sendMail(to: string, subject: string, text: string): Promi
     return;
   }
   const body = JSON.stringify({
-    FromEmailAddress: `Кстати <${config.mailFrom}>`,
+    // Имя отправителя не латиницей — только в MIME-кодировке (RFC 2047), иначе API отклоняет адрес
+    FromEmailAddress: `=?UTF-8?B?${Buffer.from('Кстати').toString('base64')}?= <${config.mailFrom}>`,
     Destination: { ToAddresses: [to] },
     Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' } } } },
   });

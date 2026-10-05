@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Кстати — концепты иконки</title>
+<style>
+  :root{--bg:#f4f3f1;--card:#fff;--ink:#1e1e1e;--muted:#6b6b6b;--line:#e5e5e5;}
+  @media (prefers-color-scheme: dark){:root{--bg:#141414;--card:#1e1e1e;--ink:#e6e6e6;--muted:#8b8b8b;--line:#333;}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,system-ui,"Segoe UI",sans-serif;padding:32px 16px 64px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 6px}
+  .lead{color:var(--muted);margin:0 0 28px;max-width:720px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:20px}
+  .head{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+  .tag{font-weight:700;font-size:13px;background:#D13438;color:#fff;border-radius:6px;padding:2px 8px}
+  .tag.old{background:#6b6b6b}
+  h2{font-size:19px;margin:0}
+  .desc{color:var(--muted);margin:0 0 18px}
+  .row{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .cap{font-size:12px;color:var(--muted)}
+  .big svg{width:168px;height:168px;display:block}
+  .home{width:200px;height:168px;border-radius:14px;display:grid;grid-template-columns:repeat(3,1fr);place-items:center;padding:14px}
+  .home.dark{background:linear-gradient(160deg,#2a2d3a,#0f1116)}
+  .home.light{background:linear-gradient(160deg,#dfe7f2,#f6efe6)}
+  .home .app{width:44px;height:44px;border-radius:10px;opacity:.35}
+  .home.dark .app{background:#555}.home.light .app{background:#bbb}
+  .home .me svg{width:44px;height:44px;display:block}
+  .notif{width:260px;height:168px;border-radius:14px;background:#2b2b2e;padding:14px;display:flex;flex-direction:column;gap:10px;justify-content:center}
+  .nrow{display:flex;align-items:center;gap:8px;color:#e6e6e6;font-size:12px}
+  .nrow svg{width:18px;height:18px;flex:none}
+  .sb{display:flex;gap:6px;align-items:center;background:#000;border-radius:8px;padding:6px 10px;color:#fff;font-size:11px}
+  .sb svg{width:14px;height:14px}
+  .splash{width:96px;height:168px;border-radius:14px;background:#1E1E1E;display:flex;align-items:center;justify-content:center}
+  .splash svg{width:56px;height:56px}
+  .round svg{width:120px;height:120px;display:block}
+  .tiny{display:flex;gap:10px;align-items:center}
+  .tiny svg{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Кстати — концепты иконки</h1>
+  <p class="lead">Каждый концепт построен как одна форма: цветная версия для иконки и сплэша, и та же форма одним цветом для Android-уведомлений, монохромной/тонированной иконки (Android 13+, iOS 18). Так иконка везде одинаковая. Во всех вариантах палитра из приложения: #1E1E1E, #E6E6E6 и акцент #D13438.</p>
+  <div id="list"></div>
+</div>
+<script>
+const BG='#1E1E1E', LT='#E6E6E6', RED='#D13438';
+let uid=0;
+
+/* Each concept: draw(mode) returns inner SVG for viewBox 0 0 100 100.
+   mode 'color' = full colour on dark bg; 'mono' = single colour (currentColor), transparent bg. */
+const cap=(x,y1,y2,w,fill)=>`<rect x="${x-w/2}" y="${y1}" width="${w}" height="${y2-y1}" rx="${w/2}" fill="${fill}"/>`;
+
+const concepts=[
+ {id:'0',old:true,name:'Сейчас',desc:'Правая полоска длиннее левой (y 358–665 против 389–634), а адаптивная, монохромная и уведомительная версии нарисованы с разными пропорциями и отступами.',
+  draw:m=>{const c=m==='mono'?'currentColor':LT,r=m==='mono'?'currentColor':RED;
+   return cap(30.5,38,62,7,c)+cap(50,26,74,7,r)+cap(69.5,35,65,7,c);}},
+ {id:'A',name:'Волна, исправленная',desc:'Тот же образ, но симметричный и плотнее: боковые полоски одинаковые, всё толще и крупнее, чтобы не терялось на рабочем столе. Минимальное изменение для узнаваемости.',
+  draw:m=>{const c=m==='mono'?'currentColor':LT,r=m==='mono'?'currentColor':RED;
+   return cap(28,34,66,12,c)+cap(50,20,80,12,r)+cap(72,34,66,12,c);}},
+ {id:'B',name:'Голос из пяти',desc:'Пять полосок 2–4–6–4–2: больше похоже на живую речь, ритм ровный и строго симметричный. Красная середина — «говорящий».',
+  draw:m=>{const c=m==='mono'?'currentColor':LT,r=m==='mono'?'currentColor':RED;
+   const xs=[22,36,50,64,78],h=[14,26,38,26,14];
+   return xs.map((x,i)=>cap(x,50-h[i],50+h[i],9,i===2?r:c)).join('');}},
+ {id:'C',name:'Реплика',desc:'Облачко реплики с волной внутри — «кстати…» как начало разговора. Волна вырезана в облачке, поэтому в монохроме форма читается так же.',
+  draw:m=>{const k=++uid,f=m==='mono'?'currentColor':LT;
+   const bubble=`<path d="M32 16h36a18 18 0 0 1 18 18v24a18 18 0 0 1-18 18H40l-14 11c-2 1.6-4.6 0-4.2-2.5L23 74.5A18 18 0 0 1 14 58V34a18 18 0 0 1 18-18z"/>`;
+   const bars=cap(36,38,54,8,'#000')+cap(50,30,62,8,'#000')+cap(64,38,54,8,'#000');
+   let s=`<mask id="mc${k}"><rect width="100" height="100" fill="#fff"/>${bars}</mask><g fill="${f}" mask="url(#mc${k})">${bubble}</g>`;
+   if(m!=='mono') s+=cap(50,30,62,8,RED);
+   return s;}},
+ {id:'D',name:'Двое',desc:'Две реплики внахлёст — разговор пары или компании. Красная впереди, светлая за ней; между ними зазор, так что в одном цвете они не сливаются.',
+  draw:m=>{const k=++uid,a=m==='mono'?'currentColor':LT,b=m==='mono'?'currentColor':RED;
+   const back=`<path d="M30 14h24a16 16 0 0 1 16 16v14a16 16 0 0 1-16 16H34l-10 8c-1.8 1.4-4.2 0-3.8-2.2L21.5 57A16 16 0 0 1 14 44V30a16 16 0 0 1 16-16z"/>`;
+   const front=`M46 38h24a16 16 0 0 1 16 16v14a16 16 0 0 1-8.5 14.1l1.3 8.8c.3 2.2-2.1 3.6-3.8 2.2L66 84H46a16 16 0 0 1-16-16V54a16 16 0 0 1 16-16z`;
+   return `<mask id="md${k}"><rect width="100" height="100" fill="#fff"/><path d="${front}" fill="none" stroke="#000" stroke-width="10" stroke-linejoin="round"/><path d="${front}" fill="#000"/></mask>
+    <g fill="${a}" mask="url(#md${k})">${back}</g><path d="${front}" fill="${b}"/>`;}},
+ {id:'E',name:'Буква К',desc:'Монограмма из трёх скруглённых штрихов: вертикаль и два луча, которые читаются и как «К», и как расходящийся звук. Верхний луч — акцент.',
+  draw:m=>{const c=m==='mono'?'currentColor':LT,r=m==='mono'?'currentColor':RED;
+   return cap(30,20,80,13,c)+`<path d="M47 50 L72 25" stroke="${r}" stroke-width="13" stroke-linecap="round"/><path d="M47 50 L72 75" stroke="${c}" stroke-width="13" stroke-linecap="round"/>`;}},
+ {id:'F',name:'Сердце-волна',desc:'Сердце, собранное из полосок звуковой волны: голос + близкие люди. Средняя полоса красная. Самый «тёплый» вариант, но и самый сложный на 24 px.',
+  draw:m=>{const k=++uid,c=m==='mono'?'currentColor':LT,r=m==='mono'?'currentColor':RED;
+   const heart=`M50 84C46 80 14 60 14 37 14 25 23 17 33 17c7 0 13 4 17 10 4-6 10-10 17-10 10 0 19 8 19 20 0 23-32 43-36 47z`;
+   const xs=[19,31,43,57,69,81];
+   let bars=xs.map(x=>`<rect x="${x-4.5}" y="0" width="9" height="100" fill="${c}"/>`).join('');
+   return `<clipPath id="hf${k}"><path d="${heart}"/></clipPath><g clip-path="url(#hf${k})">${bars}<rect x="45.5" y="0" width="9" height="100" fill="${r}"/></g>`;}},
+];
+
+function svg(inner,{bg=null,shape='square',scale=1,color=null}={}){
+  const k=++uid;
+  const clip = shape==='square'?`<rect width="100" height="100" rx="22.4"/>`:shape==='circle'?`<circle cx="50" cy="50" r="50"/>`:`<rect width="100" height="100"/>`;
+  const t=(1-scale)*50;
+  return `<svg viewBox="0 0 100 100" ${color?`style="color:${color}"`:''}><clipPath id="s${k}">${clip}</clipPath><g clip-path="url(#s${k})">${bg?`<rect width="100" height="100" fill="${bg}"/>`:''}<g transform="translate(${t} ${t}) scale(${scale})">${inner}</g></g></svg>`;
+}
+
+const list=document.getElementById('list');
+for(const c of concepts){
+  const col=()=>c.draw('color'), mono=()=>c.draw('mono');
+  const apps=n=>Array.from({length:n},()=>'<div class="app"></div>').join('');
+  list.insertAdjacentHTML('beforeend',`
+  <div class="card">
+    <div class="head"><span class="tag ${c.old?'old':''}">${c.id}</span><h2>${c.name}</h2></div>
+    <p class="desc">${c.desc}</p>
+    <div class="row">
+      <div class="cell big">${svg(col(),{bg:BG})}<span class="cap">iOS / основная</span></div>
+      <div class="cell round">${svg(col(),{bg:BG,shape:'circle',scale:.72})}<span class="cap">Android adaptive</span></div>
+      <div class="cell"><div class="home dark">${apps(4)}<div class="me">${svg(col(),{bg:BG})}</div>${apps(4)}</div><span class="cap">Рабочий стол, тёмный</span></div>
+      <div class="cell"><div class="home light">${apps(4)}<div class="me">${svg(mono(),{bg:'#dfe4ec',color:'#3d5a80'})}</div>${apps(4)}</div><span class="cap">Тонированная (mono)</span></div>
+      <div class="cell"><div class="notif">
+          <div class="sb">${svg(mono(),{shape:'none',color:'#fff'})} 12:30</div>
+          <div class="nrow">${svg(mono(),{shape:'none',color:'#fff'})}<span><b>Кстати</b> · Маша добавила фильм</span></div>
+          <div class="nrow">${svg(mono(),{shape:'none',color:'#fff'})}<span><b>Кстати</b> · Напоминание: купить хлеб</span></div>
+        </div><span class="cap">Уведомления (mono)</span></div>
+      <div class="cell"><div class="splash">${svg(col(),{shape:'none'})}</div><span class="cap">Сплэш</span></div>
+      <div class="cell"><div class="tiny">${[16,24,32].map(s=>`<div style="width:${s}px;height:${s}px">${svg(mono(),{shape:'none',color:'var(--ink)'})}</div>`).join('')}</div><span class="cap">16 / 24 / 32 px</span></div>
+    </div>
+  </div>`);
+}
+</script>
+</body>
+</html>

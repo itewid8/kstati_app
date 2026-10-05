@@ -1,6 +1,6 @@
 <lint-module
     format="1"
-    dir="/Users/aleksandrstarikov/want_watch_plans/mobile/modules/kstati-widget/android"
+    dir="/Users/aleksandrstarikov/kstati/mobile/modules/kstati-widget/android"
     name=":kstati-widget"
     type="LIBRARY"
     maven="ru.wwp.app:kstati-widget:1.0.0"
