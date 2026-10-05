@@ -8,7 +8,8 @@ import { ICON, space, useColors } from '@/theme';
 import { Avatar } from './Avatar';
 import { T } from './ui';
 
-/** Шапка: слева название группы со стрелкой (или заголовок), справа «+» и инициал. */
+/** Шапка: слева название группы со стрелкой (или заголовок), справа «+» и иконка */
+
 export function Header({
   title,
   groupSwitch,

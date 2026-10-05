@@ -34,23 +34,13 @@ export default function Reminders() {
         <View style={{ opacity: disabled ? 0.4 : 1 }} pointerEvents={disabled ? 'none' : 'auto'}>
           <SectionLabel>Дела со временем</SectionLabel>
           <View style={{ paddingHorizontal: space.side }}>
-            <T variant="label" muted>
-              Например, «Ужин у родителей» в сб 19:00
-            </T>
             <ReminderEditor value={r.timed} onChange={(timed) => setReminders({ timed })} timed />
           </View>
 
           <SectionLabel>Дела на весь день</SectionLabel>
           <View style={{ paddingHorizontal: space.side }}>
-            <T variant="label" muted>
-              Дела без времени, например «День рождения Лены». У них нет часа начала, поэтому напоминание всегда с точным временем: «в день события в 09:00», «накануне в 20:00».
-            </T>
             <ReminderEditor value={r.allDay} onChange={(allDay) => setReminders({ allDay })} timed={false} />
           </View>
-
-          <T variant="caption" muted style={{ paddingHorizontal: space.side, paddingTop: 16 }}>
-            Это настройки по умолчанию. Для отдельного дела напоминания меняются в его карточке — только для себя или для всех участников группы.
-          </T>
         </View>
       </ScrollView>
     </View>

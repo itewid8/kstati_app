@@ -42,7 +42,8 @@ const code = () => {
   return Array.from({ length: 6 }, () => a[Math.floor(Math.random() * a.length)]).join('');
 };
 
-export type Undo = { label: string; restore: () => void; at: number };
+/** Сообщение внизу экрана: с отменой (после удаления) или просто текст (restore нет) */
+export type Undo = { label: string; restore?: () => void; at: number };
 
 /** Состояние карточки (bottom sheet) */
 export type Card =
@@ -206,6 +207,8 @@ type Actions = {
   setTasksView: (v: TasksView) => void;
   setCalendarPerson: (id: ID | null) => void;
   toggleSection: (key: string) => void;
+  /** Короткое сообщение внизу экрана без кнопки */
+  notice: (label: string) => void;
   clearUndo: () => void;
   setMenu: (m: Menu | null) => void;
   setCalendarDate: (iso: string) => void;
@@ -764,6 +767,7 @@ export const useStore = create<State & Actions>()(
       set({ collapsedSections: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key] });
     },
     clearUndo: () => set({ undo: null }),
+    notice: (label) => set({ undo: { label, at: Date.now() } }),
     setMenu: (menu) => set({ menu }),
     setCalendarDate: (calendarDate) => set({ calendarDate }),
     setAdmin: (groupId, userId, admin) => {

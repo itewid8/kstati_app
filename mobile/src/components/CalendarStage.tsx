@@ -11,7 +11,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
-import { usePalette } from '@/lib/colors';
+import { inkOn, usePalette } from '@/lib/colors';
 import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { font } from '@/theme';
@@ -165,7 +165,7 @@ export function CalendarStage({
                     person && !active ? { opacity: 0.35 } : null,
                   ]}
                 >
-                  <T numberOfLines={1} style={[styles.tabText, { fontFamily: active ? font.semibold : font.medium }]}>
+                  <T numberOfLines={1} style={[styles.tabText, { color: inkOn(pal.of(id)), fontFamily: active ? font.semibold : font.medium }]}>
                     {nameOf(id)}
                   </T>
                 </Pressable>
@@ -181,5 +181,5 @@ export function CalendarStage({
 const styles = StyleSheet.create({
   tabs: { position: 'absolute', right: 0, top: 52, alignItems: 'flex-end', gap: 4 },
   tab: { height: TAB_H, borderTopLeftRadius: 6, borderBottomLeftRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  tabText: { width: TAB_H - 8, textAlign: 'center', fontSize: 11, lineHeight: 14, color: '#FFFFFF', transform: [{ rotate: '-90deg' }] },
+  tabText: { width: TAB_H - 8, textAlign: 'center', fontSize: 11, lineHeight: 14, transform: [{ rotate: '-90deg' }] },
 });

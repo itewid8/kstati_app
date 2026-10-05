@@ -1,5 +1,6 @@
 import * as Haptics from 'expo-haptics';
-import { Mic, X } from '@/components/icons';
+import { Mic, TriangleAlert, X } from '@/components/icons';
+import { useVpnActive } from '../../modules/kstati-net';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -72,6 +73,7 @@ function MicCluster() {
   const phase = useStore((s) => s.voice);
   const recording = phase === 'recording';
   const hold = useStore((s) => s.micMode) === 'hold';
+  const vpn = useVpnActive();
   // Удержание: кнопка едет за пальцем влево; дальше CANCEL_DX — запись отменяется
   const drag = useRef(new Animated.Value(0)).current;
   const cancelled = useRef(false);
@@ -158,9 +160,23 @@ function MicCluster() {
         {recording && <Timer />}
         {recording && <Level />}
       </View>
+      {/* Сервер в России: через VPN он часто недоступен — пока VPN включён, справа треугольник */}
+      {vpn && !recording && phase !== 'processing' && (
+        <Pressable
+          onPress={() => useStore.getState().notice(VPN_TEXT)}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Включён VPN"
+          style={({ pressed }) => [styles.vpn, { backgroundColor: c.background, borderColor: c.border, opacity: pressed ? 0.6 : 1 }]}
+        >
+          <TriangleAlert size={20} strokeWidth={ICON.stroke} color={c.danger} />
+        </Pressable>
+      )}
     </View>
   );
 }
+
+const VPN_TEXT = 'Включён VPN: через него «Кстати» часто не достучится до сервера. Выключите VPN или добавьте приложение в исключения.';
 
 /** Высота плавного затемнения над таб-баром: зона микрофона и ещё немного списка над ней */
 const SCRIM_H = MIC_SIZE + 12 + 96;
@@ -256,6 +272,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   side: { width: SIDE, alignItems: 'flex-end', paddingHorizontal: 12 },
+  vpn: { position: 'absolute', right: 16, width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   mic: {
     width: MIC_SIZE,
     height: MIC_SIZE,

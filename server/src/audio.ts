@@ -12,7 +12,7 @@ const MAX_SEC = 11;
  * Вход пишем во временный файл: у m4a служебный блок бывает в конце, из потока ffmpeg его не прочитает.
  */
 export async function toOggOpus(input: Buffer): Promise<{ ogg: Buffer; seconds: number | null }> {
-  const dir = await mkdtemp(join(tmpdir(), 'wwp-'));
+  const dir = await mkdtemp(join(tmpdir(), 'kstati-'));
   const src = join(dir, 'in');
   await writeFile(src, input);
   try {

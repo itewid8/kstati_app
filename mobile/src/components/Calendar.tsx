@@ -1,8 +1,6 @@
 import { ChevronLeft, ChevronRight } from '@/components/icons';
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View, type RefreshControlProps } from 'react-native';
-// Прокрутка из gesture-handler: щипок слоёв может её перехватить
-import { ScrollView } from 'react-native-gesture-handler';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { tint, usePalette } from '@/lib/colors';
 import {
   addDays,
@@ -25,6 +23,7 @@ import { font, ICON, space, useColors } from '@/theme';
 import { uid } from '@/lib/ids';
 import { MIC_SPACE } from './BottomBar';
 import { CalendarStage } from './CalendarStage';
+import { PullScrollView } from './PullRefresh';
 import { DayHeader, TimeGrid, type GridColumn } from './TimeGrid';
 import { editTask, openPlan, TaskRow, taskMenu } from './TaskRow';
 import { Button, Divider, T } from './ui';
@@ -75,11 +74,8 @@ export function CalendarView({
   onSelect,
   onPinching,
   members = [],
-  refreshControl,
 }: {
   tasks: Task[];
-  /** Обновление потягиванием — для общего листа */
-  refreshControl?: React.ReactElement<RefreshControlProps>;
   /** Участники группы — закладки-фильтр у правого края */
   members?: ID[];
   zoom: Zoom;
@@ -148,7 +144,6 @@ export function CalendarView({
           onSelect={onSelect}
           today={today}
           pinching={pinching}
-          refreshControl={refreshControl}
         />
       </CalendarStage>
     </View>
@@ -166,7 +161,6 @@ const CalendarBody = React.memo(function CalendarBody({
   onSelect,
   today,
   pinching,
-  refreshControl,
 }: {
   tasks: Task[];
   person: ID | null;
@@ -177,25 +171,24 @@ const CalendarBody = React.memo(function CalendarBody({
   onSelect: (iso: string) => void;
   today: string;
   pinching: boolean;
-  refreshControl?: React.ReactElement<RefreshControlProps>;
 }) {
   const byDate = useByDate(tasks);
   const sel = fromISODate(selected);
   if (zoom === 'week') {
     return (
-      <WeekGrid byDate={byDate} selected={selected} person={person} onSelect={onSelect} onZoom={onZoom} pinching={pinching} refreshControl={refreshControl} />
+      <WeekGrid byDate={byDate} selected={selected} person={person} onSelect={onSelect} onZoom={onZoom} pinching={pinching} />
     );
   }
   if (zoom === 'day') {
     return (
       <>
         <WeekStrip byDate={byDate} selected={selected} today={today} onSelect={onSelect} />
-        <DayGrid byDate={byDate} day={selected} person={person} pinching={pinching} refreshControl={refreshControl} />
+        <DayGrid byDate={byDate} day={selected} person={person} pinching={pinching} />
       </>
     );
   }
   return (
-    <ScrollView scrollEnabled={!pinching} refreshControl={refreshControl} contentContainerStyle={{ paddingBottom: MIC_SPACE }}>
+    <PullScrollView scrollEnabled={!pinching} contentContainerStyle={{ paddingBottom: MIC_SPACE }}>
       {zoom === 'month' ? (
         <>
           <MonthGrid byDate={byDate} selected={selected} today={today} onSelect={onSelect} lanes={person ? [person] : people} />
@@ -214,7 +207,7 @@ const CalendarBody = React.memo(function CalendarBody({
           }}
         />
       )}
-    </ScrollView>
+    </PullScrollView>
   );
 });
 
@@ -335,7 +328,6 @@ function WeekGrid({
   onSelect,
   onZoom,
   pinching,
-  refreshControl,
 }: {
   byDate: Map<string, Task[]>;
   selected: string;
@@ -343,7 +335,6 @@ function WeekGrid({
   onSelect: (iso: string) => void;
   onZoom: (z: Zoom) => void;
   pinching: boolean;
-  refreshControl?: React.ReactElement<RefreshControlProps>;
 }) {
   const weekStart = toISODate(startOfWeek(fromISODate(selected)));
   const columns = useMemo<GridColumn[]>(() => {
@@ -370,7 +361,7 @@ function WeekGrid({
       onTask={openTask}
       onLongTask={taskMenu}
       onSlot={(col, m) => newAt(col.day, m, person ? [person] : undefined)}
-      refreshControl={refreshControl}
+     
     />
   );
 }
@@ -381,13 +372,11 @@ function DayGrid({
   day,
   person,
   pinching,
-  refreshControl,
 }: {
   byDate: Map<string, Task[]>;
   day: string;
   person: ID | null;
   pinching: boolean;
-  refreshControl?: React.ReactElement<RefreshControlProps>;
 }) {
   const columns = useMemo<GridColumn[]>(() => [{ key: day, day, header: null, tasks: byDate.get(day) ?? [] }], [byDate, day]);
   return (
@@ -398,7 +387,7 @@ function DayGrid({
       onTask={openTask}
       onLongTask={taskMenu}
       onSlot={(_, m) => newAt(day, m, person ? [person] : undefined)}
-      refreshControl={refreshControl}
+     
     />
   );
 }

@@ -1,9 +1,7 @@
 import { CalendarDays, ChevronDown, List } from '@/components/icons';
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { usePullRefresh } from '@/components/PullRefresh';
-// Прокрутка из gesture-handler: щипок в календаре может её перехватить
-import { ScrollView } from 'react-native-gesture-handler';
+import { PullScreen, PullScrollView } from '@/components/PullRefresh';
 import { useBottomSpace, useTabBarSpace } from '@/components/BottomBar';
 import { CalendarView } from '@/components/Calendar';
 import { emptyDraft } from '@/components/CardSheet';
@@ -19,6 +17,8 @@ import type { DraftItem, Task } from '@/lib/types';
 import { ICON, space, useColors } from '@/theme';
 
 const DONE_KEEP_MS = 30 * 86400000;
+/** Отступ подзадач под планом */
+const PLAN_INDENT = 28;
 
 export default function Tasks() {
   const c = useColors();
@@ -28,8 +28,6 @@ export default function Tasks() {
   const { setCard, setTasksView } = useStore.getState();
   const bottom = useBottomSpace();
   const tabBar = useTabBarSpace();
-  // Два пальца на календаре — прокрутку выключаем, чтобы щипок не превращался в прокрутку
-  const [pinching, setPinching] = useState(false);
   const selected = useStore((st) => st.calendarDate);
   const setSelected = useStore((st) => st.setCalendarDate);
 
@@ -43,8 +41,6 @@ export default function Tasks() {
   }, [groupTasks, month]);
   const calendar = view !== 'list';
 
-  // Во время щипка по календарю обновление выключено, чтобы жест не превращался в «потянуть»
-  const refreshControl = usePullRefresh(!pinching);
 
   const add = () => {
     const d = emptyDraft('task') as Extract<DraftItem, { type: 'task' }>;
@@ -67,35 +63,35 @@ export default function Tasks() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background }}>
-      <Header title={group?.name ?? 'Дела'} groupSwitch onPlus={group ? add : undefined} actions={group ? toggle : null} />
-      {!group ? (
-        <NoGroup />
-      ) : (
-        <>
-          {calendar && <Segmented value={view} onChange={setTasksView} />}
-          {calendar ? (
-            // Календарь тянется до вкладок, микрофон — поверх; месяц и год листаются внутри листа
-            <View style={{ flex: 1, paddingBottom: tabBar }}>
-              <CalendarView
-                tasks={calTasks}
-                zoom={view}
-                onZoom={setTasksView}
-                selected={selected}
-                onSelect={setSelected}
-                onPinching={setPinching}
-                members={group.memberIds}
-                refreshControl={refreshControl}
-              />
-            </View>
-          ) : (
-            <ScrollView contentContainerStyle={{ paddingBottom: bottom }} refreshControl={refreshControl}>
-              <ListView tasks={groupTasks} />
-            </ScrollView>
-          )}
-        </>
-      )}
-    </View>
+    <PullScreen>
+      <View style={{ flex: 1, backgroundColor: c.background }}>
+        <Header title={group?.name ?? 'Дела'} groupSwitch onPlus={group ? add : undefined} actions={group ? toggle : null} />
+        {!group ? (
+          <NoGroup />
+        ) : (
+          <>
+            {calendar && <Segmented value={view} onChange={setTasksView} />}
+            {calendar ? (
+              // Календарь тянется до вкладок, микрофон — поверх; месяц и год листаются внутри листа
+              <View style={{ flex: 1, paddingBottom: tabBar }}>
+                <CalendarView
+                  tasks={calTasks}
+                  zoom={view}
+                  onZoom={setTasksView}
+                  selected={selected}
+                  onSelect={setSelected}
+                  members={group.memberIds}
+                />
+              </View>
+            ) : (
+              <PullScrollView contentContainerStyle={{ paddingBottom: bottom }}>
+                <ListView tasks={groupTasks} />
+              </PullScrollView>
+            )}
+          </>
+        )}
+      </View>
+    </PullScreen>
   );
 }
 
@@ -125,19 +121,35 @@ function Segmented({ value, onChange }: { value: TasksView; onChange: (v: TasksV
   );
 }
 
-/** Список по разделам; раздел сворачивается нажатием на заголовок (по умолчанию свёрнуто «Прошло») */
+/**
+ * Список по разделам; раздел сворачивается нажатием на заголовок (по умолчанию свёрнуто «Прошло»).
+ * План (дело с подзадачами) — одной строкой в разделе своей даты; нажатие раскрывает его, и под ним
+ * отступом видны все подзадачи полноценными строками (отметить, открыть, смахнуть). Отдельно подзадачи не повторяются
+ */
 function ListView({ tasks }: { tasks: Task[] }) {
   const c = useColors();
   const collapsed = useStore((s) => s.collapsedSections);
   const toggleSection = useStore((s) => s.toggleSection);
-  const sections = useMemo(() => {
+  const [openPlans, setOpenPlans] = useState<Set<string>>(() => new Set());
+  const togglePlan = (id: string) =>
+    setOpenPlans((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const { sections, kidsOf } = useMemo(() => {
     const now = new Date();
     // Выполненные остаются на своём месте (затемнены) и исчезают через 30 дней.
     // У серии — один ближайший раз (и сегодняшний, если уже отмечен)
-    // Все дела, в том числе подзадачи планов — отдельными строками
-    const visible = listInstances(tasks, toISODate(now))
+    const all = listInstances(tasks, toISODate(now))
       .filter((t) => !t.doneAt || now.getTime() - new Date(t.doneAt).getTime() < DONE_KEEP_MS)
       .sort((a, b) => sortKey(a.date, a.time).localeCompare(sortKey(b.date, b.time)));
+    // Подзадачи — под своим планом (если план есть в группе)
+    const ids = new Set(tasks.map((t) => t.id));
+    const kids = new Map<string, Task[]>();
+    for (const t of all) if (t.parentId && ids.has(t.parentId)) kids.set(t.parentId, [...(kids.get(t.parentId) ?? []), t]);
+    const visible = all.filter((t) => !t.parentId || !ids.has(t.parentId));
     const by = new Map<Section, Task[]>();
     for (const t of visible) {
       const s = sectionFor(t.date, t.time, now);
@@ -145,7 +157,7 @@ function ListView({ tasks }: { tasks: Task[] }) {
     }
     // «Без даты» — новые сверху
     by.get('none')?.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return SECTION_ORDER.filter((s) => by.has(s)).map((s) => ({ key: s, items: by.get(s)! }));
+    return { sections: SECTION_ORDER.filter((s) => by.has(s)).map((s) => ({ key: s, items: by.get(s)! })), kidsOf: kids };
   }, [tasks]);
 
   return (
@@ -178,12 +190,30 @@ function ListView({ tasks }: { tasks: Task[] }) {
               </View>
             </Pressable>
             {open &&
-              s.items.map((t, i) => (
-                <ListItem key={taskKey(t)}>
-                  {i > 0 && <Divider inset={space.side + 36} />}
-                  <TaskRow task={t} past={s.key === 'past'} markDelay={0} />
-                </ListItem>
-              ))}
+              s.items.map((t, i) => {
+                const kids = kidsOf.get(t.id);
+                const expanded = openPlans.has(t.id);
+                return (
+                  <ListItem key={taskKey(t)}>
+                    {i > 0 && <Divider inset={space.side + 36} />}
+                    <TaskRow
+                      task={t}
+                      past={s.key === 'past'}
+                      markDelay={0}
+                      expanded={expanded}
+                      onToggle={kids ? () => togglePlan(t.id) : undefined}
+                    />
+                    {kids &&
+                      expanded &&
+                      kids.map((k) => (
+                        <ListItem key={taskKey(k)}>
+                          <Divider inset={space.side + PLAN_INDENT + 36} />
+                          <TaskRow task={k} past={sectionFor(k.date, k.time) === 'past'} markDelay={0} indent={PLAN_INDENT} />
+                        </ListItem>
+                      ))}
+                  </ListItem>
+                );
+              })}
           </ListItem>
         );
       })}

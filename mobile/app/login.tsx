@@ -11,9 +11,12 @@ import { space, useColors } from '@/theme';
 
 type Mode = 'login' | 'register' | 'reset';
 
+/** Вход через VK ID отложен: кнопка вернётся, когда настроим приложение в VK */
+const VK_LOGIN = false;
+
 /**
  * Вход и регистрация.
- *   Вход: почта + пароль, или VK ID одной кнопкой.
+ *   Вход: почта + пароль (VK ID — за флагом VK_LOGIN).
  *   Регистрация: почта → код из письма + имя + пароль.
  *   Забыли пароль: почта → код из письма + новый пароль.
  * Без сервера (демо) — любые данные подходят.
@@ -173,7 +176,7 @@ export default function Login() {
           )}
         </View>
 
-        {!DEMO && mode === 'login' && (
+        {VK_LOGIN && !DEMO && mode === 'login' && (
           <View style={{ marginTop: 24, gap: 12 }}>
             <View style={styles.or}>
               <View style={[styles.line, { backgroundColor: c.border }]} />

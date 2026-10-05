@@ -7,7 +7,10 @@ import { Button, T } from './ui';
 
 const UNDO_MS = 5000;
 
-/** «Удалено · Отменить» — 5 секунд после удаления; смахнуть влево (или вправо) — убрать сразу */
+/**
+ * «Удалено · Отменить» — 5 секунд после удаления; так же — короткие сообщения без кнопки.
+ * Смахнуть влево (или вправо) — убрать сразу
+ */
 export function UndoToast() {
   const c = useColors();
   const undo = useStore((s) => s.undo);
@@ -56,7 +59,7 @@ export function UndoToast() {
       <T color={c.onPrimary} style={{ flex: 1 }}>
         {undo.label}
       </T>
-      <Button kind="text" title="Отменить" color={c.onPrimary} onPress={undo.restore} style={{ height: 40 }} />
+      {undo.restore ? <Button kind="text" title="Отменить" color={c.onPrimary} onPress={undo.restore} style={{ height: 40 }} /> : null}
     </Animated.View>
   );
 }
@@ -70,6 +73,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingLeft: 16,
     paddingRight: 12,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
   },

@@ -41,7 +41,7 @@ yc ydb database get kstati --format json | jq -r .document_api_endpoint   # → 
 Создать таблицы (с Mac, ключи из шага 1):
 
 ```bash
-cd ~/want_watch_plans/server
+cd ~/kstati/server
 YDB_DOCAPI_ENDPOINT=… AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=… npm run tables
 # ✓ YDB отвечает, таблицы готовы
 ```
@@ -74,7 +74,7 @@ yc serverless container get kstati-api --format json | jq -r .url # → PUBLIC_U
 ## 5. Выкладка
 
 ```bash
-cd ~/want_watch_plans/server
+cd ~/kstati/server
 cp deploy.env.example deploy.env && open -e deploy.env   # заполнить ID из шагов 1–4
 chmod +x scripts/deploy.sh
 ./scripts/deploy.sh                                      # сборка, загрузка, новая ревизия, проверка /health
