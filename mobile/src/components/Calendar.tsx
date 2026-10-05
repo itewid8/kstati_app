@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from '@/components/icons';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View, type RefreshControlProps } from 'react-native';
 // Прокрутка из gesture-handler: щипок слоёв может её перехватить
 import { ScrollView } from 'react-native-gesture-handler';
@@ -18,17 +18,19 @@ import {
   WEEKDAYS_SHORT,
   weekTitle,
 } from '@/lib/dates';
-import { daysOf, fromMin, minutesOn, peopleOf } from '@/lib/span';
+import { daysOf, fromMin, isLong, minutesOn, peopleOf } from '@/lib/span';
 import { useStore } from '@/lib/store';
 import type { ID, Task } from '@/lib/types';
 import { font, ICON, space, useColors } from '@/theme';
 import { uid } from '@/lib/ids';
-import { CalendarLayers } from './CalendarLayers';
+import { MIC_SPACE } from './BottomBar';
+import { CalendarStage } from './CalendarStage';
 import { DayHeader, TimeGrid, type GridColumn } from './TimeGrid';
 import { editTask, openPlan, TaskRow, taskMenu } from './TaskRow';
 import { Button, Divider, T } from './ui';
 
 export type Zoom = 'day' | 'week' | 'month' | 'year';
+const ZOOMS: Zoom[] = ['day', 'week', 'month', 'year'];
 const MONTH_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
@@ -60,10 +62,10 @@ function useByDate(tasks: Task[]) {
 
 /**
  * Календарь дел: день, неделя, месяц, год — и слои людей поверх любого из них.
- *   Неделя — семь колонок, раскрыт выбранный день, остальные свёрнуты в полоски; нажатие на свёрнутый — раскрыть,
- *   на заголовок раскрытого — открыть день целиком.
- *   Слои (CalendarLayers): общий лист или лист каждого человека; щипок склеивает и раскладывает.
- *   Свайп влево/вправо — соседний период.
+ *   Неделя — семь одинаковых дней; дела длиннее суток — полосой сверху и ярлыками в день начала и конца.
+ *   Нажатие на заголовок дня — открыть его.
+ *   План длиннее суток — только полосой сверху: его подзадачи в календаре не показываются (они в самом плане).
+ *   Закладки людей справа — показать дела одного человека; щипок — крупнее/мельче период; свайп — соседний период.
  */
 export function CalendarView({
   tasks,
@@ -78,7 +80,7 @@ export function CalendarView({
   tasks: Task[];
   /** Обновление потягиванием — для общего листа */
   refreshControl?: React.ReactElement<RefreshControlProps>;
-  /** Участники группы — у каждого свой лист */
+  /** Участники группы — закладки-фильтр у правого края */
   members?: ID[];
   zoom: Zoom;
   onZoom: (z: Zoom) => void;
@@ -95,9 +97,23 @@ export function CalendarView({
     () => (meId && members.includes(meId) ? [meId, ...members.filter((id) => id !== meId)] : members),
     [key, meId], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const perPerson = useMemo(() => new Map(people.map((id) => [id, tasks.filter((t) => peopleOf(t).includes(id))])), [tasks, people]);
+  // Подзадачи плана длиннее суток в календаре не показываем: план — полосой сверху, подробности — в нём самом
+  const shown = useMemo(() => {
+    const long = new Set(tasks.filter((t) => isLong(t)).map((t) => t.id));
+    return long.size ? tasks.filter((t) => !t.parentId || !long.has(t.parentId)) : tasks;
+  }, [tasks]);
+  // Закладка человека — только его дела
+  const person = useStore((s) => s.calendarPerson);
+  const setPerson = useStore((s) => s.setCalendarPerson);
+  const filter = person && people.includes(person) ? person : null;
+  const visible = useMemo(() => (filter ? shown.filter((t) => peopleOf(t).includes(filter)) : shown), [shown, filter]);
+  const [pinching, setPinching] = useState(false);
 
   const go = (dir: 1 | -1) => onSelect(shift(selected, zoom, dir));
+  const zoomBy = (step: 1 | -1) => {
+    const next = ZOOMS[ZOOMS.indexOf(zoom) + step];
+    if (next) onZoom(next);
+  };
   const title =
     zoom === 'day'
       ? cap(shortDate(selected))
@@ -110,31 +126,36 @@ export function CalendarView({
   return (
     <View style={{ flex: 1 }}>
       <NavRow title={title} onPrev={() => go(-1)} onNext={() => go(1)} onToday={() => onSelect(today)} />
-      <CalendarLayers
-        members={people.length > 1 ? people : []}
+      <CalendarStage
+        members={people}
+        person={filter}
+        onPerson={setPerson}
         period={`${zoom}|${selected}`}
         onSwipe={go}
-        onPinching={onPinching}
-        render={(person, pinching) => (
-          <CalendarBody
-            tasks={person ? (perPerson.get(person) ?? []) : tasks}
-            person={person}
-            people={people}
-            zoom={zoom}
-            onZoom={onZoom}
-            selected={selected}
-            onSelect={onSelect}
-            today={today}
-            pinching={pinching}
-            refreshControl={person ? undefined : refreshControl}
-          />
-        )}
-      />
+        onZoomStep={zoomBy}
+        onPinching={(v) => {
+          setPinching(v);
+          onPinching?.(v);
+        }}
+      >
+        <CalendarBody
+          tasks={visible}
+          person={filter}
+          people={people}
+          zoom={zoom}
+          onZoom={onZoom}
+          selected={selected}
+          onSelect={onSelect}
+          today={today}
+          pinching={pinching}
+          refreshControl={refreshControl}
+        />
+      </CalendarStage>
     </View>
   );
 }
 
-/** Один лист календаря: все дела (person = null) или дела одного человека */
+/** Содержимое масштаба: все дела (person = null) или дела одного человека */
 const CalendarBody = React.memo(function CalendarBody({
   tasks,
   person,
@@ -162,7 +183,7 @@ const CalendarBody = React.memo(function CalendarBody({
   const sel = fromISODate(selected);
   if (zoom === 'week') {
     return (
-      <WeekAccordion byDate={byDate} selected={selected} person={person} onSelect={onSelect} onZoom={onZoom} pinching={pinching} refreshControl={refreshControl} />
+      <WeekGrid byDate={byDate} selected={selected} person={person} onSelect={onSelect} onZoom={onZoom} pinching={pinching} refreshControl={refreshControl} />
     );
   }
   if (zoom === 'day') {
@@ -174,7 +195,7 @@ const CalendarBody = React.memo(function CalendarBody({
     );
   }
   return (
-    <ScrollView scrollEnabled={!pinching} refreshControl={refreshControl} contentContainerStyle={{ paddingBottom: 8 }}>
+    <ScrollView scrollEnabled={!pinching} refreshControl={refreshControl} contentContainerStyle={{ paddingBottom: MIC_SPACE }}>
       {zoom === 'month' ? (
         <>
           <MonthGrid byDate={byDate} selected={selected} today={today} onSelect={onSelect} lanes={person ? [person] : people} />
@@ -306,11 +327,8 @@ function newAt(day: string, minutes: number, people?: ID[]) {
   });
 }
 
-/**
- * Неделя сеткой: раскрыт выбранный день, остальные шесть — узкие колонки, где дела — полоски своего цвета.
- * Нажатие на узкую колонку раскрывает её, на заголовок раскрытой — день целиком
- */
-function WeekAccordion({
+/** Неделя сеткой: семь одинаковых дней; нажатие на заголовок дня открывает его целиком */
+function WeekGrid({
   byDate,
   selected,
   person,
@@ -327,29 +345,30 @@ function WeekAccordion({
   pinching: boolean;
   refreshControl?: React.ReactElement<RefreshControlProps>;
 }) {
+  const weekStart = toISODate(startOfWeek(fromISODate(selected)));
   const columns = useMemo<GridColumn[]>(() => {
-    const start = startOfWeek(fromISODate(selected));
+    const start = fromISODate(weekStart);
     return Array.from({ length: 7 }, (_, i) => {
       const d = addDays(start, i);
       const iso = toISODate(d);
-      const compact = iso !== selected;
       return {
         key: iso,
         day: iso,
-        compact,
-        header: <DayHeader date={d} label={WEEKDAYS_SHORT[i]} compact={compact} />,
-        onHeader: compact ? undefined : () => onZoom('day'),
+        header: <DayHeader date={d} label={WEEKDAYS_SHORT[i]} />,
+        onHeader: () => {
+          onSelect(iso);
+          onZoom('day');
+        },
         tasks: byDate.get(iso) ?? [],
       };
     });
-  }, [byDate, selected, onZoom]);
+  }, [byDate, weekStart, onSelect, onZoom]);
   return (
     <TimeGrid
       columns={columns}
       scrollEnabled={!pinching}
       onTask={openTask}
       onLongTask={taskMenu}
-      onColumn={(col) => onSelect(col.day)}
       onSlot={(col, m) => newAt(col.day, m, person ? [person] : undefined)}
       refreshControl={refreshControl}
     />

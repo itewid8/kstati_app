@@ -3,23 +3,21 @@
  * Вся сетка помещается на экран: часы — от 7 до 22 (шире, если дела раньше или позже), высота часа — по месту.
  *   Дело — ярлык цвета своего человека: цветной кончик слева и полупрозрачное тело с описанием
  *   (название, от и до, чьё, описание — сколько влезет). У общего дела — цвета всех его людей.
- *   Узкая колонка (свёрнутый день недели): ярлыки сужаются в цветные полоски на своём времени.
- *   Ширина колонок меняется плавно: раскрытый день растёт, остальные сжимаются.
- *   Дела без времени и многодневные без времени — полосами над сеткой. План — там же полосой с названием
- *   и «от – до», а в сетке — подложкой своего цвета на своё время (начало и конец отчёркнуты), подзадачи — внутри.
- * Нажатие на пустое место раскрытой колонки — новое дело на это время, на узкую — раскрыть её;
- * долгое нажатие на дело — его меню.
+ *   Дело на всю ширину колонки; пересекающиеся по времени — делят её на дорожки по людям; дни через один чуть другого тона.
+ *   Дела без времени — полосами над сеткой. Дела длиннее суток — тоже полосой через свои дни, а в день начала
+ *   и день конца ещё и ярлыком на свою часть дня; в днях между ними — только полоса.
+ *   План не длиннее суток — подложкой своего цвета на своё время (начало и конец скруглены), подзадачи — внутри.
+ * Нажатие на пустое место — новое дело на это время; долгое нажатие на дело — его меню.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View, type RefreshControlProps } from 'react-native';
 // Прокрутка из gesture-handler: щипок слоёв календаря может её перехватить
 import { ScrollView } from 'react-native-gesture-handler';
-import Animated, { useReducedMotion } from 'react-native-reanimated';
 import { tint, usePalette } from '@/lib/colors';
 import { toISODate } from '@/lib/dates';
-import { isMulti, minutesOn, peopleOf, spanLabel, spanParts } from '@/lib/span';
-import { useStore } from '@/lib/store';
-import type { Task } from '@/lib/types';
+import { isLong, isMulti, lastDay, minutesOn, peopleOf, spanLabel, spanParts } from '@/lib/span';
+import { useCurrentGroup, useStore } from '@/lib/store';
+import type { ID, Task } from '@/lib/types';
 import { font, useColors } from '@/theme';
 import { T } from './ui';
 
@@ -29,10 +27,10 @@ const MIN_HOUR_H = 16;
 const HEAD_H = 48;
 const BAR_H = 18;
 const MAX_ROWS = 3;
-/** Свёрнутая колонка: в ней только цветные полоски */
-export const COMPACT_W = 22;
-const STRIP_W = 5;
 const TIP_W = 3;
+/** Ярлык дела, которое целиком вне видимых часов */
+const STUB_H = 16;
+const BAND_R = 8;
 
 export type GridColumn = {
   key: string;
@@ -41,12 +39,12 @@ export type GridColumn = {
   header: React.ReactNode;
   onHeader?: () => void;
   tasks: Task[];
-  /** Свёрнута: дела — полосками, нажатие раскрывает (onColumn) */
-  compact?: boolean;
 };
 
 type Kind = 'block' | 'band' | 'strip';
 type Placed = { task: Task; start: number; end: number; lane: number; lanes: number };
+/** Кусок ярлыка в колонке: доля ширины слева (x) и ширина (w), от 0 до 1 */
+type Piece = { task: Task; start: number; end: number; x: number; w: number; colors: 'all' | ID };
 type Seg = { task: Task; c0: number; c1: number; row: number; label: string };
 
 const keyOf = (t: Task) => `${t.id}@${t.occ ?? ''}`;
@@ -72,6 +70,61 @@ function lanes(items: { task: Task; start: number; end: number }[]): Placed[] {
     clusterEnd = Math.max(clusterEnd, x.end);
   }
   if (cluster.length) flush();
+  return out;
+}
+
+/**
+ * Раскладка ярлыков дня. Дело, которое ни с чем не пересекается по времени, — на всю ширину колонки.
+ * Пересекающиеся дела (кластер) делят ширину на дорожки по людям этого кластера — двое пополам, трое на трети,
+ * в порядке группы. Дело человека занимает всю его дорожку; его дела пересекаются между собой — дорожка делится ещё раз.
+ * Общее дело — одним ярлыком через дорожки своих людей, если они рядом и ни с чем там не пересекаются;
+ * иначе — куском в каждой своей дорожке.
+ */
+function byPeople(items: { task: Task; start: number; end: number }[], order: (id: ID) => number): Piece[] {
+  const sorted = [...items].sort((a, b) => a.start - b.start || b.end - a.end);
+  const out: Piece[] = [];
+  let cluster: typeof items = [];
+  let clusterEnd = -1;
+  for (const x of sorted) {
+    if (cluster.length && x.start >= clusterEnd) {
+      out.push(...clusterPieces(cluster, order));
+      cluster = [];
+    }
+    cluster.push(x);
+    clusterEnd = Math.max(clusterEnd, x.end);
+  }
+  if (cluster.length) out.push(...clusterPieces(cluster, order));
+  return out;
+}
+
+/** Дорожки по людям внутри одного кластера пересекающихся дел */
+function clusterPieces(items: { task: Task; start: number; end: number }[], order: (id: ID) => number): Piece[] {
+  if (items.length === 1) return [{ ...items[0], x: 0, w: 1, colors: 'all' }];
+  const people = [...new Set(items.flatMap((b) => peopleOf(b.task)))].sort((a, b) => order(a) - order(b));
+  const n = Math.max(1, people.length);
+  const inLane = people.map((id) => {
+    const placed = lanes(items.filter((b) => peopleOf(b.task).includes(id)));
+    return new Map(placed.map((p) => [keyOf(p.task), p]));
+  });
+  const out: Piece[] = [];
+  for (const b of items) {
+    const ks = peopleOf(b.task)
+      .map((id) => people.indexOf(id))
+      .filter((k) => k >= 0)
+      .sort((x, y) => x - y);
+    if (!ks.length) continue;
+    const key = keyOf(b.task);
+    const together = ks[ks.length - 1] - ks[0] === ks.length - 1 && ks.every((k) => inLane[k].get(key)?.lanes === 1);
+    if (together) {
+      out.push({ ...b, x: ks[0] / n, w: ks.length / n, colors: 'all' });
+      continue;
+    }
+    for (const k of ks) {
+      const p = inLane[k].get(key);
+      if (!p) continue;
+      out.push({ ...b, x: (k + p.lane / p.lanes) / n, w: 1 / (n * p.lanes), colors: ks.length > 1 ? 'all' : people[k] });
+    }
+  }
   return out;
 }
 
@@ -105,7 +158,6 @@ export function TimeGrid({
   headless,
   scrollEnabled = true,
   onSlot,
-  onColumn,
   onTask,
   onLongTask,
   refreshControl,
@@ -121,17 +173,15 @@ export function TimeGrid({
   /** Прокрутку часов выключают на время щипка */
   scrollEnabled?: boolean;
   onSlot?: (col: GridColumn, minutes: number) => void;
-  /** Нажатие на свёрнутую колонку */
-  onColumn?: (col: GridColumn) => void;
   onTask: (t: Task) => void;
   onLongTask?: (t: Task) => void;
   refreshControl?: React.ReactElement<RefreshControlProps>;
 }) {
   const c = useColors();
   const pal = usePalette();
-  const reduced = useReducedMotion();
   const users = useStore((s) => s.users);
   const all = useStore((s) => s.tasks);
+  const memberIds = useCurrentGroup()?.memberIds;
   const [width, setWidth] = useState(0);
   const [gridH, setGridH] = useState(0);
   const today = toISODate(new Date());
@@ -142,6 +192,15 @@ export function TimeGrid({
   }, []);
 
   const parents = useMemo(() => new Set(all.filter((t) => t.parentId).map((t) => t.parentId!)), [all]);
+
+  // Порядок дорожек — порядок участников группы
+  const order = useMemo(() => {
+    const ids = memberIds ?? [];
+    return (id: ID) => {
+      const i = ids.indexOf(id);
+      return i < 0 ? ids.length : i;
+    };
+  }, [memberIds]);
 
   // Что где рисуется: ярлык, подложка плана или полоса сверху
   const laid = useMemo(() => {
@@ -157,6 +216,15 @@ export function TimeGrid({
       const bands: { task: Task; start: number; end: number }[] = [];
       const strip: Task[] = [];
       for (const t of col.tasks) {
+        if (isLong(t)) {
+          // Длиннее суток: полоса сверху через все дни, а в день начала и день конца — ещё и ярлык
+          // на свою часть («с 12:00» и «до 12:00»), чтобы было видно, когда начинается и кончается
+          strip.push(t);
+          const m = minutesOn(t, col.day);
+          const edge = !!m && ((col.day === t.date && m[0] > 0) || (col.day === lastDay(t) && m[1] < 1440));
+          if (m && edge && !parents.has(t.id)) blocks.push({ task: t, start: m[0], end: Math.max(m[1], m[0] + 15) });
+          continue;
+        }
         const k = kind(t, col.day);
         const m = minutesOn(t, col.day);
         if (k === 'block' && m) blocks.push({ task: t, start: m[0], end: Math.max(m[1], m[0] + 15) });
@@ -166,15 +234,17 @@ export function TimeGrid({
           strip.push(t);
         } else strip.push(t);
       }
-      return { blocks: lanes(blocks), bands, strip };
+      return { blocks: byPeople(blocks, order), bands, strip };
     });
-  }, [columns, parents]);
+  }, [columns, parents, order]);
 
   // Часы: по делам и планам, но не уже 7–22.
   // У многодневных в счёт идут только настоящие начало и конец, середина (весь день) упирается в края сетки
   const spans = laid.flatMap((l) => [...l.blocks, ...l.bands]);
-  const starts = spans.filter((b) => b.start > 0 || !isMulti(b.task)).map((b) => b.start);
-  const ends = spans.filter((b) => b.end < 1440 || !isMulti(b.task)).map((b) => b.end);
+  // Кусок, который начался вчера и кончается утром (22:00–05:00), — сетка начинается за час до его конца,
+  // чтобы было видно настоящее время конца; так же с куском, который уходит за полночь
+  const starts = spans.map((b) => (b.start > 0 || !isMulti(b.task) ? b.start : Math.max(0, b.end - 60)));
+  const ends = spans.map((b) => (b.end < 1440 || !isMulti(b.task) ? b.end : Math.min(1440, b.start + 60)));
   const fromHour = fixedFrom ?? Math.max(0, Math.min(7, ...starts.map((m) => Math.floor(m / 60))));
   const toHour = fixedTo ?? Math.min(24, Math.max(22, ...ends.map((m) => Math.ceil(m / 60))));
   const hours = toHour - fromHour;
@@ -183,21 +253,14 @@ export function TimeGrid({
 
   // Ширины: свёрнутые — узкие, раскрытые делят остальное поровну
   const avail = Math.max(0, width - LABEL_W);
-  const compactN = columns.filter((col) => col.compact).length;
-  const openN = columns.length - compactN;
-  const openW = openN ? Math.max(minColumnWidth ?? 0, (avail - compactN * COMPACT_W) / openN) : 0;
-  const widths = columns.map((col) => (col.compact ? COMPACT_W : openW));
+  const colW = columns.length ? Math.max(minColumnWidth ?? 0, avail / columns.length) : 0;
+  const widths = columns.map(() => colW);
   const lefts: number[] = [];
   const total = widths.reduce((acc, w) => {
     lefts.push(acc);
     return acc + w;
   }, 0);
   const wide = total > avail + 1;
-  const move = {
-    transitionProperty: ['left', 'width'] as ('left' | 'width')[],
-    transitionDuration: reduced ? 0 : 220,
-    transitionTimingFunction: 'ease-in-out' as const,
-  };
 
   // Полосы сверху: одно дело в соседних колонках — одна полоса через них
   const { segs, hidden } = useMemo(() => {
@@ -217,7 +280,7 @@ export function TimeGrid({
         if (j === cols.length || cols[j] !== cols[j - 1] + 1) {
           const first = s === cols[0];
           const time = first && task.time && isMulti(task) ? `${task.time} ` : '';
-          const label = parents.has(task.id) ? `${task.title} · ${spanLabel(task)}` : `${time}${task.title}`;
+          const label = parents.has(task.id) || isLong(task) ? `${task.title} · ${spanLabel(task)}` : `${time}${task.title}`;
           list.push({ task, c0: s, c1: cols[j - 1], row: 0, label });
           s = cols[j];
         }
@@ -282,15 +345,14 @@ export function TimeGrid({
       {!headless && (
       <View style={[styles.headRow, { borderBottomColor: c.border }]}>
         {columns.map((col, i) => (
-          <Animated.View key={col.key} style={[styles.abs, { top: 0, bottom: 0, left: LABEL_W + lefts[i], width: widths[i] }, move]}>
-            <Pressable
-              disabled={!col.onHeader && !(col.compact && onColumn)}
-              onPress={col.compact && onColumn ? () => onColumn(col) : col.onHeader}
-              style={styles.head}
-            >
+          <View
+            key={col.key}
+            style={[styles.abs, { top: 0, bottom: 0, left: LABEL_W + lefts[i], width: widths[i] }, i % 2 === 1 && { backgroundColor: c.surface }]}
+          >
+            <Pressable disabled={!col.onHeader} onPress={col.onHeader} style={styles.head}>
               {col.header}
             </Pressable>
-          </Animated.View>
+          </View>
         ))}
       </View>
       )}
@@ -300,13 +362,11 @@ export function TimeGrid({
         <View style={{ height: rows * (BAR_H + 2) + 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border }}>
           {segs.map((sg) => {
             const colors = pal.task(sg.task);
-            const narrow = widths.slice(sg.c0, sg.c1 + 1).every((w) => w <= COMPACT_W);
             return (
-              <Animated.View
+              <View
                 key={`${keyOf(sg.task)}-${sg.c0}`}
                 style={[
                   styles.abs,
-                  move,
                   {
                     top: 2 + sg.row * (BAR_H + 2),
                     height: BAR_H,
@@ -316,28 +376,18 @@ export function TimeGrid({
                   sg.task.doneAt ? { opacity: 0.45 } : null,
                 ]}
               >
-                <Pressable {...press(sg.task)} style={[styles.bar, narrow && { paddingLeft: 0 }]}>
-                  {narrow ? (
-                    <View style={[StyleSheet.absoluteFill, { flexDirection: 'row', margin: 6, marginHorizontal: 3, gap: 1 }]}>
-                      {colors.map((col, k) => (
-                        <View key={k} style={{ flex: 1, borderRadius: 2, backgroundColor: col }} />
-                      ))}
-                    </View>
-                  ) : (
-                    <>
-                      <Body colors={colors} alpha={pal.bodyAlpha} />
-                      <Tip colors={colors} />
-                      <T style={[styles.barText, { color: c.text }]} numberOfLines={1}>
-                        {sg.label}
-                      </T>
-                    </>
-                  )}
+                <Pressable {...press(sg.task)} style={styles.bar}>
+                  <Body colors={colors} alpha={pal.bodyAlpha} />
+                  <Tip colors={colors} />
+                  <T style={[styles.barText, { color: c.text }]} numberOfLines={1}>
+                    {sg.label}
+                  </T>
                 </Pressable>
-              </Animated.View>
+              </View>
             );
           })}
           {hidden.map((n, i) =>
-            n && !columns[i].compact ? (
+            n ? (
               <Pressable
                 key={`more-${i}`}
                 onPress={columns[i].onHeader}
@@ -360,6 +410,16 @@ export function TimeGrid({
           showsVerticalScrollIndicator={false}
         >
           <View style={{ height }}>
+            {/* Дни через один чуть другого тона — видно, где какой день; под линиями часов */}
+            {columns.map((col, ci) =>
+              ci % 2 === 1 ? (
+                <View
+                  key={`bg-${col.key}`}
+                  pointerEvents="none"
+                  style={[styles.abs, { top: 0, height, left: LABEL_W + lefts[ci], width: widths[ci], backgroundColor: c.surface }]}
+                />
+              ) : null,
+            )}
             {Array.from({ length: hours }, (_, i) => {
               // Подписи часов — через один, если час низкий
               const every = hourH < 22 ? 2 : 1;
@@ -374,22 +434,18 @@ export function TimeGrid({
             })}
             {columns.map((col, ci) => {
               const l = laid[ci];
-              const compact = !!col.compact;
-              const inset = l.bands.length && !compact ? 5 : 0;
+              const inset = l.bands.length ? 5 : 0;
               return (
-                <Animated.View
+                <View
                   key={col.key}
                   style={[
                     styles.abs,
-                    move,
                     { top: 0, height, left: LABEL_W + lefts[ci], width: widths[ci], borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: c.border },
-                    compact && { backgroundColor: c.surface },
                   ]}
                 >
                   <Pressable
                     style={StyleSheet.absoluteFill}
                     onPress={(e) => {
-                      if (compact) return onColumn?.(col);
                       if (!onSlot) return;
                       const min = fromHour * 60 + Math.floor((e.nativeEvent.locationY / hourH) * 2) * 30;
                       onSlot(col, Math.min(min, 23 * 60 + 30));
@@ -401,6 +457,9 @@ export function TimeGrid({
                     const bottom = Math.min(height, y(b.end));
                     if (bottom <= top) return null;
                     const col0 = pal.task(b.task)[0];
+                    // Начало и конец плана отчёркнуты линией и скруглены; середина — прямая
+                    const starts = b.start > 0 && y(b.start) >= 0;
+                    const ends = b.end < 1440 && y(b.end) <= height;
                     return (
                       <Pressable
                         key={`band-${keyOf(b.task)}`}
@@ -411,9 +470,13 @@ export function TimeGrid({
                             top,
                             height: bottom - top,
                             backgroundColor: tint(col0, pal.bodyAlpha * 0.45),
-                            borderColor: col0,
-                            borderTopWidth: b.start > 0 && y(b.start) >= 0 ? 2 : 0,
-                            borderBottomWidth: b.end < 1440 && y(b.end) <= height ? 2 : 0,
+                            borderColor: tint(col0, 0.45),
+                            borderTopWidth: starts ? 2 : 0,
+                            borderBottomWidth: ends ? 2 : 0,
+                            borderTopLeftRadius: starts ? BAND_R : 0,
+                            borderTopRightRadius: starts ? BAND_R : 0,
+                            borderBottomLeftRadius: ends ? BAND_R : 0,
+                            borderBottomRightRadius: ends ? BAND_R : 0,
                           },
                         ]}
                       />
@@ -422,43 +485,19 @@ export function TimeGrid({
                   <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { left: inset }]}>
                     {l.blocks.map((p) => {
                       // Обрезаем по краям сетки (многодневное утром и вечером выходит за видимые часы)
-                      const top = Math.max(0, y(p.start));
-                      const bottom = Math.min(height, y(p.end));
-                      if (bottom <= 0 || top >= height) return null;
+                      // Кусок целиком до или после видимых часов (ночь после полуночи) — короткий ярлык у края, чтобы не пропал
+                      let top = Math.max(0, y(p.start));
+                      let bottom = Math.min(height, y(p.end));
+                      if (bottom <= 0) [top, bottom] = [0, STUB_H];
+                      else if (top >= height) [top, bottom] = [height - STUB_H, height];
                       const h = Math.max(14, bottom - top - 1);
-                      const colors = pal.task(p.task);
+                      const colors = p.colors === 'all' ? pal.task(p.task) : [pal.of(p.colors)];
                       const done = !!p.task.doneAt;
-                      if (compact) {
-                        // Свёрнутый день: ярлык сужается в полоски своего цвета
-                        return (
-                          <View
-                            key={keyOf(p.task)}
-                            pointerEvents="none"
-                            style={[styles.stripWrap, { top: top + 0.5, height: h, left: 3 + Math.min(p.lane, 2) * 6 }, done && { opacity: 0.45 }]}
-                          >
-                            {colors.slice(0, 2).map((col, k) => (
-                              <View key={k} style={[styles.strip, { backgroundColor: col }]} />
-                            ))}
-                          </View>
-                        );
-                      }
-                      const w = (widths[ci] - inset) / p.lanes;
-                      const d = describe(p.task, h, w - 2);
+                      const k = `${keyOf(p.task)}@${p.x}`;
+                      const place = { top: top + 0.5, height: h, left: `${p.x * 100}%` as const, width: `${p.w * 100}%` as const };
+                      const d = describe(p.task, h, (widths[ci] - inset) * p.w - 2);
                       return (
-                        <Pressable
-                          key={keyOf(p.task)}
-                          {...press(p.task)}
-                          style={[
-                            styles.label,
-                            {
-                              top: top + 0.5,
-                              height: h,
-                              left: `${(p.lane / p.lanes) * 100}%`,
-                              width: `${100 / p.lanes}%`,
-                            },
-                            done && { opacity: 0.45 },
-                          ]}
-                        >
+                        <Pressable key={k} {...press(p.task)} style={[styles.label, place, done && { opacity: 0.45 }]}>
                           <View style={styles.labelIn}>
                             <Body colors={colors} alpha={pal.bodyAlpha} />
                             <Tip colors={colors} />
@@ -484,7 +523,7 @@ export function TimeGrid({
                       style={[styles.now, { top: y(now.getHours() * 60 + now.getMinutes()), backgroundColor: c.event }]}
                     />
                   ) : null}
-                </Animated.View>
+                </View>
               );
             })}
           </View>
@@ -507,22 +546,10 @@ export function TimeGrid({
   );
 }
 
-/** Заголовок колонки дня: «пн» и число, сегодня — выделено. Свёрнутый — мельче */
-export function DayHeader({ date, label, compact }: { date: Date; label: string; compact?: boolean }) {
+/** Заголовок колонки дня: «пн» и число, сегодня — выделено */
+export function DayHeader({ date, label }: { date: Date; label: string }) {
   const c = useColors();
   const isToday = toISODate(date) === toISODate(new Date());
-  if (compact) {
-    return (
-      <View style={{ alignItems: 'center', gap: 2 }}>
-        <T style={{ fontFamily: font.regular, fontSize: 9, lineHeight: 11, color: c.textMuted }}>{label}</T>
-        <View style={[styles.numSmall, isToday ? { backgroundColor: c.event } : null]}>
-          <T style={{ fontFamily: isToday ? font.semibold : font.mono, fontSize: 10, lineHeight: 13, color: isToday ? c.onEvent : c.text }}>
-            {date.getDate()}
-          </T>
-        </View>
-      </View>
-    );
-  }
   return (
     <View style={{ alignItems: 'center', gap: 2 }}>
       <T variant="label" muted>
@@ -544,16 +571,13 @@ const styles = StyleSheet.create({
   hour: { position: 'absolute', left: 0, width: LABEL_W - 5, textAlign: 'right', fontFamily: font.mono, fontSize: 10, lineHeight: 12 },
   line: { position: 'absolute', height: StyleSheet.hairlineWidth },
   tip: { position: 'absolute', left: 0, top: 0, bottom: 0 },
-  label: { position: 'absolute', paddingHorizontal: 1 },
+  label: { position: 'absolute' },
   labelIn: { flex: 1, borderTopRightRadius: 5, borderBottomRightRadius: 5, borderTopLeftRadius: 2, borderBottomLeftRadius: 2, overflow: 'hidden', paddingLeft: TIP_W + 4, paddingRight: 3, paddingTop: 1 },
   labelTitle: { fontFamily: font.medium, fontSize: 10, lineHeight: 13 },
   labelSub: { fontFamily: font.mono, fontSize: 9, lineHeight: 11 },
-  stripWrap: { position: 'absolute', flexDirection: 'row', gap: 1 },
-  strip: { width: STRIP_W, borderRadius: 2.5 },
   band: { position: 'absolute', left: 0, right: 0, borderLeftWidth: 2 },
   bar: { flex: 1, borderTopRightRadius: 5, borderBottomRightRadius: 5, borderTopLeftRadius: 2, borderBottomLeftRadius: 2, overflow: 'hidden', paddingLeft: TIP_W + 4, paddingRight: 4, justifyContent: 'center' },
   barText: { fontFamily: font.medium, fontSize: 10, lineHeight: 13 },
   now: { position: 'absolute', left: 0, right: 0, height: 2 },
   num: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  numSmall: { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
 });

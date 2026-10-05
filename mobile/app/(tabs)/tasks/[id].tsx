@@ -3,7 +3,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { openMenu } from '@/components/ActionMenu';
-import { useBottomSpace } from '@/components/BottomBar';
+import { useBottomSpace, useTabBarSpace } from '@/components/BottomBar';
 import { ChevronLeft, Ellipsis, Plus } from '@/components/icons';
 import { usePullRefresh } from '@/components/PullRefresh';
 import { DayHeader, TimeGrid, type GridColumn } from '@/components/TimeGrid';
@@ -30,6 +30,7 @@ export default function PlanScreen() {
   const all = useStore((s) => s.tasks);
   const { setCard, setVoiceParent } = useStore.getState();
   const bottom = useBottomSpace();
+  const tabBar = useTabBarSpace();
   const refreshControl = usePullRefresh();
 
   const kids = useMemo(() => all.filter((t) => t.parentId === id), [all, id]);
@@ -152,7 +153,7 @@ export default function PlanScreen() {
       )}
 
       {mode === 'grid' && days.length > 0 ? (
-        <View style={{ flex: 1, paddingBottom: bottom }}>
+        <View style={{ flex: 1, paddingBottom: tabBar }}>
           {other.length > 0 && (
             <Pressable onPress={() => setMode('list')} style={({ pressed }) => [styles.other, { opacity: pressed ? 0.6 : 1 }]}>
               <T variant="caption" muted>

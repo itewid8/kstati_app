@@ -66,8 +66,7 @@ export type Card =
 
 export type VoicePhase = 'idle' | 'recording' | 'processing';
 export type TasksView = 'list' | 'day' | 'week' | 'month' | 'year';
-/** Календари людей: склеены в один, разложены стопкой или открыт один человек */
-export type LayerMode = { kind: 'together' } | { kind: 'stack' } | { kind: 'focus'; id: ID };
+
 
 /** Меню действий по долгому нажатию */
 export type MenuAction = { label: string; danger?: boolean; onPress: () => void };
@@ -121,7 +120,10 @@ type State = {
   groupSheet: boolean;
   voice: VoicePhase;
   tasksView: TasksView;
-  layers: LayerMode;
+  /** Закладка в календаре: показаны дела одного человека; null — всех */
+  calendarPerson: ID | null;
+  /** Свёрнутые разделы списка дел («Прошло», «Сегодня»…) */
+  collapsedSections: string[];
   menu: Menu | null;
   /** Выбранный день календаря — общий для экрана «Дела» и ответа ассистента */
   calendarDate: string;
@@ -154,8 +156,8 @@ type Actions = {
   setNick: (nick: string) => string | null;
   /** Имя, ник и пол разом. null — сохранено, иначе текст ошибки */
   saveProfile: (p: Profile) => Promise<string | null>;
-  /** Свой цвет в календаре; null — подбирать самому. Сразу на экране, на сервер — следом */
-  setColor: (color: PersonColor | null) => Promise<string | null>;
+  /** Иконка: свой цвет (null — подбирать самому) и символ (null — первая буква имени). Сразу на экране, на сервер — следом */
+  setLook: (patch: { color?: PersonColor | null; avatar?: string | null }) => Promise<string | null>;
   setTheme: (t: ThemePref) => void;
   setMicMode: (m: MicMode) => void;
   /** Добавить свежие записи ленты (с сервера) */
@@ -202,7 +204,8 @@ type Actions = {
   setGroupSheet: (v: boolean) => void;
   setVoice: (v: VoicePhase) => void;
   setTasksView: (v: TasksView) => void;
-  setLayers: (m: LayerMode) => void;
+  setCalendarPerson: (id: ID | null) => void;
+  toggleSection: (key: string) => void;
   clearUndo: () => void;
   setMenu: (m: Menu | null) => void;
   setCalendarDate: (iso: string) => void;
@@ -247,7 +250,8 @@ const initial: State = {
   voice: 'idle',
   // При запуске — общая неделя, раскрыт сегодняшний день
   tasksView: 'week',
-  layers: { kind: 'together' },
+  calendarPerson: null,
+  collapsedSections: ['past'],
   menu: null,
   calendarDate: toISODate(new Date()),
   voiceTopicId: null,
@@ -411,22 +415,25 @@ export const useStore = create<State & Actions>()(
       set({ me: next, users: get().users.map((u) => (u.id === me.id ? next : u)) });
       return null;
     },
-    setColor: async (color) => {
+    setLook: async (patch) => {
       const me = get().me;
       if (!me) return 'Нет аккаунта';
-      const apply = (c: PersonColor | undefined) => {
+      type Look = { color?: PersonColor; avatar?: string };
+      const apply = (look: Look) => {
         const cur = get().me;
         if (!cur) return;
-        const next = { ...cur, color: c };
-        set({ me: next, users: get().users.map((u) => (u.id === cur.id ? { ...u, color: c } : u)) });
+        set({ me: { ...cur, ...look }, users: get().users.map((u) => (u.id === cur.id ? { ...u, ...look } : u)) });
       };
-      const prev = me.color;
-      apply(color ?? undefined);
+      const prev: Look = { color: me.color, avatar: me.avatar };
+      const next: Look = {};
+      if (patch.color !== undefined) next.color = patch.color ?? undefined;
+      if (patch.avatar !== undefined) next.avatar = patch.avatar?.trim() || undefined;
+      apply(next);
       if (DEMO) return null;
       try {
         const { results } = await request<{ results: { ok: boolean; message?: string }[] }>('/ops', {
           token: get().session?.token,
-          body: { ops: [{ op: 'profile', color }] },
+          body: { ops: [{ op: 'profile', ...patch }] },
         });
         if (results[0]?.ok) return null;
         apply(prev);
@@ -751,7 +758,11 @@ export const useStore = create<State & Actions>()(
     setGroupSheet: (groupSheet) => set({ groupSheet }),
     setVoice: (voice) => set({ voice }),
     setTasksView: (tasksView) => set({ tasksView }),
-    setLayers: (layers) => set({ layers }),
+    setCalendarPerson: (calendarPerson) => set({ calendarPerson }),
+    toggleSection: (key) => {
+      const cur = get().collapsedSections;
+      set({ collapsedSections: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key] });
+    },
     clearUndo: () => set({ undo: null }),
     setMenu: (menu) => set({ menu }),
     setCalendarDate: (calendarDate) => set({ calendarDate }),
@@ -846,6 +857,7 @@ export const useStore = create<State & Actions>()(
       reminders: s.reminders,
       theme: s.theme,
       micMode: s.micMode,
+      collapsedSections: s.collapsedSections,
       activity: s.activity,
       activitySeen: s.activitySeen,
     }),

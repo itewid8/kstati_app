@@ -280,7 +280,13 @@ async function scenario(name: string, store: Store) {
   const sc = await ok('POST', '/sync', {}, T2);
   assert.equal(sc.users.find((u: any) => u.nick === 'sasha_k').color, 'pink', 'цвет Саши виден Маше');
   assert.equal((await ops(T1, { op: 'profile', color: 'brown' }))[0].ok, false, 'цвета нет в палитре');
-  assert.equal((await ops(T1, { op: 'profile', color: null }))[0].ok, true);
+  assert.equal((await ops(T1, { op: 'profile', color: '#3A7BD5', avatar: '🐱' }))[0].ok, true, 'свой цвет и эмодзи');
+  const sc2 = await ok('POST', '/sync', {}, T2);
+  const sashaSeen = sc2.users.find((u: any) => u.nick === 'sasha_k');
+  assert.equal(sashaSeen.color, '#3a7bd5');
+  assert.equal(sashaSeen.avatar, '🐱');
+  assert.equal((await ops(T1, { op: 'profile', color: '#12345' }))[0].ok, false, 'неверный цвет');
+  assert.equal((await ops(T1, { op: 'profile', color: null, avatar: null }))[0].ok, true);
   assert.equal((await ok('POST', '/sync', {}, T1)).me.color, undefined);
 
   /* ---------- голос ---------- */
