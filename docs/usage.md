@@ -4,11 +4,11 @@ How «Кстати» is used once it is installed and connected to a server. Int
 
 ## First launch
 
-1. **Sign up:** «Создать аккаунт» → email → «Получить код» → enter the 6-digit code from the email, a name and a password (at least 8 characters).
+1. **Sign up:** «Создать аккаунт» → email → «Получить код» → type the 6-digit code into the cells (it is checked as soon as the last digit is entered) → name, password and its repeat. The password must rate at least «Средний» on the strength meter and the repeat must match.
 2. **First group:** create one (name + category: Пара, Семья, Родители, Друзья, Другое) or join by a 6-character invite code from someone else.
 3. Invite others from group settings: tap the group name in the header → «Настройки группы». Only the owner and admins see the invite code.
 
-Signing in later: email + password. «Забыли пароль?» sends a code and sets a new password.
+Signing in later: email + password. «Забыли пароль?» follows the same steps: email → code → new password and repeat.
 
 ## The four lists
 
