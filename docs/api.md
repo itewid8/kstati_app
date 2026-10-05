@@ -55,6 +55,9 @@ Send a 6-digit code (valid 15 minutes).
 
 → `{ "ok": true }`. Locally without Postbox the response also has `devCode`. For `reset` the answer is the same whether or not the address exists. `register` with a taken address → `409 email_taken`.
 
+### `POST /auth/email/verify`
+`{ "email", "purpose", "code" }` → `{ ok: true }` if the code is right. The code stays valid for `/auth/register` or `/auth/reset`; wrong attempts count towards the limit of 5.
+
 ### `POST /auth/register`
 ```json
 { "email": "sasha@example.ru", "code": "123456", "name": "Саша", "password": "at-least-8-chars" }

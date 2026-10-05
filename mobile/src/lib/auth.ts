@@ -6,7 +6,7 @@ import * as Linking from 'expo-linking';
 import { uuid } from 'expo-modules-core';
 import * as WebBrowser from 'expo-web-browser';
 import { API_URL } from './config';
-import { errorText, request } from './net';
+import { ApiError, errorText, request } from './net';
 import { challengeS256 } from './pkce';
 import { useStore, type Me } from './store';
 
@@ -26,6 +26,16 @@ export async function sendCode(email: string, purpose: 'register' | 'reset'): Pr
     return { ok: true, devCode: r.devCode };
   } catch (e) {
     return { ok: false, error: errorText(e) };
+  }
+}
+
+/** Проверить код до ввода пароля: код не гасится, его потом предъявляют при регистрации или сбросе */
+export async function verifyCode(email: string, purpose: 'register' | 'reset', code: string): Promise<{ ok: true } | { ok: false; error: string; expired: boolean }> {
+  try {
+    await request('/auth/email/verify', { body: { email, purpose, code } });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: errorText(e), expired: e instanceof ApiError && e.code === 'code_expired' };
   }
 }
 

@@ -51,12 +51,18 @@ async function scenario(name: string, store: Store) {
   const ops = async (token: string, ...list: unknown[]) => (await ok('POST', '/ops', { ops: list }, token)).results as any[];
 
   /* ---------- регистрация и вход ---------- */
-  const reg = async (email: string, name: string) => {
+  const reg = async (email: string, name: string, checkVerify = false) => {
     const { devCode } = await ok('POST', '/auth/email/code', { email, purpose: 'register' });
     assert.match(devCode, /^\d{6}$/);
+    // Проверка кода на отдельном экране: неверный отклоняется, верный не гасится и годится для регистрации
+    if (checkVerify) {
+      const wrong = devCode === '000000' ? '000001' : '000000';
+      assert.equal((await call('POST', '/auth/email/verify', { email, purpose: 'register', code: wrong })).json.error, 'code_wrong');
+      await ok('POST', '/auth/email/verify', { email, purpose: 'register', code: devCode });
+    }
     return ok('POST', '/auth/register', { email, code: devCode, name, password: 'secret-123' });
   };
-  const sasha = await reg('Sasha@Example.ru', 'Саша');
+  const sasha = await reg('Sasha@Example.ru', 'Саша', true);
   assert.equal(sasha.me.email, 'sasha@example.ru');
   assert.equal((await call('POST', '/auth/email/code', { email: 'sasha@example.ru', purpose: 'register' })).status, 409, 'почта уже занята');
   assert.equal((await call('POST', '/auth/login', { email: 'sasha@example.ru', password: 'wrong-pass' })).status, 401);

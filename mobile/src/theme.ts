@@ -11,6 +11,8 @@ export type Colors = {
   danger: string;
   /** «Свободен», успешные подсказки */
   success: string;
+  /** Средняя оценка: «средний» пароль */
+  warning: string;
   /** Дни с делами в календаре: заливка и цифра на ней */
   event: string;
   onEvent: string;
@@ -27,6 +29,7 @@ const dark: Colors = {
   onPrimary: '#1E1E1E',
   danger: '#D16969',
   success: '#73C991',
+  warning: '#E5A50A',
   // Красный в духе VS Code / Fluent: приглушённый, белая цифра читается (контраст ≥ 4.5)
   event: '#C4314B',
   onEvent: '#FFFFFF',
@@ -43,6 +46,7 @@ const light: Colors = {
   onPrimary: '#FFFFFF',
   danger: '#C0392B',
   success: '#2E7D32',
+  warning: '#A15C00',
   event: '#D13438',
   onEvent: '#FFFFFF',
   scrim: 'rgba(0,0,0,0.25)',

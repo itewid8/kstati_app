@@ -109,7 +109,8 @@ async function sendCode(store: Store, purpose: 'register' | 'reset', email: stri
   return !config.isProd && !mailConfigured() ? code : undefined;
 }
 
-async function checkCode(store: Store, purpose: 'register' | 'reset', email: string, code: string) {
+/** Проверить код. consume — погасить его (регистрация, сброс); без него только проверка (экран ввода кода) */
+async function checkCode(store: Store, purpose: 'register' | 'reset', email: string, code: string, consume = true) {
   const key = `code#${purpose}#${email}`;
   const rec = await store.getTemp<CodeRec>(key);
   if (!rec) throw new HttpError(400, 'code_expired', 'Код устарел — запросите новый');
@@ -121,7 +122,7 @@ async function checkCode(store: Store, purpose: 'register' | 'reset', email: str
     await store.putTemp(key, { ...rec, attempts: rec.attempts + 1 }, CODE_TTL);
     throw new HttpError(400, 'code_wrong', 'Неверный код');
   }
-  await store.deleteTemp(key);
+  if (consume) await store.deleteTemp(key);
 }
 
 const Email = z.string().trim().toLowerCase().email().max(200);
@@ -183,6 +184,13 @@ export function registerAuth(app: FastifyInstance, store: Store) {
     // Для сброса не выдаём, есть ли такой адрес: ответ одинаковый
     const devCode = purpose === 'reset' && !exists ? undefined : await sendCode(store, purpose, email);
     return { ok: true, ...(devCode && { devCode }) };
+  });
+
+  /** Проверка кода до ввода пароля: код остаётся действующим, неверные попытки считаются */
+  app.post('/auth/email/verify', async (req) => {
+    const b = z.object({ email: Email, purpose: z.enum(['register', 'reset']), code: z.string().max(12) }).parse(req.body);
+    await checkCode(store, b.purpose, b.email, b.code, false);
+    return { ok: true };
   });
 
   /** Шаг 2 регистрации: код + имя + пароль → аккаунт */
