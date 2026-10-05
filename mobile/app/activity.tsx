@@ -1,9 +1,9 @@
 import { router } from 'expo-router';
 import React, { useEffect, useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackHeader } from '@/components/Header';
-import { usePullRefresh } from '@/components/PullRefresh';
+import { PullScreen, PullScrollView } from '@/components/PullRefresh';
 import { Divider, SectionLabel, T } from '@/components/ui';
 import { activityText } from '@/lib/activity';
 import { addDays, shortDate, toISODate } from '@/lib/dates';
@@ -21,7 +21,6 @@ export default function ActivityScreen() {
   const events = useStore((s) => s.activity);
   const users = useStore((s) => s.users);
   const groups = useStore((s) => s.groups);
-  const refreshControl = usePullRefresh();
   // Точку на колокольчике запоминаем при входе: что было непрочитанным — подсвечиваем до выхода
   const seenBefore = useMemo(() => useStore.getState().activitySeen, []);
 
@@ -60,45 +59,47 @@ export default function ActivityScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background }}>
-      <BackHeader title="Активность" />
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }} refreshControl={refreshControl}>
-        {days.length === 0 && (
-          <T muted style={{ padding: space.side, paddingTop: 24 }}>
-            Здесь появится, что добавляют и отмечают участники ваших групп.
-          </T>
-        )}
-        {days.map((day) => (
-          <View key={day.title}>
-            <SectionLabel>{day.title}</SectionLabel>
-            <Divider />
-            {day.list.map((e, i) => {
-              const actor = users.find((u) => u.id === e.actor);
-              const where = e.kind.startsWith('wish.') ? 'Хотелки' : (groups.find((g) => g.id === e.groupId)?.name ?? '');
-              const fresh = e.id > seenBefore;
-              const time = new Date(e.at);
-              return (
-                <View key={e.id}>
-                  {i > 0 && <Divider inset={space.side} />}
-                  <Pressable onPress={() => open(e)} style={({ pressed }) => [styles.row, { backgroundColor: pressed ? c.surface : 'transparent' }]}>
-                    <View style={[styles.dot, { backgroundColor: fresh ? c.event : 'transparent' }]} />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <T>
-                        <T weight="medium">{actor?.name ?? 'Кто-то'}</T> {activityText(e, actor, users)}
-                      </T>
-                      <T variant="label" muted>
-                        {[where, `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`].filter(Boolean).join(' · ')}
-                      </T>
-                    </View>
-                  </Pressable>
-                </View>
-              );
-            })}
-            <Divider />
-          </View>
-        ))}
-      </ScrollView>
-    </View>
+    <PullScreen>
+      <View style={{ flex: 1, backgroundColor: c.background }}>
+        <BackHeader title="Активность" />
+        <PullScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+          {days.length === 0 && (
+            <T muted style={{ padding: space.side, paddingTop: 24 }}>
+              Здесь появится, что добавляют и отмечают участники ваших групп.
+            </T>
+          )}
+          {days.map((day) => (
+            <View key={day.title}>
+              <SectionLabel>{day.title}</SectionLabel>
+              <Divider />
+              {day.list.map((e, i) => {
+                const actor = users.find((u) => u.id === e.actor);
+                const where = e.kind.startsWith('wish.') ? 'Хотелки' : (groups.find((g) => g.id === e.groupId)?.name ?? '');
+                const fresh = e.id > seenBefore;
+                const time = new Date(e.at);
+                return (
+                  <View key={e.id}>
+                    {i > 0 && <Divider inset={space.side} />}
+                    <Pressable onPress={() => open(e)} style={({ pressed }) => [styles.row, { backgroundColor: pressed ? c.surface : 'transparent' }]}>
+                      <View style={[styles.dot, { backgroundColor: fresh ? c.event : 'transparent' }]} />
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <T>
+                          <T weight="medium">{actor?.name ?? 'Кто-то'}</T> {activityText(e, actor, users)}
+                        </T>
+                        <T variant="label" muted>
+                          {[where, `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`].filter(Boolean).join(' · ')}
+                        </T>
+                      </View>
+                    </Pressable>
+                  </View>
+                );
+              })}
+              <Divider />
+            </View>
+          ))}
+        </PullScrollView>
+      </View>
+    </PullScreen>
   );
 }
 

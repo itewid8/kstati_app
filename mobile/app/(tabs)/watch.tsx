@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from '@/components/icons';
-import { usePullRefresh } from '@/components/PullRefresh';
+import { PullScreen, PullScrollView } from '@/components/PullRefresh';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useBottomSpace } from '@/components/BottomBar';
@@ -51,7 +51,6 @@ export default function Watch() {
   const filters = useStore((s) => s.watchFilters);
   const { setWatchFilters, setCard } = useStore.getState();
   const bottom = useBottomSpace();
-  const refreshControl = usePullRefresh();
   const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
   const [showWatched, setShowWatched] = useState(false);
 
@@ -65,74 +64,76 @@ export default function Watch() {
   }, [all, group?.id, filters]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background }}>
-      <Header
-        title={group?.name ?? 'Смотреть'}
-        groupSwitch
-        onPlus={group ? () => setCard({ source: 'manual', items: [emptyDraft('watch')], editing: true }) : undefined}
-      />
-      {!group ? (
-        <NoGroup />
-      ) : (
-        <>
-          <View style={styles.filtersRow}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={{ flex: 1 }}>
-              {KEYS.map((k) => (
-                <Chip key={k} label={chipLabel(k, filters)} selected={filters[k].length > 0} onPress={() => setOpenFilter(k)} />
+    <PullScreen>
+      <View style={{ flex: 1, backgroundColor: c.background }}>
+        <Header
+          title={group?.name ?? 'Смотреть'}
+          groupSwitch
+          onPlus={group ? () => setCard({ source: 'manual', items: [emptyDraft('watch')], editing: true }) : undefined}
+        />
+        {!group ? (
+          <NoGroup />
+        ) : (
+          <>
+            <View style={styles.filtersRow}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={{ flex: 1 }}>
+                {KEYS.map((k) => (
+                  <Chip key={k} label={chipLabel(k, filters)} selected={filters[k].length > 0} onPress={() => setOpenFilter(k)} />
+                ))}
+              </ScrollView>
+              {active && (
+                <Button kind="text" title="Сбросить" color={c.textMuted} onPress={() => setWatchFilters(emptyFilters)} style={{ height: 32, marginRight: space.side, marginLeft: 8 }} />
+              )}
+            </View>
+
+            <PullScrollView contentContainerStyle={{ paddingBottom: bottom }}>
+              <LayoutAnimationConfig skipEntering>
+              {list.length === 0 && active && (
+                <View style={{ padding: space.side, paddingTop: 24, gap: 4, alignItems: 'flex-start' }}>
+                  <T muted>Ничего не нашлось</T>
+                  <Button kind="text" title="Сбросить фильтры" onPress={() => setWatchFilters(emptyFilters)} />
+                </View>
+              )}
+              {list.length === 0 && !active && watched.length === 0 && (
+                <T muted style={{ padding: space.side, paddingTop: 24 }}>
+                  Список пуст
+                </T>
+              )}
+              {list.map((w, i) => (
+                <ListItem key={w.id}>
+                  {i > 0 && <Divider inset={space.side + 36} />}
+                  <WatchRow item={w} />
+                </ListItem>
               ))}
-            </ScrollView>
-            {active && (
-              <Button kind="text" title="Сбросить" color={c.textMuted} onPress={() => setWatchFilters(emptyFilters)} style={{ height: 32, marginRight: space.side, marginLeft: 8 }} />
-            )}
-          </View>
 
-          <ScrollView contentContainerStyle={{ paddingBottom: bottom }} refreshControl={refreshControl}>
-            <LayoutAnimationConfig skipEntering>
-            {list.length === 0 && active && (
-              <View style={{ padding: space.side, paddingTop: 24, gap: 4, alignItems: 'flex-start' }}>
-                <T muted>Ничего не нашлось</T>
-                <Button kind="text" title="Сбросить фильтры" onPress={() => setWatchFilters(emptyFilters)} />
-              </View>
-            )}
-            {list.length === 0 && !active && watched.length === 0 && (
-              <T muted style={{ padding: space.side, paddingTop: 24 }}>
-                Список пуст
-              </T>
-            )}
-            {list.map((w, i) => (
-              <ListItem key={w.id}>
-                {i > 0 && <Divider inset={space.side + 36} />}
-                <WatchRow item={w} />
-              </ListItem>
-            ))}
-
-            {watched.length > 0 && (
-              <ListItem>
-                <Pressable onPress={() => setShowWatched((v) => !v)} style={styles.toggle}>
-                  <T variant="caption" muted>
-                    Посмотрели · {watched.length}
-                  </T>
-                  {showWatched ? (
-                    <ChevronDown size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
-                  ) : (
-                    <ChevronRight size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
-                  )}
-                </Pressable>
-                {showWatched &&
-                  watched.map((w, i) => (
-                    <ListItem key={w.id}>
-                      {i > 0 && <Divider inset={space.side + 36} />}
-                      <WatchRow item={w} />
-                    </ListItem>
-                  ))}
-              </ListItem>
-            )}
-            </LayoutAnimationConfig>
-          </ScrollView>
-        </>
-      )}
-      <FilterSheet field={openFilter} filters={filters} onChange={setWatchFilters} onClose={() => setOpenFilter(null)} />
-    </View>
+              {watched.length > 0 && (
+                <ListItem>
+                  <Pressable onPress={() => setShowWatched((v) => !v)} style={styles.toggle}>
+                    <T variant="caption" muted>
+                      Посмотрели · {watched.length}
+                    </T>
+                    {showWatched ? (
+                      <ChevronDown size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
+                    ) : (
+                      <ChevronRight size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
+                    )}
+                  </Pressable>
+                  {showWatched &&
+                    watched.map((w, i) => (
+                      <ListItem key={w.id}>
+                        {i > 0 && <Divider inset={space.side + 36} />}
+                        <WatchRow item={w} />
+                      </ListItem>
+                    ))}
+                </ListItem>
+              )}
+              </LayoutAnimationConfig>
+            </PullScrollView>
+          </>
+        )}
+        <FilterSheet field={openFilter} filters={filters} onChange={setWatchFilters} onClose={() => setOpenFilter(null)} />
+      </View>
+    </PullScreen>
   );
 }
 

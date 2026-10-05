@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, ExternalLink } from '@/components/icons';
-import { usePullRefresh } from '@/components/PullRefresh';
+import { PullScreen, PullScrollView } from '@/components/PullRefresh';
 import React, { useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useBottomSpace } from '@/components/BottomBar';
@@ -24,7 +24,6 @@ export default function Wishes() {
   const personId = useStore((s) => s.wishPersonId);
   const { setWishPerson, setCard } = useStore.getState();
   const bottom = useBottomSpace();
-  const refreshControl = usePullRefresh();
   const [showReceived, setShowReceived] = useState(false);
 
   // Люди текущей группы, кроме меня, по алфавиту
@@ -44,70 +43,72 @@ export default function Wishes() {
   const inset = own ? space.side + 36 : space.side;
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background }}>
-      <Header
-        title={group?.name ?? 'Хочу'}
-        groupSwitch
-        onPlus={
-          group
-            ? () => {
-                setWishPerson(null);
-                setCard({ source: 'manual', items: [emptyDraft('wish')], editing: true });
-              }
-            : undefined
-        }
-      />
-      {!group ? (
-        <NoGroup />
-      ) : (
-        <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.people} style={{ flexGrow: 0 }}>
-        <Chip label="Я" selected={own} onPress={() => setWishPerson(null)} />
-        {people.map((p) => (
-          <Chip key={p.id} label={p.name} selected={ownerId === p.id} onPress={() => setWishPerson(p.id)} />
-        ))}
-      </ScrollView>
-      <ScrollView contentContainerStyle={{ paddingBottom: bottom }} refreshControl={refreshControl}>
-        {/* key: при смене человека список перерисовывается без анимаций */}
-        <LayoutAnimationConfig skipEntering key={ownerId}>
-          {list.length === 0 && (
-            <T muted style={{ padding: space.side, paddingTop: 24 }}>
-              {own ? 'Список пуст' : 'Пока ничего не хочет'}
-            </T>
-          )}
-          {list.map((w, i) => (
-            <ListItem key={w.id}>
-              {i > 0 && <Divider inset={inset} />}
-              <WishRow wish={w} own={own} />
-            </ListItem>
+    <PullScreen>
+      <View style={{ flex: 1, backgroundColor: c.background }}>
+        <Header
+          title={group?.name ?? 'Хочу'}
+          groupSwitch
+          onPlus={
+            group
+              ? () => {
+                  setWishPerson(null);
+                  setCard({ source: 'manual', items: [emptyDraft('wish')], editing: true });
+                }
+              : undefined
+          }
+        />
+        {!group ? (
+          <NoGroup />
+        ) : (
+          <>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.people} style={{ flexGrow: 0 }}>
+          <Chip label="Я" selected={own} onPress={() => setWishPerson(null)} />
+          {people.map((p) => (
+            <Chip key={p.id} label={p.name} selected={ownerId === p.id} onPress={() => setWishPerson(p.id)} />
           ))}
-
-          {received.length > 0 && (
-            <ListItem>
-              <Pressable onPress={() => setShowReceived((v) => !v)} style={styles.toggle}>
-                <T variant="caption" muted>
-                  Подарили · {received.length}
-                </T>
-                {showReceived ? (
-                  <ChevronDown size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
-                ) : (
-                  <ChevronRight size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
-                )}
-              </Pressable>
-            </ListItem>
-          )}
-          {showReceived &&
-            received.map((w, i) => (
+        </ScrollView>
+        <PullScrollView contentContainerStyle={{ paddingBottom: bottom }}>
+          {/* key: при смене человека список перерисовывается без анимаций */}
+          <LayoutAnimationConfig skipEntering key={ownerId}>
+            {list.length === 0 && (
+              <T muted style={{ padding: space.side, paddingTop: 24 }}>
+                {own ? 'Список пуст' : 'Пока ничего не хочет'}
+              </T>
+            )}
+            {list.map((w, i) => (
               <ListItem key={w.id}>
                 {i > 0 && <Divider inset={inset} />}
                 <WishRow wish={w} own={own} />
               </ListItem>
             ))}
-        </LayoutAnimationConfig>
-      </ScrollView>
-        </>
-      )}
-    </View>
+
+            {received.length > 0 && (
+              <ListItem>
+                <Pressable onPress={() => setShowReceived((v) => !v)} style={styles.toggle}>
+                  <T variant="caption" muted>
+                    Подарили · {received.length}
+                  </T>
+                  {showReceived ? (
+                    <ChevronDown size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
+                  ) : (
+                    <ChevronRight size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
+                  )}
+                </Pressable>
+              </ListItem>
+            )}
+            {showReceived &&
+              received.map((w, i) => (
+                <ListItem key={w.id}>
+                  {i > 0 && <Divider inset={inset} />}
+                  <WishRow wish={w} own={own} />
+                </ListItem>
+              ))}
+          </LayoutAnimationConfig>
+        </PullScrollView>
+          </>
+        )}
+      </View>
+    </PullScreen>
   );
 }
 

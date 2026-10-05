@@ -7,7 +7,7 @@ import type { Task } from '@/lib/types';
 import { useDelayedMark } from '@/lib/useMark';
 import { ICON, space, useColors } from '@/theme';
 import { openMenu } from './ActionMenu';
-import { Repeat } from './icons';
+import { ChevronDown, Repeat } from './icons';
 import { SwipeRow } from './SwipeRow';
 import { Checkbox, T } from './ui';
 
@@ -21,8 +21,16 @@ export function TaskRow({
   whenFormat = 'full',
   markDelay,
   day,
+  expanded,
+  onToggle,
+  indent = 0,
 }: {
   task: Task;
+  /** План в списке: раскрыт ли (подзадачи под ним) и что делать по нажатию — раскрыть/свернуть */
+  expanded?: boolean;
+  onToggle?: () => void;
+  /** Отступ слева: подзадача под своим планом */
+  indent?: number;
   past?: boolean;
   whenFormat?: 'full' | 'time';
   /** День календаря, в котором показана строка (для многодневных: «с 10:00», «весь день») */
@@ -40,8 +48,8 @@ export function TaskRow({
 
   const edit = () => editTask(task.id, setCard);
   const remove = () => deleteTaskAsk(task);
-  // Большое дело с подзадачами открывается планом
-  const press = kidsCount ? () => openPlan(task.id) : edit;
+  // Большое дело с подзадачами: в списке раскрывается на месте, в остальных местах открывается планом
+  const press = kidsCount ? (onToggle ?? (() => openPlan(task.id))) : edit;
 
   const when = whenFormat === 'time' ? timeOn(task, day ?? task.date ?? '') : task.date || task.time ? spanLabel(task) : '';
   const who = peopleOf(task)
@@ -55,7 +63,7 @@ export function TaskRow({
         onPress={press}
         onLongPress={() => taskMenu(task)}
         delayLongPress={350}
-        style={({ pressed }) => [styles.row, { backgroundColor: pressed ? c.surface : c.background }]}>
+        style={({ pressed }) => [styles.row, { paddingLeft: space.side + indent, backgroundColor: pressed ? c.surface : c.background }]}>
         <Checkbox checked={done} onPress={toggle} />
         <View style={{ flex: 1 }}>
           <T numberOfLines={2} muted={done} style={done ? { textDecorationLine: 'line-through' } : undefined}>
@@ -70,6 +78,11 @@ export function TaskRow({
           <T variant="caption" mono muted={!past} danger={past && !done}>
             {when}
           </T>
+        ) : null}
+        {kidsCount && onToggle ? (
+          <View style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }] }}>
+            <ChevronDown size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
+          </View>
         ) : null}
       </Pressable>
     </SwipeRow>

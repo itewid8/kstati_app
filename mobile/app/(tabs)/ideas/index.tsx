@@ -1,12 +1,12 @@
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useBottomSpace } from '@/components/BottomBar';
 import { emptyDraft } from '@/components/CardSheet';
 import { Header } from '@/components/Header';
 import { Users } from '@/components/icons';
 import { LayoutAnimationConfig, ListItem } from '@/components/ListItem';
-import { usePullRefresh } from '@/components/PullRefresh';
+import { PullScreen, PullScrollView } from '@/components/PullRefresh';
 import { TopicShareSheet } from '@/components/TopicShareSheet';
 import { Divider, SectionLabel, T } from '@/components/ui';
 import { ideasOf, sortTopics, topicMenu } from '@/lib/ideas';
@@ -23,7 +23,6 @@ export default function Ideas() {
   const users = useStore((s) => s.users);
   const setCard = useStore((s) => s.setCard);
   const bottom = useBottomSpace();
-  const refreshControl = usePullRefresh();
   const [sharing, setSharing] = useState<ID | null>(null);
 
   const mine = useMemo(() => sortTopics(topics.filter((t) => t.ownerId === me.id), ideas), [topics, ideas, me.id]);
@@ -32,42 +31,44 @@ export default function Ideas() {
   const empty = !mine.length && !shared.length && !inbox.length;
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.background }}>
-      <Header title="Идеи" onPlus={() => setCard({ source: 'manual', items: [emptyDraft('topic')], editing: true })} />
-      <ScrollView contentContainerStyle={{ paddingBottom: bottom }} refreshControl={refreshControl}>
-        <LayoutAnimationConfig skipEntering>
-          {empty && (
-            <T muted style={{ padding: space.side, paddingTop: 24 }}>
-              Идей пока нет
-            </T>
-          )}
-          {inbox.length > 0 && (
-            <ListItem>
-              <TopicRow id={INBOX} title="Без темы" list={inbox} />
-            </ListItem>
-          )}
-          {mine.map((t, i) => (
-            <ListItem key={t.id}>
-              {(i > 0 || inbox.length > 0) && <Divider inset={space.side} />}
-              <TopicRow id={t.id} title={t.title} list={ideasOf(ideas, t.id, me.id)} shared={t.groupIds.length > 0} onLong={() => topicMenu(t, () => setSharing(t.id))} />
-            </ListItem>
-          ))}
-          {shared.length > 0 && (
-            <ListItem>
-              <SectionLabel>Открыли мне</SectionLabel>
-              <Divider />
-            </ListItem>
-          )}
-          {shared.map((t: Topic, i) => (
-            <ListItem key={t.id}>
-              {i > 0 && <Divider inset={space.side} />}
-              <TopicRow id={t.id} title={t.title} owner={users.find((u) => u.id === t.ownerId)?.name} list={ideasOf(ideas, t.id, me.id)} />
-            </ListItem>
-          ))}
-        </LayoutAnimationConfig>
-      </ScrollView>
-      <TopicShareSheet topicId={sharing} onClose={() => setSharing(null)} />
-    </View>
+    <PullScreen>
+      <View style={{ flex: 1, backgroundColor: c.background }}>
+        <Header title="Идеи" onPlus={() => setCard({ source: 'manual', items: [emptyDraft('topic')], editing: true })} />
+        <PullScrollView contentContainerStyle={{ paddingBottom: bottom }}>
+          <LayoutAnimationConfig skipEntering>
+            {empty && (
+              <T muted style={{ padding: space.side, paddingTop: 24 }}>
+                Идей пока нет
+              </T>
+            )}
+            {inbox.length > 0 && (
+              <ListItem>
+                <TopicRow id={INBOX} title="Без темы" list={inbox} />
+              </ListItem>
+            )}
+            {mine.map((t, i) => (
+              <ListItem key={t.id}>
+                {(i > 0 || inbox.length > 0) && <Divider inset={space.side} />}
+                <TopicRow id={t.id} title={t.title} list={ideasOf(ideas, t.id, me.id)} shared={t.groupIds.length > 0} onLong={() => topicMenu(t, () => setSharing(t.id))} />
+              </ListItem>
+            ))}
+            {shared.length > 0 && (
+              <ListItem>
+                <SectionLabel>Открыли мне</SectionLabel>
+                <Divider />
+              </ListItem>
+            )}
+            {shared.map((t: Topic, i) => (
+              <ListItem key={t.id}>
+                {i > 0 && <Divider inset={space.side} />}
+                <TopicRow id={t.id} title={t.title} owner={users.find((u) => u.id === t.ownerId)?.name} list={ideasOf(ideas, t.id, me.id)} />
+              </ListItem>
+            ))}
+          </LayoutAnimationConfig>
+        </PullScrollView>
+        <TopicShareSheet topicId={sharing} onClose={() => setSharing(null)} />
+      </View>
+    </PullScreen>
   );
 }
 

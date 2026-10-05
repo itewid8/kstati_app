@@ -371,9 +371,9 @@ console.log(`  операций Document API: ${fake.calls.length} (${[...new Se
       assert.equal(await start('https://evil.example/'), 'bad_redirect', `чужой сайт, isProd=${isProd}`);
     }
     config.isProd = false;
-    assert.equal(await start('exp+want-watch-plans://auth'), 302, 'dev-клиент Expo вне продакшена');
+    assert.equal(await start('exp+kstati://auth'), 302, 'dev-клиент Expo вне продакшена');
     config.isProd = true;
-    assert.equal(await start('exp+want-watch-plans://auth'), 'bad_redirect', 'в продакшене exp+… не принимается');
+    assert.equal(await start('exp+kstati://auth'), 'bad_redirect', 'в продакшене exp+… не принимается');
     assert.equal(await start('exp+evil://x'), 'bad_redirect', 'в продакшене exp+… не принимается');
   } finally {
     Object.assign(config, saved);

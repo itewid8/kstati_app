@@ -14,6 +14,7 @@ import { ActionMenu } from '@/components/ActionMenu';
 import { CardSheet } from '@/components/CardSheet';
 import { GroupSheet } from '@/components/GroupSheet';
 import { UndoToast } from '@/components/UndoToast';
+import { PullIndicator } from '@/components/PullRefresh';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
 import { initAnalytics } from '@/lib/analytics';
 import { watchReminders } from '@/lib/notify';
@@ -69,6 +70,7 @@ export default function RootLayout() {
             }}
           />
           <UndoToast />
+          <PullIndicator />
         </View>
         <VoiceRecorder />
         <CardSheet />

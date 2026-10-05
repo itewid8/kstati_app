@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -16,8 +16,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { motion, useColors } from '@/theme';
 
 /**
+ * Своя вертикальная прокрутка внутри шторки (барабан времени): касание в ней не тянет шторку вниз.
+ * Вызвать в onTouchStart такой области
+ */
+const DragBlock = createContext<() => void>(() => {});
+export const useSheetDragBlock = () => useContext(DragBlock);
+
+/**
  * Bottom sheet: фон surface, скругление 16 сверху, «ручка».
  * Короткая анимация 200 мс без пружин.
+ * Смахнуть вниз из любого места шторки — закрыть (если её содержимое не прокручено вниз
+ * и палец не на барабане времени). Обновление экранов здесь не срабатывает: шторка — отдельное окно.
  */
 export function Sheet({
   visible,
@@ -38,17 +47,22 @@ export function Sheet({
   // Смахивание вниз: шторка едет за пальцем, дальше 100 px или быстро — закрывается
   const drag = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(0);
-  const sheetTop = useRef(0);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  /** Касание началось на барабане времени — шторку не тянем */
+  const blocked = useRef(false);
+  const block = useMemo(() => () => (blocked.current = true), []);
   const pan = useMemo(() => {
-    // Тянуть можно за верх шторки (ручка, первая строка), когда содержимое не прокручено:
-    // ниже — поля и колёса выбора времени, их жесты не перехватываем
-    const grab = (pageY: number, dy: number, dx: number) =>
-      dy > 10 && Math.abs(dy) > Math.abs(dx) * 1.5 && scrollY.current <= 0 && pageY - dy - sheetTop.current < 120;
+    // Тянуть вниз можно из любого места, когда содержимое не прокручено (иначе палец прокручивает его вверх)
+    const grab = (dy: number, dx: number) => !blocked.current && dy > 10 && Math.abs(dy) > Math.abs(dx) * 1.5 && scrollY.current <= 0;
     return PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (e, g) => grab(e.nativeEvent.pageY, g.dy, g.dx),
-      onMoveShouldSetPanResponder: (e, g) => grab(e.nativeEvent.pageY, g.dy, g.dx),
+      // Новое касание: снова можно тянуть (барабан, если палец на нём, тут же запретит)
+      onStartShouldSetPanResponderCapture: () => {
+        blocked.current = false;
+        return false;
+      },
+      onMoveShouldSetPanResponderCapture: (_, g) => grab(g.dy, g.dx),
+      onMoveShouldSetPanResponder: (_, g) => grab(g.dy, g.dx),
       onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
       onPanResponderRelease: (_, g) => {
         if (g.dy > 100 || g.vy > 0.8) closeRef.current();
@@ -85,7 +99,6 @@ export function Sheet({
         <View style={{ flex: 1 }} pointerEvents="box-none" />
         <Animated.View
           {...pan.panHandlers}
-          onLayout={(e) => (sheetTop.current = e.nativeEvent.layout.y)}
           style={[
             styles.sheet,
             { backgroundColor: c.surface, maxHeight: height * 0.88, paddingBottom: Math.max(insets.bottom, 12), transform: [{ translateY }] },
@@ -99,7 +112,7 @@ export function Sheet({
             scrollEventThrottle={32}
             onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)}
           >
-            {children}
+            <DragBlock.Provider value={block}>{children}</DragBlock.Provider>
           </ScrollView>
           {footer}
         </Animated.View>

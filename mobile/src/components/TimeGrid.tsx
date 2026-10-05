@@ -10,7 +10,7 @@
  * Нажатие на пустое место — новое дело на это время; долгое нажатие на дело — его меню.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View, type RefreshControlProps } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 // Прокрутка из gesture-handler: щипок слоёв календаря может её перехватить
 import { ScrollView } from 'react-native-gesture-handler';
 import { tint, usePalette } from '@/lib/colors';
@@ -19,6 +19,7 @@ import { isLong, isMulti, lastDay, minutesOn, peopleOf, spanLabel, spanParts } f
 import { useCurrentGroup, useStore } from '@/lib/store';
 import type { ID, Task } from '@/lib/types';
 import { font, useColors } from '@/theme';
+import { PullScrollView } from './PullRefresh';
 import { T } from './ui';
 
 const LABEL_W = 34;
@@ -160,7 +161,6 @@ export function TimeGrid({
   onSlot,
   onTask,
   onLongTask,
-  refreshControl,
 }: {
   columns: GridColumn[];
   /** Часы сетки; не заданы — по делам (не уже 7–22) */
@@ -175,7 +175,6 @@ export function TimeGrid({
   onSlot?: (col: GridColumn, minutes: number) => void;
   onTask: (t: Task) => void;
   onLongTask?: (t: Task) => void;
-  refreshControl?: React.ReactElement<RefreshControlProps>;
 }) {
   const c = useColors();
   const pal = usePalette();
@@ -402,10 +401,9 @@ export function TimeGrid({
 
       {/* Часы и дела: подгоняем под оставшуюся высоту */}
       <View style={{ flex: 1 }} onLayout={(e) => setGridH(e.nativeEvent.layout.height)}>
-        <ScrollView
+        <PullScrollView
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 2 }}
           scrollEnabled={scrollEnabled}
-          refreshControl={refreshControl}
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}
         >
@@ -527,7 +525,7 @@ export function TimeGrid({
               );
             })}
           </View>
-        </ScrollView>
+        </PullScrollView>
       </View>
     </View>
   );

@@ -1,76 +1,94 @@
-# Кстати (want_watch_plans)
+# Кстати
 
-Голосовое приложение для пар и групп: **Дела · Хочу · Смотреть · Идеи**. ТЗ — в чате.
+## 📚 Documentation
+| | |
+|---|---|
+| [⚙️ Architecture](docs/architecture.md) | System design, components and flow |
+| [📁 Structure](docs/structure.md) | Project organization and responsibilities |
+| [🚀 Installation](docs/installation.md) | Requirements and steps to run the project |
+| [🧠 Technical decisions](docs/decisions.md) | Trade-offs and design justifications |
+| [📖 Usage guide](docs/usage.md) | How the app is used: flows and voice examples |
+| [🔌 API](docs/api.md) | HTTP endpoints, request/response and errors |
+| [🧪 Testing](docs/testing.md) | Server tests, model evaluation, type checks |
+| [☁️ Yandex Cloud deployment](docs/deploy-yandex.md) | One-time cloud setup (in Russian) |
+| [🎙 Voice command contract](docs/voice-api.md) | Parse result format shared by server and app (in Russian) |
 
-```
-mobile/   приложение (Expo, React Native, TypeScript)
-server/   API: распознавание речи и разбор команд (см. server/README.md)
-docs/     формат голосовых команд
-```
+---
 
-## Этап 1 — дизайн на заглушках
+## Description
 
-Сейчас всё работает **без сервера и без Яндекса**:
+«Кстати» is a voice-first shared planner for couples, families and groups of friends. Four lists live in one app:
 
-| Что | Как устроено сейчас |
-| --- | --- |
-| Вход / регистрация | любые email и пароль (от 6 символов). «Войти» — демо-аккаунт Саши с данными; «Создать аккаунт» — пустой аккаунт и экран первой группы |
-| Данные | демо-списки в памяти (`src/lib/mock.ts`), после перезапуска сбрасываются |
-| Микрофон | запись имитируется: таймер и полоска уровня. После «Стоп» подставляется следующая фраза из ТЗ (по кругу) |
-| Разбор фраз | локальные правила (`src/lib/mockParser.ts`), понимают все 14 фраз из раздела 8 ТЗ. Тап по распознанному тексту в карточке → правка → «Разобрать заново» — так можно проверить любую фразу |
-| Вступить по коду | подходит любой код из 6 символов |
-| Напоминания, виджет, push, синхронизация | пока нет |
+- **Дела** — tasks and plans with dates, times, durations, repeats, participants and sub-tasks, shown as a list or a week/day/month/year calendar;
+- **Хочу** — a personal wishlist that the people in your groups can see (“what should I give Masha?”);
+- **Смотреть** — a shared watchlist of movies and series with kind, genres and origin;
+- **Идеи** — a personal notebook of ideas grouped by topics, optionally opened read-only to a group.
 
-Чтобы увидеть «Ничего не услышал», нажмите микрофон и сразу «Стоп» (меньше 0,7 с).
+The main input is a short voice phrase: «В субботу в семь ужин у родителей», «Мы посмотрели Интерстеллар», «Что у друзей на выходных?». The server transcribes it with Yandex SpeechKit, YandexGPT lays it out into a strict JSON schema, server code validates and completes it, and the app shows a card the user confirms before anything is changed.
 
-## Запуск на Android (macOS)
+The product targets Russia and must work without a VPN, so the whole backend runs on Yandex Cloud (Serverless Containers, YDB, Lockbox, Postbox, AI Studio).
 
-Один раз:
+## Quick start
 
-1. Установить **Node.js LTS** — https://nodejs.org
-2. Установить **Android Studio** — https://developer.android.com/studio. При первом запуске пройти мастер (Standard): он поставит Android SDK и эмулятор.
-3. Добавить в `~/.zshrc` и перезапустить терминал:
-   ```bash
-   export ANDROID_HOME=$HOME/Library/Android/sdk
-   export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator
-   export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-   ```
-4. На телефоне: «Настройки → О телефоне» → 7 раз тапнуть «Номер сборки» → «Для разработчиков» → включить «Отладка по USB». Подключить кабелем, разрешить отладку. Проверка: `adb devices` показывает устройство.
-5. Установить зависимости:
-   ```bash
-   cd ~/want_watch_plans/mobile
-   bash setup.sh
-   ```
-
-Запуск:
+Run the server locally on a file database and point the Android emulator at it:
 
 ```bash
-cd ~/want_watch_plans/mobile
+# server (terminal 1)
+cd server
+npm install
+cp .env.example .env          # set YANDEX_API_KEY
+npm run dev                   # http://localhost:3000, emulator: http://10.0.2.2:3000
+
+# app (terminal 2)
+cd mobile
+npm install
+echo 'EXPO_PUBLIC_API_URL=http://10.0.2.2:3000' > .env
 npx expo run:android
 ```
 
-Первая сборка — 5–10 минут. Приложение установится на телефон (или в открытый эмулятор) и откроется.
+Without `EXPO_PUBLIC_API_URL` the app starts in demo mode: in-memory sample data, simulated recording and a local rule-based parser (`mobile/src/lib/mockParser.ts`).
 
-Дальше при правках кода пересобирать не нужно — изменения прилетают на телефон сами (Fast Refresh). Если Metro остановлен: `npx expo start --dev-client`, затем открыть приложение на телефоне. Пересборка (`npx expo run:android`) нужна только после установки новых пакетов.
+## Technologies used
 
-Тема следует за системной: переключите тёмную/светлую тему в настройках Android, чтобы проверить обе.
+| Area | Stack |
+|---|---|
+| Mobile | Expo SDK 57, React Native 0.86, TypeScript, Expo Router, Zustand (persisted to a JSON file), Reanimated 4, Gesture Handler, react-native-svg, expo-audio, expo-notifications, expo-background-task, expo-widgets |
+| Native code | Local Expo modules in Kotlin: `kstati-widget` (Android home-screen widget), `kstati-net` (VPN detection); config plugins for IPv4-first networking, WorkManager versions and iOS push entitlement |
+| Server | Node 22, Fastify 5, Zod, `tsx` for dev, `tsc` for the production build |
+| AI | Yandex SpeechKit (speech-to-text), YandexGPT via Foundation Models API (`yandexgpt-lite/latest` by default) |
+| Data | YDB serverless through the Document API (DynamoDB protocol, SigV4 signing, no SDK); a JSON file store for local development |
+| Infrastructure | Yandex Serverless Containers, Container Registry, Lockbox, Postbox (email), GitHub Actions deploy |
+| Design | Geist and Geist Mono, monochrome theme with per-person colors |
 
-## Если что-то не так
+## Quick installation
 
-- `npx expo run:android` ругается на SDK / Java — проверьте переменные из шага 3 (`echo $ANDROID_HOME`).
-- Предупреждения `expo install --check` о версиях — выполните `npx expo install --fix`.
-- Красный экран в приложении — пришлите скриншот или текст ошибки из терминала.
+1. Install Node 22, Android Studio (SDK, emulator, JDK) and, for voice on a local server, `ffmpeg`.
+2. `npm install` in `server/` and `mobile/`, fill `server/.env` and `mobile/.env`.
+3. `npm run dev` in `server/`, `npx expo run:android` in `mobile/`.
 
-## Где что лежит
+Details, environment variables and cloud deployment: [docs/installation.md](docs/installation.md).
+
+## Architecture (summary)
+
+The phone is the source of truth for the user's own edits and keeps working offline: every change becomes an idempotent operation in a persisted outbox, which is pushed to `POST /ops`; `POST /sync` then returns only the groups and people whose revision changed. The server owns permissions, shared data and the voice pipeline: audio → ffmpeg → SpeechKit → YandexGPT with a context built from the database → deterministic post-processing → a `ParseResult` that the app turns into a confirmation card. Reminders are local notifications, and a background task refreshes data, the widget and reminders while the app is closed. See [docs/architecture.md](docs/architecture.md).
+
+## Project structure
 
 ```
-mobile/app/                 экраны (Expo Router)
-  login.tsx, onboarding.tsx
-  (tabs)/tasks.tsx, wishes.tsx, watch.tsx
-  settings/index.tsx, reminders.tsx
-mobile/src/theme.ts         цвета, шрифты, размеры — токены из раздела 9 ТЗ
-mobile/src/components/      кнопки, чипы, шторка, строки со свайпами, карточка
-mobile/src/lib/             данные, заглушки голоса и разбора
+.github/workflows/   server deploy to Yandex Cloud on push to main
+docs/                documentation, cloud setup, voice contract
+mobile/              Expo app
+  app/               screens (Expo Router)
+  src/components/    UI: calendar, sheets, rows, recorder, pickers
+  src/lib/           store, sync, voice, auth, dates, repeats, reminders
+  src/widget/        widget data and iOS widget view
+  modules/           local native modules (widget, VPN check)
+  plugins/           Expo config plugins
+server/              Fastify API
+  src/               routes, auth, voice parsing, Yandex clients, storage
+  test/              unit and end-to-end tests
+  eval/              phrase evaluation against the real model
+  scripts/           YDB tables, deploy, log stats, read-only inspection
 ```
 
-Цвета и размеры меняются в одном месте — `src/theme.ts`.
+Full tree and responsibilities: [docs/structure.md](docs/structure.md).

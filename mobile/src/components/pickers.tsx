@@ -9,6 +9,7 @@
 import * as Haptics from 'expo-haptics';
 import { ChevronLeft, ChevronRight } from '@/components/icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSheetDragBlock } from './Sheet';
 import { FlatList, Pressable, ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
@@ -63,6 +64,8 @@ function Wheel({
   const total = n * LOOPS;
   const base = n * Math.floor(LOOPS / 2);
   const data = useMemo(() => Array.from({ length: total + PAD * 2 }, (_, i) => i - PAD), [total]);
+  // Барабан крутят вверх-вниз — шторку при этом не тянем
+  const blockSheetDrag = useSheetDragBlock();
   const listRef = useRef<FlatList<number>>(null);
   const y = useSharedValue((base + index) * ITEM);
   const lastPos = useSharedValue(base + index);
@@ -127,7 +130,7 @@ function Wheel({
   };
 
   return (
-    <View style={{ flex: 1, height: ITEM * VISIBLE }}>
+    <View style={{ flex: 1, height: ITEM * VISIBLE }} onTouchStart={blockSheetDrag}>
       {/* Барабан лежит внутри прокручиваемой карточки. У него своя фиксированная высота, поэтому
           вложенность безопасна — отвязываем его от внешней прокрутки, иначе React Native ругается
           «VirtualizedLists should never be nested inside plain ScrollViews». */}

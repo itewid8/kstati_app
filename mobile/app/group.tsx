@@ -103,9 +103,6 @@ export default function GroupSettings() {
           ) : (
             <T>{CATEGORY_LABEL[group.category]}</T>
           )}
-          <T variant="caption" muted>
-            По категории ассистент понимает вопросы: «мы», «у нас» — это группа «Пара»; «наши друзья» — все группы «Друзья».
-          </T>
         </View>
 
         {manage ? (
@@ -116,11 +113,7 @@ export default function GroupSettings() {
             <ListRow label="Код" value={copied ? 'Скопирован ✓' : group.inviteCode || 'появится после связи'} mono onPress={group.inviteCode ? copyCode : undefined} />
             <Divider />
           </>
-        ) : (
-          <T variant="caption" muted style={{ paddingHorizontal: space.side, paddingTop: 16 }}>
-            Приглашать участников могут создатель и админы группы.
-          </T>
-        )}
+        ) : null}
 
         <SectionLabel>Участники · {members.length}</SectionLabel>
         <Divider />
@@ -178,13 +171,6 @@ export default function GroupSettings() {
           );
         })}
         <Divider />
-        {manage && members.length > 1 ? (
-          <T variant="caption" muted style={{ paddingHorizontal: space.side, paddingTop: 8 }}>
-            {isOwner
-              ? 'Нажмите на участника: админ или исключить. При исключении всё, что человек добавил в группу, удаляется.'
-              : 'Нажмите на участника, чтобы исключить: всё, что человек добавил в группу, удалится.'}
-          </T>
-        ) : null}
 
         <SectionLabel> </SectionLabel>
         <Divider />

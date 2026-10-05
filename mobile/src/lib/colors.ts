@@ -47,11 +47,25 @@ export function hexHue(hex: string): number {
   return (h * 60 + 360) % 360;
 }
 
-/** Текст поверх цвета: тёмный на светлых (жёлтый), белый на остальных */
-export function inkOn(hex: string): string {
+const INK_DARK = '#1A1A1A';
+const INK_LIGHT = '#FFFFFF';
+
+/** Относительная яркость по WCAG */
+function luminance(hex: string): number {
   const n = parseInt(hex.slice(1), 16);
-  const lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
-  return lum > 170 ? '#1A1A1A' : '#FFFFFF';
+  const ch = (v: number) => {
+    const x = v / 255;
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * ch(n >> 16) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
+}
+
+/** Текст поверх цвета: белый или тёмный — тот, что контрастнее */
+export function inkOn(hex: string): string {
+  const l = luminance(hex);
+  const onLight = 1.05 / (l + 0.05);
+  const onDark = (l + 0.05) / (luminance(INK_DARK) + 0.05);
+  return onLight >= onDark ? INK_LIGHT : INK_DARK;
 }
 
 /** Цвет каждого участника: свой, если не занят раньше вступившим, иначе первый свободный */

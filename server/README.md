@@ -7,7 +7,7 @@
 ## Первый запуск
 
 ```bash
-cd ~/want_watch_plans/server
+cd ~/kstati/server
 npm install
 cp .env.example .env
 open -e .env          # вставить API-ключ после YANDEX_API_KEY= и сохранить
