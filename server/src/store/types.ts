@@ -94,7 +94,14 @@ export type Wish = {
   title: string;
   note: string;
   link: string;
+  /** Владелец сам отметил «получил» */
   receivedAt: string | null;
+  /**
+   * Кто подарил и когда отметил (S1). Ставит другой участник общей группы (op wish.gift).
+   * Сюрприз: владельцу эти поля не отдаются, пока он сам не отметит receivedAt (api.ts, wishView)
+   */
+  giftedBy?: string | null;
+  giftedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -110,6 +117,8 @@ export type Topic = {
   ownerId: string;
   title: string;
   groupIds: string[];
+  /** Тема в архиве (S2): отметил владелец; нет — обычная */
+  archivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -243,3 +252,8 @@ export const grev = (groupId: string) => `grev#${groupId}`;
 export const urev = (userId: string) => `urev#${userId}`;
 /** Ревизия идей человека: меняется при любой правке его тем и идей */
 export const irev = (userId: string) => `irev#${userId}`;
+/**
+ * Ревизия подарков чужих хотелок человека (wish.gift, S1). Отдельно от urev: владелец её не получает, иначе
+ * «моя ревизия выросла, а я ничего не менял» выдаёт подарок (docs/security/REVIEW-v2.md, V2-2)
+ */
+export const giftrev = (userId: string) => `giftrev#${userId}`;

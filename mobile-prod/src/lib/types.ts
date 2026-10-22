@@ -1,0 +1,354 @@
+export type ID = string;
+
+export type User = {
+  id: ID;
+  name: string;
+  /** Уникальный никнейм без @: буквы (кириллица, латиница), цифры, «_» и «.» */
+  nick?: string;
+  /** Пол — для правильных слов: «её дела», «добавила» */
+  gender?: Gender;
+  /** Свой цвет в календаре и на иконке; нет — подбирается сам (lib/colors.ts) */
+  color?: PersonColor;
+  /** Символ на иконке: буква или эмодзи; нет — первая буква имени */
+  avatar?: string;
+};
+
+export type Gender = 'm' | 'f';
+
+/** Я: публичный профиль плюс то, что видно только мне */
+export type Me = User & { email?: string | null; hasPassword?: boolean; vk?: boolean };
+
+/** Палитра людей — цвета стикеров-закладок. Порядок — порядок автоподбора */
+export const PERSON_COLORS = ['blue', 'pink', 'green', 'yellow', 'orange', 'violet', 'teal'] as const;
+/** Цвет из палитры или свой «#rrggbb» с полосы спектра */
+export type PersonColor = (typeof PERSON_COLORS)[number] | `#${string}`;
+export type PaletteKey = (typeof PERSON_COLORS)[number];
+
+/** «его» / «её» / «его или её» */
+export const hisHer = (u?: Pick<User, 'gender'> | null) => (u?.gender === 'f' ? 'её' : u?.gender === 'm' ? 'его' : 'его или её');
+/** Окончание прошедшего времени: «добавил» / «добавила» / «добавил(а)» */
+export const pastEnd = (u?: Pick<User, 'gender'> | null) => (u?.gender === 'f' ? 'а' : u?.gender === 'm' ? '' : '(а)');
+
+export type ThemePref = 'system' | 'light' | 'dark';
+
+/** Кнопка микрофона: tap — нажать, чтобы начать, и ещё раз, чтобы закончить; hold — записывать, пока палец на кнопке */
+export type MicMode = 'tap' | 'hold';
+
+/** Язык распознавания голоса на сервере (POST /voice, поле lang) */
+export type VoiceLang = 'ru-RU' | 'en-US' | 'auto';
+
+export const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
+
+/** Категория группы: по ней ассистент понимает «мы», «наши друзья», «родители» */
+export type GroupCategory = 'couple' | 'family' | 'parents' | 'friends' | 'other';
+export const CATEGORY_LABEL: Record<GroupCategory, string> = {
+  couple: 'Пара',
+  family: 'Семья',
+  parents: 'Родители',
+  friends: 'Друзья',
+  other: 'Другое',
+};
+export const CATEGORIES: GroupCategory[] = ['couple', 'family', 'parents', 'friends', 'other'];
+
+export type Group = {
+  id: ID;
+  name: string;
+  category: GroupCategory;
+  inviteCode: string;
+  memberIds: ID[];
+  /** Создатель: назначает и снимает админов */
+  ownerId: ID;
+  /** Админы: те же права, что у создателя (приглашать, переименовывать), кроме назначения админов */
+  adminIds: ID[];
+};
+
+export const canManageGroup = (g: Group, userId: ID) => g.ownerId === userId || g.adminIds.includes(userId);
+
+/**
+ * Кого может исключить userId: создатель — любого, кроме себя; админ — только обычных участников
+ * (не создателя и не других админов).
+ */
+export const canRemoveMember = (g: Group, userId: ID, targetId: ID) => {
+  if (targetId === userId || targetId === g.ownerId) return false;
+  if (g.ownerId === userId) return true;
+  return g.adminIds.includes(userId) && !g.adminIds.includes(targetId);
+};
+
+/** Старые правила напоминаний (до версии 2 хранилища) — нужны только для переноса настроек */
+export type ReminderRule = 'week' | 'days3' | 'dayBefore' | 'sameDay' | 'h1' | 'h2' | 'h3' | 'h6';
+
+/**
+ * Одно напоминание — короткая строка (так проще хранить и проверять на сервере):
+ *   m90        — за 90 минут до начала (только для дел со временем; m0 — в момент начала)
+ *   d1@20:00   — за 1 день, в 20:00 (d0@09:00 — в день события в 09:00)
+ *   M1@20:00   — за 1 месяц, в 20:00
+ */
+export type ReminderSpec = string;
+
+/**
+ * Повтор дела. Первый раз — дата дела (task.date), дальше по правилу.
+ *   day   — каждые every дней
+ *   week  — каждые every недель, по дням weekdays (1 = пн … 7 = вс; нет — день недели первой даты)
+ *   month — каждые every месяцев, по числам monthDays (-1 = последний день; нет — число первой даты)
+ *   year  — каждые every лет, в месяцы months (1…12) по числам monthDays
+ * Конец: until (включительно) или count повторов; нет обоих — бессрочно.
+ */
+export type Repeat = {
+  freq: 'day' | 'week' | 'month' | 'year';
+  every: number;
+  weekdays?: number[];
+  monthDays?: number[];
+  months?: number[];
+  until?: string | null;
+  count?: number | null;
+};
+
+export type Task = {
+  id: ID;
+  groupId: ID;
+  title: string;
+  date: string | null; // YYYY-MM-DD
+  time: string | null; // HH:MM
+  /** Описание — видно только в карточке дела */
+  note?: string;
+  createdBy: ID;
+  doneAt: string | null;
+  createdAt: string;
+  /** Повтор; у повторяющегося дела doneAt не используется — отмечаются отдельные разы */
+  repeat?: Repeat | null;
+  /** Даты повторов, отмеченных «сделано» */
+  doneDates?: string[];
+  /** Даты повторов, удалённых по одному («только этот раз») */
+  skipDates?: string[];
+  /** Общие напоминания для всех участников группы; null/нет — у каждого свои настройки по умолчанию */
+  reminders?: ReminderSpec[] | null;
+  /** Конец: время (в тот же день) и дата — если дело многодневное */
+  endDate?: string | null;
+  endTime?: string | null;
+  /** Кто занят: участники группы; пусто — автор */
+  people?: ID[];
+  /** Подзадача: id большого дела (плана) в той же группе */
+  parentId?: ID | null;
+  /** Только в приложении: дата конкретного повтора, если это «развёрнутый» повтор серии */
+  occ?: string;
+};
+
+/** Личные напоминания для дела (только мои): undefined — как у всех, [] — не напоминать */
+export type TaskReminderOverride = ReminderSpec[];
+
+export type Wish = {
+  id: ID;
+  /** Хотелки принадлежат человеку, а не группе: во всех его группах видны одни и те же */
+  ownerId: ID;
+  title: string;
+  note: string;
+  link: string;
+  /** Отметка «получил» — ставит владелец */
+  receivedAt: string | null;
+  createdAt: string;
+  /**
+   * Кто подарил (API 2). У чужой хотелки — если её подарил кто-то; у своей — приходит только после receivedAt
+   * (до этого подарок скрыт от владельца — сюрприз)
+   */
+  giftedBy?: ID;
+  giftedAt?: string;
+};
+
+/**
+ * Идеи — личный блокнот, разложенный по темам. Тема и идеи принадлежат человеку и видны только ему;
+ * тему можно открыть группам (groupIds) — участники её видят, но менять не могут.
+ */
+export type Topic = {
+  id: ID;
+  ownerId: ID;
+  title: string;
+  groupIds: ID[];
+  createdAt: string;
+  /** В архиве с этого времени (API 2). null — только что вернули из архива: так поле уйдёт на сервер */
+  archivedAt?: string | null;
+};
+
+export type Idea = {
+  id: ID;
+  ownerId: ID;
+  /** null — «Без темы» */
+  topicId: ID | null;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** id «темы» для идей без темы — в адресе экрана и в голосовом ответе */
+export const INBOX = 'inbox';
+
+export type Kind = 'movie' | 'series' | 'cartoon' | 'show' | 'standup';
+export type Genre =
+  | 'comedy'
+  | 'drama'
+  | 'action'
+  | 'thriller'
+  | 'horror'
+  | 'scifi'
+  | 'detective'
+  | 'romance'
+  | 'adventure'
+  | 'documentary';
+export type Origin = 'ru' | 'foreign';
+export type Freshness = 'new' | 'old';
+
+export type WatchItem = {
+  id: ID;
+  groupId: ID;
+  title: string;
+  kind: Kind | null;
+  genres: Genre[];
+  origin: Origin | null;
+  year: number | null;
+  addedBy: ID;
+  watchedAt: string | null;
+  createdAt: string;
+};
+
+export type WatchFilters = {
+  kind: Kind[];
+  genre: Genre[];
+  origin: Origin[];
+  fresh: Freshness[];
+};
+
+export const emptyFilters: WatchFilters = { kind: [], genre: [], origin: [], fresh: [] };
+
+/** Напоминания по умолчанию: отдельно для дел со временем и на весь день (как в Google Календаре) */
+export type ReminderSettings = {
+  enabled: boolean;
+  timed: ReminderSpec[];
+  allDay: ReminderSpec[];
+};
+
+export const KIND_LABEL: Record<Kind, string> = {
+  movie: 'фильм',
+  series: 'сериал',
+  cartoon: 'мультфильм',
+  show: 'шоу',
+  standup: 'стендап',
+};
+
+export const GENRE_LABEL: Record<Genre, string> = {
+  comedy: 'комедия',
+  drama: 'драма',
+  action: 'боевик',
+  thriller: 'триллер',
+  horror: 'ужасы',
+  scifi: 'фантастика',
+  detective: 'детектив',
+  romance: 'мелодрама',
+  adventure: 'приключения',
+  documentary: 'документальное',
+};
+
+export const ORIGIN_LABEL: Record<Origin, string> = { ru: 'наше', foreign: 'зарубежное' };
+export const FRESH_LABEL: Record<Freshness, string> = { new: 'новое', old: 'не новое' };
+
+
+/** Запись ленты активности (приходит с сервера, GET /activity) */
+export type ActivityKind =
+  | 'task.add'
+  | 'task.done'
+  | 'task.undone'
+  | 'task.edit'
+  | 'task.delete'
+  | 'watch.add'
+  | 'watch.done'
+  | 'watch.delete'
+  | 'wish.add'
+  | 'wish.done'
+  | 'wish.delete'
+  | 'member.join'
+  | 'member.leave'
+  | 'member.remove'
+  | 'group.rename'
+  | 'topic.share';
+
+export type Activity = {
+  scope: string;
+  /** «время#случайное» — по нему порядок и «что уже видели» */
+  id: string;
+  at: string;
+  actor: ID;
+  kind: ActivityKind;
+  groupId?: ID;
+  itemId?: ID;
+  title?: string;
+  date?: string | null;
+  time?: string | null;
+  fields?: string[];
+  target?: ID;
+};
+
+/* Черновики для карточки подтверждения */
+export type TaskDraft = {
+  title: string;
+  date: string | null;
+  time: string | null;
+  note?: string;
+  repeat?: Repeat | null;
+  /** Мои личные напоминания (undefined — как у всех) */
+  mine?: TaskReminderOverride;
+  /** Общие напоминания группы (null — у каждого свои по умолчанию) */
+  shared?: ReminderSpec[] | null;
+  endDate?: string | null;
+  endTime?: string | null;
+  people?: ID[];
+  parentId?: ID | null;
+};
+export type WishDraft = { title: string; note: string; link: string };
+export type WatchDraft = {
+  title: string;
+  kind: Kind | null;
+  genres: Genre[];
+  origin: Origin | null;
+  year: number | null;
+};
+
+/** Идея в карточке: title — её текст; тема — существующая (topicId) или новая (newTopic); обе null — «Без темы» */
+export type IdeaDraft = { title: string; topicId: ID | null; newTopic: string | null };
+export type TopicDraft = { title: string };
+
+export type DraftItem =
+  | { key: string; type: 'task'; id?: ID; force?: boolean; data: TaskDraft }
+  | { key: string; type: 'wish'; id?: ID; force?: boolean; data: WishDraft }
+  | { key: string; type: 'watch'; id?: ID; force?: boolean; data: WatchDraft }
+  | { key: string; type: 'idea'; id?: ID; force?: boolean; data: IdeaDraft }
+  | { key: string; type: 'topic'; id?: ID; force?: boolean; data: TopicDraft };
+
+export type ItemType = DraftItem['type'];
+
+/* Голосовые изменения существующих записей */
+export type ChangeAction = 'update' | 'mark' | 'unmark' | 'delete';
+
+export type ChangePatch = Partial<TaskDraft> & Partial<WishDraft> & Partial<WatchDraft> & Partial<Omit<IdeaDraft, 'title'>>;
+
+export type ChangeDraft = {
+  key: string;
+  action: ChangeAction;
+  type: ItemType;
+  /** Подходящие записи, лучшие первыми (до 3). Если их несколько, человек выбирает. */
+  candidates: ID[];
+  chosen: ID;
+  /** Для update: только изменяемые поля */
+  patch?: ChangePatch;
+  /** Раз серии, названный во фразе (API 2, «удали йогу в субботу»). Относится к chosen */
+  occ?: string;
+};
+
+/* Вопросы о планах: «какие у нас планы на выходные» */
+export type PlansScope =
+  | { kind: 'us' } // «мы», «у нас» — группа категории «Пара»
+  | { kind: 'current' } // не сказано — текущая группа
+  | { kind: 'category'; category: GroupCategory } // «наши друзья» — все группы категории
+  | { kind: 'groups'; names: string[] } // «в Футболе» — по названию
+  | { kind: 'people'; names: string[] } // «у нас с Кариной» — самая маленькая общая группа
+  | { kind: 'me' }; // «что я делаю» — все мои группы (только при x-kstati-api: 2, вместе с who)
+
+/** who — чьи дела показать (участие = peopleOf); нет — всех */
+export type PlansQuery = { scope: PlansScope; from: string; to: string; query: string; who?: ID[] };

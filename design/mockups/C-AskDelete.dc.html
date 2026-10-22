@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инструмент — голос: удалить</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 844px; display: flex; gap: 40px; font-family: 'Geist', sans-serif">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}">
+<div style="position: absolute; left: 16px; right: 16px; top: 20px; height: 40px; display: flex; gap: 8px">
+<span style="flex: 1; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em">МЫ С КАРИНОЙ</span>
+<span style="width: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}"></span><span style="width: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}"></span><span style="width: 40px; border: 1.5px solid {{t.border}}; background: {{t.s}}"></span>
+</div>
+<div style="position: absolute; left: 16px; top: 70px; font-size: 40px; font-weight: 700; letter-spacing: -0.05em; line-height: 42px">Дела</div>
+<div style="position: absolute; left: 16px; right: 16px; top: 122px; border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>СЕГОДНЯ</span><span>ПН 05</span></div>
+<sc-for list="{{t.bgRows}}" as="r" hint-placeholder-count="6"><div style="position: relative; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; background: {{t.panel}}; border-top: 1px solid {{t.hair}}"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1.5px; background: {{r.strip}}"></span><span style="width: 18px; height: 18px; box-sizing: border-box; border: 1.5px solid {{t.border}}"></span><span style="flex: 1; font-size: 13px; font-weight: 500">{{r.title}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 600">{{r.time}}</span></div></sc-for>
+</div>
+<div style="position: absolute; inset: 0; background: {{t.scrim}}"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; border-top: 1.5px solid {{t.border}}; background: {{t.bg}}; padding: 8px 16px 18px; display: flex; flex-direction: column; gap: 10px"><span style="align-self: center; width: 36px; height: 4px; background: {{t.hair}}"></span><div style="display: flex; align-items: center; gap: 10px"><span style="display: flex; align-items: center; gap: 7px; font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; color: {{t.muted}}"><span style="width: 8px; height: 8px; border-radius: 4px; background: {{t.muted}}"></span>00:03</span><div style="flex: 1; height: 24px; display: flex; align-items: center; gap: 2px"><sc-for list="{{t.meter}}" as="m" hint-placeholder-count="40"><span style="width: 3px; height: {{m.h}}px; background: {{t.hairStrong}}"></span></sc-for></div><span style="height: 22px; padding: 0 7px; display: flex; align-items: center; background: {{t.text}}; color: {{t.bg}}; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">УДАЛИТЬ</span></div><div style="font-size: 18px; font-weight: 600; letter-spacing: -0.02em; line-height: 22px">«Удали йогу в субботу»</div><div style="position: relative; border: 1.5px solid {{t.border}}; background: {{t.panel}}; padding: 9px 10px 9px 12px; display: flex; flex-direction: column; gap: 3px"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1.5px; background: {{t.cardStrip}}"></span><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px"><span style="font-size: 15px; font-weight: 600; text-decoration: {{t.cardDeco}}">{{t.cardTitle}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.06em; color: {{t.muted}}">{{t.cardTag}}</span></span><span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.02em; color: {{t.muted}}">{{t.cardMeta}}</span></div><div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr))"><sc-for list="{{t.scope}}" as="g" hint-placeholder-count="2"><button style="height: 32px; margin-left: {{g.ml}}; border: 1.5px solid {{t.border}}; background: {{g.bg}}; color: {{g.color}}; padding: 0 2px; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: {{g.weight}}; letter-spacing: 0.04em">{{g.label}}</button></sc-for></div><div style="display: flex; gap: 8px; height: 44px"><button style="flex: 1; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em">ОТМЕНА</button><button style="flex: 1.3; border: 1.5px solid {{t.red}}; background: {{t.red}}; color: #FFFFFF; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em">УДАЛИТЬ</button></div></div>
+
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; };
+    const pal = [
+      { bg: '#E7E6E1', panel: '#F4F3EF', border: '#161616', hair: '#CFCEC8', hairStrong: '#A3A29C', faint: '#A3A29C', text: '#111111', muted: '#5E5E58', red: '#E0281E', warn: '#A15C00', s: '#2F6BDB', k: '#E2407E', sInk: '#FFFFFF', kInk: '#1A1A1A', a: 0.2 },
+      { bg: '#0B0B0B', panel: '#151515', border: '#2E2E2E', hair: '#222222', hairStrong: '#3A3A3A', faint: '#4A4A47', text: '#F2F2F0', muted: '#7C7C78', red: '#FF3B30', warn: '#E5A50A', s: '#5B8DEF', k: '#F06A9B', sInk: '#1A1A1A', kInk: '#1A1A1A', a: 0.24 },
+    ];
+    // Октябрь 2026: 1-е — четверг. sel — выбранные дни, from/to — диапазон (для многодневного дела)
+    const calendar = (p, o) => Array.from({ length: 35 }, (_, i) => {
+      const d = i - 2, inM = d >= 1 && d <= 31;
+      const end = inM && (d === o.sel || d === o.from || d === o.to);
+      const mid = inM && o.from && d > o.from && d < o.to;
+      return {
+        n: inM ? d : d < 1 ? 30 + d : d - 31,
+        bg: end ? p.text : mid ? rgba(o.tint === 's' ? p.s : p.k, p.a) : 'transparent',
+        color: end ? p.bg : !inM ? p.faint : d === 5 ? p.red : p.text,
+        weight: end || d === 5 ? 600 : 400,
+      };
+    });
+    const seg = (p, labels, on) => labels.map((label, i) => ({ label, ml: i ? '-1.5px' : '0', bg: i === on ? p.text : p.panel, color: i === on ? p.bg : p.text, weight: i === on ? 600 : 400 }));
+    // Цвет человека всегда один: квадрат его цвета. В строке «Кто» показаны только выбранные
+    const person = (p, name, c, on) => ({ name, c, show: on ? 'flex' : 'none' });
+    const wheel = (p, rows) => rows.map(([h, m], i) => ({ h, m, size: i === 1 ? 17 : 12, weight: i === 1 ? 600 : 400, color: i === 1 ? p.text : p.muted }));
+    const lv = [8, 12, 20, 34, 52, 44, 30, 60, 72, 56, 40, 64, 78, 66, 48, 30, 22, 38, 58, 70, 54, 36, 26, 44, 62, 50, 34, 20, 14, 26, 40, 30, 18, 12, 8, 6, 6, 6, 6, 6];
+    const base = (p, pi) => ({
+      ...p,
+      scrim: pi === 0 ? 'rgba(17,17,17,0.45)' : 'rgba(0,0,0,0.6)',
+      bgRows: [['Стоматолог', '09:30', p.s], ['Забрать посылку', '—', p.k], ['Йога', '19:00', p.k], ['Подарок Лене', '—', p.s], ['Сериал', '21:00', 'linear-gradient(' + p.s + ' 50%, ' + p.k + ' 50%)'], ['Оплатить коммуналку', '—', p.s]].map(([title, time, strip]) => ({ title, time, strip })),
+      meter: lv.map((v) => ({ h: Math.max(3, Math.round(v * 0.28)) })),
+    });
+    const stripOf = (p, w) => (w === 'sk' ? 'linear-gradient(' + p.s + ' 50%, ' + p.k + ' 50%)' : w === 's' ? p.s : p.k);
+    const whoOf = (w) => (w === 'sk' ? 'САНЯ, КАРИНА' : w === 's' ? 'САНЯ' : 'КАРИНА');
+    const dayList = (p, days) => days.map(([label, note, rows, today]) => ({
+      label, note, color: today ? p.red : p.text,
+      rows: rows.map(([time, title, w, done, multi]) => ({
+        time, title, who: whoOf(w), strip: stripOf(p, w), h: multi ? 22 : 26,
+        deco: done ? 'line-through' : 'none', color: done ? p.muted : p.text,
+      })),
+    }));
+    const themes = pal.map((p, pi) => ({
+      ...base(p, pi),
+      cardTitle: 'Йога', cardTag: 'КАЖДУЮ НЕДЕЛЮ', cardMeta: 'СБ 10 ОКТ · 10:00–11:30 · КАРИНА', cardStrip: p.k, cardDeco: 'line-through',
+      scope: seg(p, ['ТОЛЬКО 10 ОКТ', 'ВСЕ ПОВТОРЫ'], 0),
+    }));
+    return { themes };
+  }
+}
+</script>
+</body>
+</html>

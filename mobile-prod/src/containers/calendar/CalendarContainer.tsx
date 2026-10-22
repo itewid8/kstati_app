@@ -1,0 +1,24 @@
+import { useStore } from '@/lib/store';
+import { signedInOnly } from '../common';
+import { DayContainer } from './DayContainer';
+import { MonthContainer } from './MonthContainer';
+import { WeekContainer } from './WeekContainer';
+import { YearContainer } from './YearContainer';
+
+/**
+ * Вкладка «Дела» в виде календаря: вид — s.tasksView (список рисует TasksListContainer) (INTEGRATION.md 1.1, 5.1).
+ * Без групп сюда не попадают — app/(tabs)/tasks/index.tsx ведёт на онбординг
+ */
+export const CalendarContainer = signedInOnly(function Calendar() {
+  const view = useStore((s) => s.tasksView);
+  switch (view) {
+    case 'day':
+      return <DayContainer />;
+    case 'month':
+      return <MonthContainer />;
+    case 'year':
+      return <YearContainer />;
+    default:
+      return <WeekContainer />;
+  }
+});

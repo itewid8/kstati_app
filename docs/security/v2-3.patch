@@ -1,0 +1,73 @@
+diff --git a/server/src/api.ts b/server/src/api.ts
+index 73f7931..57a06ea 100644
+--- a/server/src/api.ts
++++ b/server/src/api.ts
+@@ -214,10 +214,20 @@ export class Data {
+     return { events: events.map((a) => (giftOwner(a) ? { ...a, actor: giftOwner(a)! } : a)) };
+   }
+ 
+-  /** Есть ли у двух людей общая группа */
++  /**
++   * Есть ли у двух людей общая группа. Читаем только группы, общие по спискам членства, и по 20 за раз до первой
++   * подходящей: wish.gift и wish.put зовут это на каждую операцию (до 200 в /ops), а групп у человека может быть
++   * сколько угодно — чтение всех его групп на операцию давало ×200 обращений к базе (docs/security/REVIEW-v2.md, V2-3)
++   */
+   private async shareGroup(a: string, b: string): Promise<boolean> {
+-    const groups = await this.store.getGroups(await this.store.listMemberships(a));
+-    return groups.some((g) => g.memberIds.includes(a) && g.memberIds.includes(b));
++    const [ma, mb] = await Promise.all([this.store.listMemberships(a), this.store.listMemberships(b)]);
++    const theirs = new Set(mb);
++    const common = [...new Set(ma)].filter((g) => theirs.has(g));
++    for (let i = 0; i < common.length; i += 20) {
++      const groups = await this.store.getGroups(common.slice(i, i + 20));
++      if (groups.some((g) => g.memberIds.includes(a) && g.memberIds.includes(b))) return true;
++    }
++    return false;
+   }
+ 
+   private async memberGroup(user: User, groupId: string): Promise<Group> {
+diff --git a/server/test/v2.ts b/server/test/v2.ts
+index 099e033..1eb666e 100644
+--- a/server/test/v2.ts
++++ b/server/test/v2.ts
+@@ -83,6 +83,40 @@ assert.match(sys.text, /«Удали йогу в субботу»/);
+ assert.match(sys.text, /«Перенеси стоматолога на пятницу на два и добавь Карину»/);
+ assert.match(sys.text, /«Что я делаю на выходных\?» → .*"scope":"me"/);
+ 
++/* ---------- S1 через HTTP: проверка общей группы не читает все группы на каждую операцию (REVIEW-v2, V2-3) ---------- */
++{
++  // Импорт здесь, а не в шапке: блок не зависит от остального файла
++  const { buildApp } = await import('../src/app.js');
++  const { signToken } = await import('../src/auth.js');
++  const { MemoryStore } = await import('../src/store/memory.js');
++  const store = new MemoryStore();
++  let groupReads = 0;
++  const getGroups = store.getGroups.bind(store);
++  store.getGroups = async (ids) => ((groupReads += ids.length), getGroups(ids));
++  const app = await buildApp({ store });
++  for (const [id, name] of [['o1', 'Оля'], ['a1', 'Аня'], ['x1', 'Чужой']]) await store.putUser({ id, name, createdAt: 'c' });
++  const ops = async (uid: string, ...list: unknown[]) => {
++    const r = await app.inject({ method: 'POST', url: '/ops', payload: { ops: list }, headers: { authorization: `Bearer ${signToken(uid)}` } });
++    assert.equal(r.statusCode, 200, r.body);
++    return JSON.parse(r.body).results;
++  };
++  const [g] = await ops('o1', { op: 'group.create', group: { id: 'g', name: 'Друзья', category: 'friends' } });
++  await ops('a1', { op: 'group.join', code: g.group.inviteCode });
++  await ops('o1', { op: 'wish.put', wish: { id: 'w', title: 'Наушники', note: '', link: '', receivedAt: null } });
++  // У Ани — ещё 400 своих групп
++  for (const p of ['ga', 'gb']) await ops('a1', ...Array.from({ length: 200 }, (_, i) => ({ op: 'group.create', group: { id: `${p}${i}`, name: 'g', category: 'other' } })));
++  groupReads = 0;
++  const res = await ops('a1', ...Array.from({ length: 200 }, (_, i) => ({ op: 'wish.gift', ownerId: 'o1', id: 'w', gifted: i % 2 === 0 })));
++  assert.ok(res.every((r: { ok: boolean }) => r.ok), JSON.stringify(res[0]));
++  assert.ok(groupReads <= 200 * 20, `200 операций wish.gift прочитали ${groupReads} групп`);
++  // Права те же: без общей группы — forbidden; общая группа по спискам, но человека в ней уже нет — тоже
++  assert.equal((await ops('x1', { op: 'wish.gift', ownerId: 'o1', id: 'w', gifted: true }))[0].error, 'forbidden');
++  await store.addMembership('x1', 'g');
++  assert.equal((await ops('x1', { op: 'wish.gift', ownerId: 'o1', id: 'w', gifted: true }))[0].error, 'forbidden', 'устаревшая запись членства прав не даёт');
++  assert.equal((await ops('o1', { op: 'wish.put', wish: { id: 'w', title: 'Наушники', note: '', link: '', receivedAt: 'r', giftedBy: 'x1' } }))[0].error, 'bad_member');
++  await app.close();
++}
++
+ /* ---------- S1: хотелка глазами владельца и других ---------- */
+ const base: Wish = { id: 'w', ownerId: 'u1', title: 'Наушники', note: '', link: '', receivedAt: null, createdAt: 'c', updatedAt: 'u' };
+ const gifted: Wish = { ...base, giftedBy: 'u7', giftedAt: '2026-10-06T10:00:00.000Z' };

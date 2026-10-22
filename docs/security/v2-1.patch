@@ -1,0 +1,51 @@
+diff --git a/server/src/recur.ts b/server/src/recur.ts
+index 8f24333..e5f5da6 100644
+--- a/server/src/recur.ts
++++ b/server/src/recur.ts
+@@ -46,6 +46,13 @@ function fits(r: Repeat, start: string, iso: string): boolean {
+ 
+ type Series = { date: string | null; repeat?: Repeat | null; skipDates?: string[] };
+ 
++/**
++ * Предел перебора — 50 лет от первого проверяемого дня. Без него серия со счётчиком и давней датой
++ * (date «0100-01-01», count, редкий повтор) или далёкий to перебирают миллионы дней и на секунды занимают
++ * процесс сервера целиком (docs/security/REVIEW-v2.md, V2-1)
++ */
++const MAX_SPAN_DAYS = 366 * 50;
++
+ /** Все даты серии в промежутке [from, to] (включительно), кроме удалённых по одному */
+ export function occurrences(task: Series, from: string, to: string, limit = 2000): string[] {
+   if (!task.date) return [];
+@@ -58,6 +65,7 @@ export function occurrences(task: Series, from: string, to: string, limit = 2000
+   if (r.until) end = Math.min(end, dayNo(r.until));
+   // Со счётчиком повторов считаем с самого начала серии, иначе — с начала промежутка
+   let n = r.count ? start : Math.max(start, dayNo(from));
++  end = Math.min(end, n + MAX_SPAN_DAYS);
+   let seen = 0;
+   const fromNo = dayNo(from);
+   for (; n <= end && out.length < limit; n++) {
+diff --git a/server/test/v2.ts b/server/test/v2.ts
+index 099e033..cd6e5bb 100644
+--- a/server/test/v2.ts
++++ b/server/test/v2.ts
+@@ -41,6 +41,20 @@ assert.equal(repeatShort({ freq: 'week', every: 2, weekdays: [3] }), 'раз в
+ assert.equal(repeatShort({ freq: 'month', every: 1, monthDays: [20] }), 'каждое 20 число');
+ assert.equal(repeatShort({ freq: 'day', every: 1 }), 'каждый день');
+ 
++// Дело-«бомба» от участника группы: давняя дата + счётчик + редкий повтор. Перебор ограничен (REVIEW-v2, V2-1)
++const bomb = { id: 'b1', title: 'Йога', date: '0100-01-01', time: null, repeat: { freq: 'year' as const, every: 99, count: 999 } };
++let tBomb = Date.now();
++assert.deepEqual(occurrences(bomb, '9998-01-01', '9999-02-01'), []);
++assert.ok(Date.now() - tBomb < 300, `occurrences на «бомбе» — ${Date.now() - tBomb} мс`);
++tBomb = Date.now();
++normalize(
++  Array.from({ length: 3 }, () => ({ intent: 'delete', target: ['b1'], query: '' })),
++  { ...ctx(2), today: '9998-01-01', existing: { tasks: [bomb], watch: [], wishes: [] } },
++  'Удали йогу в субботу',
++);
++assert.ok(Date.now() - tBomb < 500, `голосовой разбор с «бомбой» — ${Date.now() - tBomb} мс`);
++assert.deepEqual(occurrences({ date: '2000-01-01', repeat: { freq: 'week', every: 1, count: 999 } }, '2019-02-01', '2019-02-28'), ['2019-02-02', '2019-02-09', '2019-02-16'], 'давняя серия со счётчиком считается как раньше');
++
+ /* ---------- S3: раз серии в голосовой правке ---------- */
+ const del = (text: string, target = 'y1', api?: number) => change(normalize([{ intent: 'delete', target: [target], query: '' }], ctx(api), text));
+ assert.equal(del('Удали йогу в субботу').occ, '2026-10-17', 'ближайшая суббота серии (10 октября уже удалено)');

@@ -1,0 +1,409 @@
+import { Check } from '@/components/icons';
+import React, { forwardRef, useEffect, useRef, useState } from 'react';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type PressableProps,
+  type StyleProp,
+  type TextInputProps,
+  type TextProps,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
+import { font, size, space, useColors } from '@/theme';
+import { Marquee } from '@/ui';
+
+/* ---------- Текст ---------- */
+
+type TProps = TextProps & {
+  variant?: 'title' | 'body' | 'caption' | 'label';
+  weight?: 'regular' | 'medium' | 'semibold';
+  mono?: boolean;
+  muted?: boolean;
+  danger?: boolean;
+  color?: string;
+};
+
+/** Только текст и числа — без вложенных <Text> и элементов */
+const isPlainText = (node: React.ReactNode): boolean =>
+  typeof node === 'string' || typeof node === 'number' || (Array.isArray(node) && node.every((n) => typeof n === 'string' || typeof n === 'number'));
+
+export function T({ variant = 'body', weight = 'regular', mono, muted, danger, color, style, ...rest }: TProps) {
+  const c = useColors();
+  const fs = size[variant];
+  const s: TextStyle = {
+    fontFamily: mono ? font.mono : font[weight],
+    fontSize: fs,
+    lineHeight: Math.round(fs * 1.4),
+    color: color ?? (danger ? c.danger : muted ? c.textMuted : c.text),
+  };
+  if (variant === 'title') s.fontFamily = font.semibold;
+  // Одна строка, которая не влезает, бежит по кругу (как во всех новых экранах)
+  if (rest.numberOfLines === 1 && !rest.onPress && isPlainText(rest.children)) {
+    return (
+      <Marquee style={[s, style]} accessibilityLabel={rest.accessibilityLabel} testID={rest.testID}>
+        {rest.children}
+      </Marquee>
+    );
+  }
+  return <Text {...rest} style={[s, style]} />;
+}
+
+/* ---------- Кнопки ---------- */
+
+type BtnProps = Omit<PressableProps, 'style'> & {
+  title: string;
+  kind?: 'primary' | 'outline' | 'text';
+  danger?: boolean;
+  color?: string;
+  style?: StyleProp<ViewStyle>;
+};
+
+export function Button({ title, kind = 'primary', danger, color, style, disabled, ...rest }: BtnProps) {
+  const c = useColors();
+  if (kind === 'text') {
+    return (
+      <Pressable
+        hitSlop={8}
+        disabled={disabled}
+        style={({ pressed }) => [styles.textBtn, { opacity: disabled ? 0.4 : pressed ? 0.6 : 1 }, style]}
+        {...rest}
+      >
+        <T weight="medium" color={color ?? (danger ? c.danger : c.text)}>
+          {title}
+        </T>
+      </Pressable>
+    );
+  }
+  const outline = kind === 'outline';
+  return (
+    <Pressable
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.primaryBtn,
+        outline
+          ? { borderWidth: 1, borderColor: c.border, backgroundColor: pressed ? c.surface : 'transparent', opacity: disabled ? 0.4 : 1 }
+          : { backgroundColor: c.primary, opacity: disabled ? 0.4 : pressed ? 0.85 : 1 },
+        style,
+      ]}
+      {...rest}
+    >
+      <T weight="medium" color={color ?? (outline ? c.text : c.onPrimary)}>
+        {title}
+      </T>
+    </Pressable>
+  );
+}
+
+/* ---------- Чип ---------- */
+
+export function Chip({
+  label,
+  selected,
+  onPress,
+  style,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.chip,
+        {
+          borderColor: selected ? c.primary : c.border,
+          backgroundColor: selected ? c.primary : 'transparent',
+          opacity: pressed ? 0.7 : 1,
+        },
+        style,
+      ]}
+    >
+      <T variant="caption" weight="medium" color={selected ? c.onPrimary : c.text}>
+        {label}
+      </T>
+    </Pressable>
+  );
+}
+
+/* ---------- Переключатель ---------- */
+
+/**
+ * Переключатель в стиле приложения: бегунок всегда белый, во включённом положении дорожка — фирменный красный
+ * (как центральный столбик логотипа). Одинаковый на Android и iPhone, в отличие от системного Switch.
+ */
+export function Toggle({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
+  const c = useColors();
+  const x = useSharedValue(value ? 1 : 0);
+  useEffect(() => {
+    x.value = withTiming(value ? 1 : 0, { duration: 160 });
+  }, [value, x]);
+  const thumb = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * 18 }] }));
+  return (
+    <Pressable onPress={() => onValueChange(!value)} hitSlop={10} accessibilityRole="switch" accessibilityState={{ checked: value }}>
+      <View style={[styles.track, { backgroundColor: value ? c.event : c.border }]}>
+        <Animated.View style={[styles.thumb, thumb]} />
+      </View>
+    </Pressable>
+  );
+}
+
+/* ---------- Кружок «выполнено» ---------- */
+
+export function Checkbox({ checked, onPress }: { checked: boolean; onPress: () => void }) {
+  const c = useColors();
+  const scale = useSharedValue(1);
+  const first = useRef(true);
+
+  // Короткий «щелчок» при отметке: 0.7 → 1.15 → 1, без пружин
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (checked) scale.value = withSequence(withTiming(0.7, { duration: 80 }), withTiming(1.15, { duration: 120 }), withTiming(1, { duration: 100 }));
+  }, [checked, scale]);
+
+  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  return (
+    <Pressable onPress={onPress} hitSlop={12} style={styles.checkWrap}>
+      <Animated.View
+        style={[
+          styles.check,
+          { borderColor: checked ? c.primary : c.textMuted, backgroundColor: checked ? c.primary : 'transparent' },
+          anim,
+        ]}
+      >
+        {checked && <Check size={13} strokeWidth={2.5} color={c.onPrimary} />}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+/* ---------- Поле ввода ---------- */
+
+/** Цвет выделения текста: полупрозрачный, чтобы выделенные буквы оставались видны */
+export const selectionTint = (text: string) => `${text}40`;
+
+/**
+ * Поле ввода. Текст живёт в самом поле (полуконтролируемо): при каждом нажатии мы не переписываем
+ * его обратно из состояния. Иначе на Android после выделения и удаления курсор прыгал в начало
+ * и буквы шли задом наперёд. Если значение поменяли снаружи (или обработчик поправил ввод) —
+ * поле пересоздаётся с новым текстом и, если было в фокусе, остаётся в фокусе.
+ */
+export const Field = forwardRef<TextInput, TextInputProps & { label?: string; code?: boolean }>(function Field(
+  { label, code, style, value, defaultValue, onChangeText, onFocus, onBlur, autoFocus, ...rest },
+  ref,
+) {
+  const c = useColors();
+  const last = useRef(value ?? defaultValue ?? '');
+  const focused = useRef(false);
+  const [rev, setRev] = useState(0);
+
+  useEffect(() => {
+    if (code) return;
+    if (value !== undefined && value !== last.current) {
+      last.current = value;
+      setRev((r) => r + 1);
+    }
+  }, [value, code]);
+
+  // Код: всегда заглавными. Поле обычное управляемое (без пересоздания — клавиатура не прыгает),
+  // а подсказки и автозамена выключены: иначе клавиатура Android дублирует буквы при замене на заглавные
+  if (code) {
+    return (
+      <View style={{ gap: 6 }}>
+        {label ? (
+          <T variant="label" muted>
+            {label}
+          </T>
+        ) : null}
+        <TextInput
+          ref={ref}
+          value={(value ?? '').toUpperCase()}
+          onChangeText={(t) => onChangeText?.(t.toUpperCase())}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          autoFocus={autoFocus}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          spellCheck={false}
+          autoComplete="off"
+          placeholderTextColor={c.textMuted}
+          selectionColor={selectionTint(c.text)}
+          selectionHandleColor={c.text}
+          cursorColor={c.text}
+          {...rest}
+          {...(Platform.OS === 'android' && !rest.keyboardType && { keyboardType: 'visible-password' as const })}
+          style={[
+            styles.field,
+            { backgroundColor: c.background, borderColor: c.border, fontFamily: font.mono, fontSize: size.caption, color: c.textMuted },
+            style,
+          ]}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ gap: 6 }}>
+      {label ? (
+        <T variant="label" muted>
+          {label}
+        </T>
+      ) : null}
+      <TextInput
+        key={rev}
+        ref={ref}
+        defaultValue={value ?? defaultValue}
+        autoFocus={rev > 0 ? focused.current : autoFocus}
+        onChangeText={(t) => {
+          last.current = t;
+          onChangeText?.(t);
+        }}
+        onFocus={(e) => {
+          focused.current = true;
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          focused.current = false;
+          onBlur?.(e);
+        }}
+        // Пароли и почта: на iPhone по умолчанию первая буква заглавная и включена автозамена —
+        // поле отправляло «Parol» вместо «parol». Для паролей выключаем всё это всегда.
+        {...(rest.secureTextEntry || rest.keyboardType === 'email-address'
+          ? { autoCapitalize: 'none' as const, autoCorrect: false, spellCheck: false, smartInsertDelete: false }
+          : null)}
+        placeholderTextColor={c.textMuted}
+        selectionColor={selectionTint(c.text)}
+        selectionHandleColor={c.text}
+        cursorColor={c.text}
+        style={[
+          styles.field,
+          { backgroundColor: c.background, borderColor: c.border, color: c.text, fontFamily: font.regular },
+          style,
+        ]}
+        {...rest}
+      />
+    </View>
+  );
+});
+
+/* ---------- Разделитель и строка ---------- */
+
+export function Divider({ inset = 0 }: { inset?: number }) {
+  const c = useColors();
+  return <View style={{ height: 1,backgroundColor: c.border, marginLeft: inset }} />;
+}
+
+/** Строка настроек / выбора: подпись слева, значение справа */
+export function ListRow({
+  label,
+  value,
+  onPress,
+  danger,
+  right,
+  mono,
+}: {
+  label: string;
+  value?: string;
+  onPress?: () => void;
+  danger?: boolean;
+  right?: React.ReactNode;
+  mono?: boolean;
+}) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [styles.listRow, { backgroundColor: pressed ? c.surface : 'transparent' }]}
+    >
+      <T danger={danger} numberOfLines={1} style={{ flexShrink: 0, flexGrow: value ? 0 : 1 }}>
+        {label}
+      </T>
+      {value ? (
+        <T muted mono={mono} variant={mono ? 'caption' : 'body'} numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>
+          {value}
+        </T>
+      ) : null}
+      {right}
+    </Pressable>
+  );
+}
+
+export function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <T variant="caption" muted style={{ paddingHorizontal: space.side, paddingTop: 20, paddingBottom: 6 }}>
+      {children}
+    </T>
+  );
+}
+
+const styles = StyleSheet.create({
+  primaryBtn: {
+    height: 48,
+    borderRadius: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textBtn: {
+    height: 48,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chip: {
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkWrap: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  track: { width: 44, height: 26, borderRadius: 13, padding: 2, justifyContent: 'center' },
+  thumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  check: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  field: {
+    height: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: size.body,
+  },
+  listRow: {
+    minHeight: space.rowMin,
+    paddingHorizontal: space.side,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+});

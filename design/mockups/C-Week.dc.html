@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инструмент — неделя</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 844px; display: flex; gap: 40px; font-family: 'Geist', sans-serif">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}">
+
+<div style="position: absolute; left: 16px; right: 16px; top: 20px; height: 40px; display: flex; align-items: center; gap: 8px">
+<button style="height: 40px; flex: 1; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-align: left; padding: 0 12px; display: flex; align-items: center; justify-content: space-between">МЫ С КАРИНОЙ<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2.5"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button aria-label="Список" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg></button>
+<button aria-label="Добавить" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg></button>
+<button aria-label="Лента" style="position: relative; width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg><span style="position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 4px; background: {{t.red}}; box-shadow: 0 0 6px {{t.glow}}"></span></button>
+<button aria-label="Настройки" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.s}}; color: {{t.sInk}}; font-family: 'Geist Mono', monospace; font-size: 15px; font-weight: 600">С</button>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 68px; height: 28px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr))">
+<sc-for list="{{t.views}}" as="v" hint-placeholder-count="4">
+<button style="border: 1.5px solid {{t.border}}; margin-left: {{v.ml}}; background: {{v.bg}}; color: {{v.color}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: {{v.weight}}; letter-spacing: 0.08em">{{v.label}}</button>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 104px; height: 40px; display: flex; align-items: center; gap: 6px">
+<span style="font-size: 34px; font-weight: 700; letter-spacing: -0.05em; line-height: 36px">05—11</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: {{t.muted}}; margin-left: 4px; line-height: 13px">ОКТ<br>2026</span>
+<button aria-label="Предыдущая неделя" style="margin-left: auto; width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg></button>
+<button aria-label="Следующая неделя" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg></button>
+<button style="height: 40px; padding: 0 10px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.08em">СЕГОДНЯ</button>
+</div>
+
+<sc-for list="{{t.cols}}" as="c" hint-placeholder-count="7">
+<div style="position: absolute; left: {{c.x}}px; top: 152px; width: {{c.w}}px; height: 594px; background: {{c.shade}}"></div>
+<div style="position: absolute; left: {{c.x}}px; top: 156px; width: {{c.w}}px; display: flex; flex-direction: column; align-items: center; gap: 2px">
+<span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.06em; color: {{t.muted}}">{{c.wd}}</span>
+<span style="width: 26px; height: 24px; background: {{c.fill}}; color: {{c.color}}; display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 15px; font-weight: 600">{{c.n}}</span>
+</div>
+</sc-for>
+<div style="position: absolute; left: 0; right: 0; top: 202px; height: 1.5px; background: {{t.border}}"></div>
+
+<sc-for list="{{t.bars}}" as="b" hint-placeholder-count="4">
+<div style="position: absolute; left: {{b.x}}px; top: {{b.y}}px; width: {{b.w}}px; height: 20px; box-sizing: border-box; background: {{b.fill}}; padding-left: 7px; font-size: 8px; letter-spacing: -0.01em; font-weight: 600; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: {{b.tip}}"></span>{{b.title}}<span style="font-family: 'Geist Mono', monospace; font-weight: 400; color: {{t.muted}}">{{b.meta}}</span></div>
+</sc-for>
+<div style="position: absolute; left: 0; right: 0; top: {{t.barsEnd}}px; height: 1px; background: {{t.hair}}"></div>
+
+<sc-for list="{{t.hours}}" as="h" hint-placeholder-count="15">
+<div style="position: absolute; left: 44px; right: 26px; top: {{h.y}}px; height: 1px; background: {{t.hair}}"></div>
+<span style="position: absolute; left: 14px; top: {{h.ly}}px; font-family: 'Geist Mono', monospace; font-size: 9px; color: {{t.muted}}">{{h.label}}</span>
+</sc-for>
+
+<sc-for list="{{t.events}}" as="e" hint-placeholder-count="16">
+<svg style="position: absolute; left: {{e.x}}px; top: {{e.y}}px" width="{{e.w}}" height="{{e.h}}">
+<defs>
+<linearGradient id="{{e.fid}}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="{{e.w}}" y2="0"><stop offset="0" stop-color="{{e.c1}}" stop-opacity="{{t.a}}"></stop><stop offset="1" stop-color="{{e.c2}}" stop-opacity="{{t.a}}"></stop></linearGradient>
+<linearGradient id="{{e.tid}}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="{{e.h}}"><stop offset="0.5" stop-color="{{e.c1}}"></stop><stop offset="0.5" stop-color="{{e.c2}}"></stop></linearGradient>
+<clipPath id="{{e.cid}}"><path d="{{e.d}}"></path></clipPath>
+</defs>
+<path d="{{e.d}}" fill="url(#{{e.fid}})"></path>
+<path d="{{e.edgeD}}" fill="none" stroke="url(#{{e.tid}})" stroke-width="4" clip-path="url(#{{e.cid}})"></path>
+</svg>
+<div style="position: absolute; left: {{e.x}}px; top: {{e.y}}px; width: {{e.w}}px; height: {{e.h}}px; box-sizing: border-box; clip-path: {{e.clip}}; padding: {{e.pt}}px 1px 0 {{e.pl}}px; overflow: hidden; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 8px; font-weight: 600; line-height: 9.5px; letter-spacing: -0.01em; text-decoration: {{e.deco}}">{{e.title}}</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 7px; line-height: 8.5px; letter-spacing: -0.02em">{{e.time}}</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 7px; line-height: 8.5px; letter-spacing: -0.02em; color: {{t.muted}}">{{e.who}}</span>
+</div>
+</sc-for>
+
+<div style="position: absolute; left: 44px; top: {{t.nowY}}px; width: {{t.colW}}px; height: 2px; background: {{t.red}}"></div>
+<div style="position: absolute; left: 40px; top: {{t.nowDot}}px; width: 8px; height: 8px; border-radius: 4px; background: {{t.red}}; box-shadow: 0 0 6px {{t.glow}}"></div>
+
+<sc-for list="{{t.tabs}}" as="p" hint-placeholder-count="2">
+<button style="position: absolute; right: 0; top: {{p.y}}px; width: {{p.w}}px; height: 84px; border: 1.5px solid {{t.border}}; border-right: 0; background: {{p.bg}}; color: {{p.ink}}; padding: 0; display: flex; align-items: center; justify-content: center"><span style="writing-mode: vertical-rl; transform: rotate(180deg); font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.1em">{{p.name}}</span></button>
+</sc-for>
+
+<div style="position: absolute; left: 16px; right: 16px; bottom: 18px; height: 72px; display: flex; gap: 8px">
+<div style="flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px">
+<button style="border: 1.5px solid {{t.border}}; background: {{t.text}}; color: {{t.bg}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em">ДЕЛА</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ХОЧУ</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">СМОТРЕТЬ</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ИДЕИ</button>
+</div>
+<button aria-label="Голосовая команда" style="width: 104px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px"><span style="width: 26px; height: 26px; border-radius: 13px; background: {{t.red}}; box-shadow: 0 0 10px {{t.glow}}"></span><span style="font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; color: {{t.text}}">REC</span></button>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; };
+    const pal = [
+      { bg: '#E7E6E1', panel: '#F4F3EF', alt: '#DEDDD7', border: '#161616', hair: '#CFCEC8', text: '#111111', muted: '#5E5E58', red: '#E0281E', s: '#2F6BDB', k: '#E2407E', sInk: '#FFFFFF', kInk: '#1A1A1A', o: '#1F9D57', oInk: '#FFFFFF', a: 0.2 },
+      { bg: '#0B0B0B', panel: '#151515', alt: '#121212', border: '#2E2E2E', hair: '#1E1E1E', text: '#F2F2F0', muted: '#7C7C78', red: '#FF3B30', s: '#5B8DEF', k: '#F06A9B', sInk: '#1A1A1A', kInk: '#1A1A1A', o: '#3DBE76', oInk: '#1A1A1A', a: 0.24 },
+    ];
+    const GX = 44, GW = 390 - 44 - 26, COL = GW / 7;
+    // Дела на весь день и на несколько дней — полосы над сеткой: [первый день, последний день, название, подпись, кто].
+    // Раскладываются по строкам жадно: полоса встаёт в первую строку, где она ни с кем не пересекается по дням
+    const allDay = [
+      [0, 0, 'Подарок Лене', '', 's'],
+      [2, 4, 'Командировка в Казань', ' · 7 окт 07:00 → 9 окт 15:00', 'k'],
+      [3, 5, 'Мама в гостях', ' · 8–10 окт', 'sk'],
+      [5, 5, 'Дача', ' 09–20', 'sk'],
+    ];
+    const BY = 208, BH = 22, rowEnds = [];
+    const barRows = allDay
+      .map(([d0, d1, title, meta, who]) => ({ d0, d1, title, meta, who }))
+      .sort((x, y) => x.d0 - y.d0 || y.d1 - x.d1)
+      .map((b) => {
+        let row = rowEnds.findIndex((end) => end < b.d0);
+        if (row < 0) { row = rowEnds.length; rowEnds.push(-1); }
+        rowEnds[row] = b.d1;
+        return { ...b, row };
+      });
+    const nRows = rowEnds.length;
+    // Сетка часов начинается сразу под полосами и тянется до нижних кнопок
+    const GY = BY + nRows * BH + 8, GH = 746 - GY;
+    // [день, начало, конец, название, кто, { done, parent }]
+    const ev = [
+      [0, 9.5, 10.5, 'Стоматолог', 's'], [0, 19, 20, 'Йога', 'k'],
+      [1, 16, 17, 'МФЦ', 's'], [1, 19, 20.5, 'Ужин с Леной', 'sk'],
+      // Командировка — общее дело (полоса наверху), в сетке только её подзадачи с подписью «· Казань»
+      [2, 7, 9, 'Поезд в Казань', 'k', { parent: 'Казань' }], [2, 18, 21, 'Футбол', 's', { done: true }],
+      // Три человека одновременно: каждое следующее дело огибает полосы всех предыдущих
+      [3, 9, 15, 'Встреча с заказчиком', 'k', { parent: 'Казань' }], [3, 10.25, 13.75, 'Тренировка', 's'], [3, 11.25, 12.75, 'Сдать отчёт', 'o'],
+      [4, 13, 15, 'Поезд домой', 'k', { parent: 'Казань' }], [4, 14, 16.5, 'Обед с Олегом', 's'], [4, 19.5, 22, 'Кино', 'sk'],
+      // Общее дело с подзадачами в сетке не рисуется: оно уходит полосой наверх (см. bars), а подзадачи —
+      // обычные дела в сетке и пересекаются с чужими делами по общему правилу. Подпись подзадачи — «кто · общее дело»
+      [5, 9, 10.5, 'Полить грядки', 's', { parent: 'Дача' }], [5, 13, 15.5, 'Шашлыки', 'k', { parent: 'Дача' }],
+      [5, 14, 15, 'Созвон', 'o'], [5, 17, 18.5, 'Звонок маме', 's'],
+      [6, 11, 13, 'Бранч у Ани', 'sk'],
+    ];
+    // Видимые часы подстраиваются под дела: на час раньше самого раннего начала и на час позже самого позднего конца
+    // (и с учётом текущего времени), чтобы дела не упирались в край сетки
+    const NOW = 17 + 52 / 60;
+    const H0 = Math.max(0, Math.min(...ev.map((e) => Math.floor(e[1])), Math.floor(NOW)) - 1);
+    const HN = Math.min(24, Math.max(...ev.map((e) => Math.ceil(e[2])), Math.ceil(NOW)) + 1) - H0, H = GH / HN;
+    // Общее правило пересечений. Из двух пересекающихся дел «основа» — то, что началось раньше (оно уже идёт,
+    // его заголовок наверху виден целиком); при одновременном начале — более длинное. Второе — «гость».
+    // Основа сужается до своей полосы (WN) уступом: прямая горизонтальная ступенька со скруглёнными углами (RAD),
+    // которая стоит до начала гостя (верх гостя прямой); после гостя таким же уступом расширяется обратно.
+    // Гость занимает всё, что справа от основы, с зазором G (по горизонтали и по вертикали). Если основа кончается
+    // во время гостя, гость тоже уступом возвращает себе всю ширину. Цветная полоса гостя идёт по его левому краю и повторяет уступы.
+    const Wr = COL - 2, WN = 2, G = 2, RAD = 4, Gh = G / H, T = 0.01 / H, rampH = 0.01 / H;
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    const items = ev.map(([d, a, b, title, who, o = {}], i) => ({ i, d, a, b, title, who, o, top: Math.max(a, H0), bot: Math.min(b, H0 + HN) }));
+    const dur = (e) => e.b - e.a;
+    const longer = (x, y) => x.a < y.a || (x.a === y.a && dur(x) > dur(y));
+    items.forEach((e) => {
+      const ov = items.filter((o) => o !== e && o.d === e.d && o.a < e.b && e.a < o.b);
+      e.hosts = ov.filter((o) => longer(o, e));
+      e.guests = ov.filter((o) => longer(e, o));
+    });
+    // Вклад соседа по времени с зазором: внутри его интервала — его край + G, за концами — короткий пологий скос в ноль
+    const envelope = (n, t, edge, gh = Gh) => {
+      if (t >= n.a - gh && t <= n.b + gh) return Math.max(edge(n, t - gh), edge(n, t), edge(n, t + gh)) + G;
+      if (t > n.b + gh && t < n.b + gh + rampH) return (edge(n, n.b) + G) * (1 - (t - n.b - gh) / rampH);
+      if (t < n.a - gh && t > n.a - gh - rampH) return (edge(n, n.a) + G) * (1 - (n.a - gh - t) / rampH);
+      return 0;
+    };
+    const rightAt = (e, t) => {
+      t = Math.max(e.a, Math.min(e.b, t));
+      let k = 0;
+      e.guests.forEach((g) => { k = Math.max(k, Math.min(clamp01((t - (g.a - Gh - T)) / T), clamp01((g.b + Gh + T - t) / T))); });
+      // Сужается до своей полосы, где бы ни стоял её левый край (у гостя он сдвинут вправо)
+      const base = leftAt(e, t) + WN;
+      return base + (Wr - base) * (1 - k);
+    };
+    const leftAt = (e, t) => {
+      let x = 0;
+      e.hosts.forEach((h) => { x = Math.max(x, envelope(h, t, rightAt)); });
+      return x;
+    };
+    const simplify = (pts) => pts.filter((p, j) => {
+      if (j === 0 || j === pts.length - 1) return true;
+      const q = pts[j - 1], s = pts[j + 1];
+      return Math.abs((p[0] - q[0]) * (s[1] - q[1]) - (p[1] - q[1]) * (s[0] - q[0])) > 0.01;
+    });
+    const r = (n) => Math.round(n * 10) / 10;
+    // Скачок ширины между соседними строками превращаем в горизонтальную ступеньку
+    const stepify = (pts) => {
+      const out = [];
+      pts.forEach((p, j) => { if (j && Math.abs(p[0] - pts[j - 1][0]) > 0.5) out.push([pts[j - 1][0], p[1]]); out.push(p); });
+      return out;
+    };
+    // Контур в SVG-путь: внутренние углы (не верх и не низ блока) скругляются радиусом RAD
+    const rounded = (pts, closed, h) => {
+      const n = pts.length;
+      return pts.map((P, j) => {
+        const cmd = j ? ' L ' : 'M ';
+        const end = !closed && (j === 0 || j === n - 1);
+        if (end || P[1] < 0.01 || P[1] > h - 0.01) return cmd + r(P[0]) + ' ' + r(P[1]);
+        const A = pts[(j - 1 + n) % n], B = pts[(j + 1) % n];
+        const la = Math.hypot(A[0] - P[0], A[1] - P[1]), lb = Math.hypot(B[0] - P[0], B[1] - P[1]);
+        const rr = Math.min(RAD, la / 2, lb / 2);
+        const p1 = [P[0] + ((A[0] - P[0]) / la) * rr, P[1] + ((A[1] - P[1]) / la) * rr];
+        const p2 = [P[0] + ((B[0] - P[0]) / lb) * rr, P[1] + ((B[1] - P[1]) / lb) * rr];
+        return cmd + r(p1[0]) + ' ' + r(p1[1]) + ' Q ' + r(P[0]) + ' ' + r(P[1]) + ' ' + r(p2[0]) + ' ' + r(p2[1]);
+      }).join('') + (closed ? ' Z' : '');
+    };
+    const shapes = items.map((e) => {
+      const y = GY + (e.top - H0) * H + 1, h = (e.bot - e.top) * H - 2;
+      const tAt = (yl) => e.top + (yl + 1) / H;
+      const ys = [];
+      for (let yl = 0; yl < h; yl += 1) ys.push(yl);
+      ys.push(h);
+      const L = ys.map((yl) => [leftAt(e, tAt(yl)), yl]);
+      const Ls = simplify(stepify(L)), Rs = simplify(stepify(ys.map((yl) => [rightAt(e, tAt(yl)), yl]))).reverse();
+      const poly = Ls.concat(Rs);
+      const d = rounded(poly, true, h);
+      let j = 0;
+      while (j < L.length - 1 && L[j + 1][0] < L[j][0] - 0.01) j++;
+      return {
+        x: GX + e.d * COL + 1, y, w: Wr, h,
+        d, clip: "path('" + d + "')", edgeD: rounded(Ls, false, h),
+        pt: (j ? L[j][1] : 0) + 3, pl: L[j][0] + 6,
+      };
+    });
+    const fmt = (h) => String(Math.floor(h) % 24).padStart(2, '0') + ':' + String(Math.round((h % 1) * 60)).padStart(2, '0');
+    const wd = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+    const views = ['ДЕНЬ', 'НЕДЕЛЯ', 'МЕСЯЦ', 'ГОД'];
+    const themes = pal.map((p, pi) => {
+      return {
+        ...p,
+        glow: rgba(p.red, 0.6), colW: COL,
+        views: views.map((v, i) => ({ label: v, bg: i === 1 ? p.text : p.panel, color: i === 1 ? p.bg : p.text, weight: i === 1 ? 600 : 400, ml: i ? '-1.5px' : '0' })),
+        cols: wd.map((w, i) => ({ wd: w, n: String(5 + i).padStart(2, '0'), x: GX + i * COL, w: COL, shade: i % 2 ? p.alt : 'transparent', fill: i === 0 ? p.red : 'transparent', color: i === 0 ? '#FFFFFF' : p.text })),
+        bars: barRows.map((b) => ({
+          x: GX + b.d0 * COL + 1, y: BY + b.row * BH, w: (b.d1 - b.d0 + 1) * COL - 2, title: b.title, meta: b.meta,
+          tip: b.who === 'sk' ? 'linear-gradient(' + p.s + ' 50%, ' + p.k + ' 50%)' : b.who === 's' ? p.s : p.k,
+          fill: b.who === 'sk' ? 'linear-gradient(90deg, ' + rgba(p.s, p.a) + ', ' + rgba(p.k, p.a) + ')' : rgba(b.who === 's' ? p.s : p.k, p.a),
+        })),
+        barsEnd: BY + nRows * BH + 4,
+        hours: Array.from({ length: HN }, (_, i) => ({ y: GY + i * H, ly: GY + i * H + 2, label: String(H0 + i).padStart(2, '0') })),
+        events: items.map((e, i) => {
+          const { a, b, title, who, o } = e;
+          const time = a === 0 && b > 23 ? 'весь день' : a === 0 ? '→ ' + fmt(b) : b > 23 ? fmt(a) + ' →' : fmt(a) + '–' + fmt(b);
+          return {
+            ...shapes[i],
+            fid: 'wf' + pi + '_' + i, tid: 'wt' + pi + '_' + i, cid: 'wc' + pi + '_' + i,
+            c1: who === 'o' ? p.o : who === 'k' ? p.k : p.s, c2: who === 'o' ? p.o : who === 's' ? p.s : p.k,
+            title, time, who: (who === 'sk' ? 'Саня, Карина' : who === 's' ? 'Саня' : who === 'o' ? 'Олег' : 'Карина') + (o.parent ? ' · ' + o.parent : ''),
+            deco: o.done ? 'line-through' : 'none',
+          };
+        }),
+        nowY: GY + (NOW - H0) * H, nowDot: GY + (NOW - H0) * H - 3,
+        tabs: [
+          { name: 'Я', y: 280, w: 26, bg: p.s, ink: p.sInk },
+          { name: 'КАРИНА', y: 368, w: 26, bg: p.k, ink: p.kInk },
+          { name: 'ОЛЕГ', y: 456, w: 26, bg: p.o, ink: p.oInk },
+        ],
+      };
+    });
+    return { themes };
+  }
+}
+</script>
+</body>
+</html>

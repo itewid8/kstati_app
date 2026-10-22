@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { buildMessages } from './prompt.js';
+import { occurrences } from './recur.js';
 import { changesRepeat, firstDate, spokenRepeat, stopsRepeat, stripRepeat } from './repeat.js';
 import {
   changeTarget,
@@ -84,6 +85,37 @@ function matchPerson(name: string, ctx: Context): string | null {
   const all = [ctx.me, ...ctx.people];
   const stem = (s: string) => s.toLowerCase().replace(/ё/g, 'е').slice(0, Math.max(3, s.length - 1));
   return all.find((p) => stem(p.name) === stem(n) || n.startsWith(stem(p.name)))?.id ?? null;
+}
+
+/** «я», «me», «мне» — сам говорящий */
+const isMe = (name: string) => /^(me|я|мне|меня|мой|мои|моя|у меня)$/i.test(name.trim());
+
+type ExistingTask = Context['existing']['tasks'][number];
+
+/**
+ * S3: какой раз повторяющегося дела назван во фразе. Нет повтора или дня — undefined.
+ * delete / update — ближайший раз с сегодня в названный день недели или дату («удали йогу в субботу»);
+ * mark / unmark — последний прошедший такой раз (за неделю), иначе ближайший будущий («сделали йогу в субботу»).
+ * У update день ищем до первого «на / к»: «перенеси йогу в субботу на воскресенье» → суббота.
+ */
+function occOf(task: ExistingTask, action: ChangeAction, transcript: string, today: string): string | undefined {
+  if (!task.repeat || !task.date) return undefined;
+  const text = action === 'update' ? transcript.split(/\s(?:на|к)\s/i)[0] : transcript;
+  const past = action === 'mark' || action === 'unmark';
+  const list = occurrences(task, past ? addDaysIso(today, -7) : today, addDaysIso(today, 400), 500);
+  const dow = plainWeekday(text);
+  let pick: string[];
+  if (dow !== null) pick = list.filter((d) => new Date(`${d}T00:00:00Z`).getUTCDay() === dow);
+  else {
+    const p = spokenPeriod(text, today);
+    if (!p) return undefined;
+    pick = list.filter((d) => d >= p.from && d <= p.to);
+  }
+  if (past) {
+    const before = pick.filter((d) => d <= today);
+    if (before.length) return before.at(-1);
+  }
+  return pick.find((d) => d >= today);
 }
 
 /** Дело из списка по названию во фразе: «баню» → «Баня» (по основе первого значимого слова) */
@@ -232,10 +264,22 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
   const qp2 = actions.find((a) => a.intent === 'query_plans');
   if (qp2) {
     const names = (v: unknown) => (Array.isArray(v) ? v.map(str).filter(Boolean).slice(0, 5) : []);
+    const api = ctx.api ?? 1;
     let scope: PlansScope = { kind: 'current' };
     const cat = oneOf<GroupCategory>(CATEGORIES, qp2.category);
-    if (qp2.scope === 'us') scope = { kind: 'us' };
-    else if (qp2.scope === 'people' && names(qp2.people).length) scope = { kind: 'people', names: names(qp2.people) };
+    // «Я» среди людей — это сам говорящий, а не человек из групп (старое приложение ответило бы «Не нашёл человека «Я»»)
+    const people = names(qp2.people);
+    const others = people.filter((n) => !isMe(n));
+    const meOnly = qp2.scope === 'me' || (qp2.scope === 'people' && people.length > 0 && !others.length);
+    let who: string[] | undefined;
+    if (meOnly) {
+      // «Что я делаю на выходных» — все мои группы, только мои дела. Старому приложению — текущая группа, как раньше
+      if (api >= 2) {
+        scope = { kind: 'me' };
+        who = [ctx.me.id];
+      }
+    } else if (qp2.scope === 'us') scope = { kind: 'us' };
+    else if (qp2.scope === 'people' && others.length) scope = { kind: 'people', names: others };
     else if (qp2.scope === 'category' && cat) scope = { kind: 'category', category: cat };
     else if (qp2.scope === 'groups' && names(qp2.groups).length) scope = { kind: 'groups', names: names(qp2.groups) };
     let from = date(qp2.from) ?? ctx.today;
@@ -244,7 +288,12 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     const said = spokenPeriod(transcript, ctx.today);
     if (said) ({ from, to } = said);
     if (to < from) [from, to] = [to, from];
-    return { type: 'queryPlans', plans: { scope, from, to, query: str(qp2.query) } };
+    // Чьи дела показывать, если модель назвала («что Карина делает в субботу» → who: ["Карина"]) — только api ≥ 2
+    if (api >= 2 && !who) {
+      const ids = names(qp2.who).map((n) => matchPerson(n, ctx)).filter((x): x is string => !!x);
+      if (ids.length) who = [...new Set(ids)];
+    }
+    return { type: 'queryPlans', plans: { scope, from, to, query: str(qp2.query), ...(who && { who }) } };
   }
 
   // «Покажи идеи для подарков» — открыть тему
@@ -410,6 +459,11 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     if (type === 'idea' && (a.intent === 'mark' || a.intent === 'unmark')) continue;
     const candidates = [...new Set(ids.filter((id) => index.get(id) === type))].slice(0, 3);
     const change: ChangeDraft = { key: randomUUID(), action: a.intent as ChangeAction, type, candidates, chosen: candidates[0] };
+    if (type === 'task') {
+      const t = ctx.existing.tasks.find((x) => x.id === candidates[0]);
+      const occ = t && occOf(t, change.action, transcript, ctx.today);
+      if (occ) change.occ = occ;
+    }
 
     if (a.intent === 'update' && type === 'idea') {
       // Перенос идеи в другую тему (существующую, новую или «Без темы»)
@@ -434,8 +488,11 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
         const tail = transcript.split(/\s(?:на|к)\s/i).slice(1).at(-1) ?? transcript;
         const dow = plainWeekday(tail);
         const saidDate = spokenPeriod(tail, ctx.today);
-        // День недели при переносе — ближайший к старой дате записи
-        if (dow !== null && old?.date && patch.date !== undefined) patch.date = nearestWeekday(dow, old.date, ctx.today);
+        // День недели при переносе — ближайший к старой дате записи.
+        // Названный раз серии (S3) — для api ≥ 2 считаем от него: «перенеси йогу в субботу на воскресенье» → следующий день.
+        // Старому приложению — как раньше, от даты серии (оно переносит серию целиком)
+        const ref = change.occ && (ctx.api ?? 1) >= 2 ? change.occ : old?.date;
+        if (dow !== null && ref && patch.date !== undefined) patch.date = nearestWeekday(dow, ref, ctx.today);
         else if (saidDate && saidDate.from === saidDate.to) patch.date = saidDate.from;
         // Модель вернула «перенос» без изменений по сути — убираем поля, совпадающие со старыми
         if (old && patch.time === old.time && said === null && !('date' in a)) delete patch.time;
@@ -484,6 +541,8 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
         }
       }
       if (!Object.keys(patch).length) continue;
+      // Новый повтор или снятие повтора — правка всей серии, не одного раза
+      if ('repeat' in patch) delete change.occ;
       change.patch = patch;
     }
     changes.push(change);

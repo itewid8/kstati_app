@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инструмент — смотреть</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 844px; display: flex; gap: 40px; font-family: 'Geist', sans-serif">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}">
+
+<div style="position: absolute; left: 16px; right: 16px; top: 20px; height: 40px; display: flex; align-items: center; gap: 8px">
+<button style="height: 40px; flex: 1; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-align: left; padding: 0 12px; display: flex; align-items: center; justify-content: space-between">МЫ С КАРИНОЙ<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2.5"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button aria-label="Добавить" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg></button>
+<button aria-label="Лента" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></button>
+<button aria-label="Настройки" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.s}}; color: {{t.sInk}}; font-family: 'Geist Mono', monospace; font-size: 15px; font-weight: 600">С</button>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 70px; display: flex; align-items: flex-end; justify-content: space-between">
+<span style="font-size: 40px; font-weight: 700; letter-spacing: -0.05em; line-height: 42px">Смотреть</span>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 120px; height: 32px; display: flex">
+<sc-for list="{{t.filters}}" as="f" hint-placeholder-count="3">
+<button style="flex: {{f.flex}}; margin-left: {{f.ml}}; border: 1.5px solid {{t.border}}; background: {{f.bg}}; color: {{f.color}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: {{f.weight}}; letter-spacing: 0.06em">{{f.label}}</button>
+</sc-for>
+<button aria-label="Фильтры" style="width: 32px; margin-left: 6px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"></path><circle cx="16" cy="6" r="2"></circle><circle cx="10" cy="12" r="2"></circle><circle cx="18" cy="18" r="2"></circle></svg></button>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 162px; border: 1.5px solid {{t.border}}">
+<button aria-label="Свернуть или развернуть" style="width: 100%; height: 22px; border: 0; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>В ОЧЕРЕДИ</span><span style="display: flex; align-items: center; gap: 6px">{{t.count}}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="transform: rotate({{t.mainRot}}deg)"><path d="m6 15 6-6 6 6"></path></svg></span></button>
+<sc-if value="{{t.mainOpen}}" hint-placeholder-val="{{true}}">
+<sc-for list="{{t.items}}" as="r" hint-placeholder-count="6">
+<div style="position: relative; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 7px; box-sizing: border-box; background: {{t.panel}}; border-top: 1px solid {{t.hair}}">
+<span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1.5px; background: {{r.strip}}"></span>
+<button role="checkbox" aria-checked="false" aria-label="Посмотрели" style="margin-left: 3px; width: 32px; height: 32px; flex-shrink: 0; border: 0; background: none; padding: 0; display: flex; align-items: center; justify-content: center"><span style="width: 18px; height: 18px; box-sizing: border-box; border: 1.5px solid {{t.border}}; background: {{t.bg}}"></span></button>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; line-height: 16px; white-space: nowrap; overflow: hidden"><span style="overflow: hidden; text-overflow: ellipsis">{{r.title}}</span></span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.02em; line-height: 11px; color: {{t.muted}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.meta}}</span>
+</div>
+<span style="font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 600; letter-spacing: -0.02em">{{r.year}}</span>
+</div>
+</sc-for>
+</sc-if>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; bottom: 98px; border: 1.5px solid {{t.hairStrong}}; background: {{t.bg}}">
+<button aria-label="Свернуть или развернуть" style="width: 100%; height: 22px; border: 0; padding: 0 8px; background: none; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em; color: {{t.muted}}"><span>ПОСМОТРЕЛИ</span><span style="display: flex; align-items: center; gap: 6px">{{t.doneCount}}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="transform: rotate({{t.doneRot}}deg)"><path d="m6 15 6-6 6 6"></path></svg></span></button>
+<sc-if value="{{t.doneOpen}}" hint-placeholder-val="{{true}}">
+<sc-for list="{{t.done}}" as="r" hint-placeholder-count="3">
+<div style="height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 0; border-top: 1px solid {{t.hair}}">
+<button role="checkbox" aria-checked="true" aria-label="Вернуть в очередь" style="width: 34px; height: 33px; flex-shrink: 0; border: 0; background: none; padding: 0; display: flex; align-items: center; justify-content: center"><span style="width: 18px; height: 18px; background: {{t.text}}; display: flex; align-items: center; justify-content: center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{t.bg}}" stroke-width="3.5"><path d="M5 12l5 5L20 7"></path></svg></span></button>
+<span style="flex: 1; min-width: 0; font-size: 12px; color: {{t.muted}}; text-decoration: line-through; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.title}}</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: {{t.muted}}">{{r.meta}}</span>
+</div>
+</sc-for>
+</sc-if>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; bottom: 18px; height: 72px; display: flex; gap: 8px">
+<div style="flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px">
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ДЕЛА</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ХОЧУ</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.text}}; color: {{t.bg}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em">СМОТРЕТЬ</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ИДЕИ</button>
+</div>
+<button aria-label="Голосовая команда" style="width: 104px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px"><span style="width: 26px; height: 26px; border-radius: 13px; background: {{t.red}}; box-shadow: 0 0 10px {{t.glow}}"></span><span style="font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; color: {{t.text}}">REC</span></button>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; };
+    const pal = [
+      { bg: '#E7E6E1', panel: '#F4F3EF', border: '#161616', hair: '#CFCEC8', hairStrong: '#A3A29C', text: '#111111', muted: '#5E5E58', red: '#E0281E', s: '#2F6BDB', k: '#E2407E', sInk: '#FFFFFF' },
+      { bg: '#0B0B0B', panel: '#151515', border: '#2E2E2E', hair: '#222222', hairStrong: '#3A3A3A', text: '#F2F2F0', muted: '#7C7C78', red: '#FF3B30', s: '#5B8DEF', k: '#F06A9B', sInk: '#1A1A1A' },
+    ];
+    const items = [
+      ['Дюна: часть вторая', 'ФИЛЬМ · ФАНТАСТИКА · ЗАРУБЕЖНОЕ', '2024', 's'],
+      ['Разделение', 'СЕРИАЛ · ТРИЛЛЕР · ЗАРУБЕЖНОЕ', '2022', 'k'],
+      ['Слово пацана', 'СЕРИАЛ · ДРАМА · НАШЕ', '2023', 'k'],
+      ['Брат', 'ФИЛЬМ · КРИМИНАЛ · НАШЕ', '1997', 's'],
+      ['Шрэк', 'МУЛЬТФИЛЬМ · КОМЕДИЯ', '2001', 'k'],
+      ['Бесславные ублюдки', 'ФИЛЬМ · ВОЕННЫЙ · ЗАРУБЕЖНОЕ', '2009', 's'],
+    ];
+    const done = [
+      { title: 'Оппенгеймер', meta: '28 СЕН' },
+      { title: 'Настоящий детектив, 1 сезон', meta: '21 СЕН' },
+      { title: 'Бесконечность', meta: '14 СЕН' },
+    ];
+    // Очередь прижата к верху, «Посмотрели» — к низу; обе секции сворачиваются по нажатию на шапку.
+    // Светлый макет — обе открыты, тёмный — «Посмотрели» свёрнуто
+    const open = [{ main: true, done: true }, { main: true, done: false }];
+    const themes = pal.map((p, pi) => ({
+      ...p,
+      glow: rgba(p.red, 0.6),
+      filters: ['ВСЁ', 'ФИЛЬМЫ', 'СЕРИАЛЫ'].map((label, i) => ({ label, flex: i ? 1.4 : 1, ml: i ? '-1.5px' : '0', bg: i === 0 ? p.text : p.panel, color: i === 0 ? p.bg : p.text, weight: i === 0 ? 600 : 400 })),
+      items: items.map(([title, meta, year, who]) => ({ title, meta, year, strip: who === 's' ? p.s : p.k })),
+      count: String(items.length).padStart(2, '0'),
+      mainOpen: open[pi].main, mainRot: open[pi].main ? 0 : 180,
+      done, doneOpen: open[pi].done, doneRot: open[pi].done ? 0 : 180, doneCount: '14',
+    }));
+    return { themes };
+  }
+}
+</script>
+</body>
+</html>

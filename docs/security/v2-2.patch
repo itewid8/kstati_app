@@ -1,0 +1,113 @@
+diff --git a/server/src/api.ts b/server/src/api.ts
+index 73f7931..538d7d1 100644
+--- a/server/src/api.ts
++++ b/server/src/api.ts
+@@ -14,7 +14,7 @@ import type { FastifyInstance } from 'fastify';
+ import { z } from 'zod';
+ import { HttpError, meView, requireUser } from './auth.js';
+ import { apiLevel } from './client.js';
+-import { grev, irev, PERSON_COLORS, publicUser, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type Wish } from './store/index.js';
++import { giftrev, grev, irev, PERSON_COLORS, publicUser, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type Wish } from './store/index.js';
+ import { CATEGORIES } from './types.js';
+ 
+ const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
+@@ -401,9 +401,9 @@ export class Data {
+           delete w.giftedBy;
+           delete w.giftedAt;
+         }
+-        // updatedAt не трогаем: по нему владелец мог бы догадаться о подарке
++        // updatedAt и urev владельца не трогаем: по ним он догадался бы о подарке. Остальным — своя ревизия (giftrev)
+         await s.putWish(w);
+-        await s.incr(urev(op.ownerId));
++        await s.incr(giftrev(op.ownerId));
+         // В ленту хотелок владельца: её видят все, кроме него самого (activity не показывает человеку его scope u:<id>)
+         if (op.gifted) await this.log(user, { scope: `u:${op.ownerId}`, itemId: w.id, title: w.title, kind: 'wish.done' });
+         return {};
+@@ -596,7 +596,7 @@ export class Data {
+     const peopleIds = [...new Set([user.id, ...mine.flatMap((g) => g.memberIds)])];
+     const [users, counters] = await Promise.all([
+       s.getUsers(peopleIds),
+-      s.getCounters([...mine.map((g) => grev(g.id)), ...peopleIds.map(urev), ...peopleIds.map(irev)]),
++      s.getCounters([...mine.map((g) => grev(g.id)), ...peopleIds.map(urev), ...peopleIds.map(irev), ...peopleIds.map(giftrev)]),
+     ]);
+     // Ревизия идей: счётчик человека и общие с ним группы (вышли из группы — чужие темы надо убрать)
+     const commonWith = (id: string) => new Set(mine.filter((g) => g.memberIds.includes(id)).map((g) => g.id));
+@@ -608,7 +608,9 @@ export class Data {
+     const changedIdeaOwners = known.ideas ? peopleIds.filter((id) => knownIdeas[id] !== ideaRevs[id]) : [];
+     const revs = {
+       groups: Object.fromEntries(mine.map((g) => [g.id, counters[grev(g.id)] ?? 0])),
+-      owners: Object.fromEntries(peopleIds.map((id) => [id, counters[urev(id)] ?? 0])),
++      // Чужим хотелкам — ещё и подарки (giftrev); своя ревизия подарков не включает: сюрприз (S1, REVIEW-v2 V2-2).
++      // Сумма двух растущих счётчиков тоже только растёт — телефон по-прежнему сравнивает одно число
++      owners: Object.fromEntries(peopleIds.map((id) => [id, (counters[urev(id)] ?? 0) + (id === user.id ? 0 : (counters[giftrev(id)] ?? 0))])),
+     };
+     const changedGroups = mine.filter((g) => known.groups[g.id] !== revs.groups[g.id]);
+     const changedOwners = peopleIds.filter((id) => known.owners[id] !== revs.owners[id]);
+diff --git a/server/src/store/types.ts b/server/src/store/types.ts
+index f1e35fb..c52cf27 100644
+--- a/server/src/store/types.ts
++++ b/server/src/store/types.ts
+@@ -252,3 +252,8 @@ export const grev = (groupId: string) => `grev#${groupId}`;
+ export const urev = (userId: string) => `urev#${userId}`;
+ /** Ревизия идей человека: меняется при любой правке его тем и идей */
+ export const irev = (userId: string) => `irev#${userId}`;
++/**
++ * Ревизия подарков чужих хотелок человека (wish.gift, S1). Отдельно от urev: владелец её не получает, иначе
++ * «моя ревизия выросла, а я ничего не менял» выдаёт подарок (docs/security/REVIEW-v2.md, V2-2)
++ */
++export const giftrev = (userId: string) => `giftrev#${userId}`;
+diff --git a/server/test/v2.ts b/server/test/v2.ts
+index 099e033..44357af 100644
+--- a/server/test/v2.ts
++++ b/server/test/v2.ts
+@@ -5,7 +5,10 @@
+  *   npm test
+  */
+ import assert from 'node:assert/strict';
++import { buildApp } from '../src/app.js';
++import { signToken } from '../src/auth.js';
+ import { wishView } from '../src/api.js';
++import { MemoryStore } from '../src/store/memory.js';
+ import { normalize } from '../src/parse.js';
+ import { buildMessages } from '../src/prompt.js';
+ import { occurrences, repeatShort } from '../src/recur.js';
+@@ -93,4 +96,39 @@ assert.deepEqual(wishView(gifted, 'u7', 2), gifted, 'другие видят к
+ assert.equal(wishView(gifted, 'u7', 1).receivedAt, gifted.giftedAt, 'старое приложение — через receivedAt');
+ assert.deepEqual(wishView(base, 'u7', 1), base, 'без подарка ничего не меняется');
+ 
++/* ---------- S1 через HTTP: подарок не выдаёт себя ревизией владельца (REVIEW-v2, V2-2) ---------- */
++{
++  const store = new MemoryStore();
++  const app = await buildApp({ store });
++  for (const [id, name] of [['o1', 'Оля'], ['b1', 'Боря']]) await store.putUser({ id, name, createdAt: 'c' });
++  const req = async (url: string, uid: string, body: unknown) => {
++    const r = await app.inject({ method: 'POST', url, payload: body as any, headers: { authorization: `Bearer ${signToken(uid)}`, 'x-kstati-api': '2' } });
++    assert.equal(r.statusCode, 200, r.body);
++    return JSON.parse(r.body);
++  };
++  const ops = async (uid: string, ...list: unknown[]) => (await req('/ops', uid, { ops: list })).results;
++  const [g] = await ops('o1', { op: 'group.create', group: { id: 'g', name: 'Друзья', category: 'friends' } });
++  await ops('b1', { op: 'group.join', code: g.group.inviteCode });
++  await ops('o1', { op: 'wish.put', wish: { id: 'w', title: 'Наушники', note: '', link: '', receivedAt: null } });
++  const known = async (uid: string) => {
++    const s = await req('/sync', uid, {});
++    return { groups: s.revs.groups, owners: s.revs.owners };
++  };
++  const [kO, kB] = [await known('o1'), await known('b1')];
++  assert.deepEqual((await ops('b1', { op: 'wish.gift', ownerId: 'o1', id: 'w', gifted: true }))[0], { ok: true });
++  const sO = await req('/sync', 'o1', kO);
++  assert.equal(sO.revs.owners.o1, kO.owners.o1, 'ревизия владельца после подарка не меняется');
++  assert.deepEqual(sO.wishes, {}, 'и хотелки владельцу заново не присылаются');
++  const sB = await req('/sync', 'b1', kB);
++  assert.notEqual(sB.revs.owners.o1, kB.owners.o1, 'остальные видят новую ревизию');
++  assert.equal(sB.wishes.o1[0].giftedBy, 'b1', 'и получают подарок');
++  // Владелец отметил «получил» — его ревизия растёт как обычно, и теперь он видит, от кого
++  await ops('o1', { op: 'wish.put', wish: { id: 'w', title: 'Наушники', note: '', link: '', receivedAt: '2026-10-06T10:00:00.000Z' } });
++  const sO2 = await req('/sync', 'o1', kO);
++  assert.equal(sO2.wishes.o1[0].giftedBy, 'b1');
++  const sB2 = await req('/sync', 'b1', { groups: sB.revs.groups, owners: sB.revs.owners });
++  assert.ok(sB2.revs.owners.o1 > sB.revs.owners.o1, 'общая ревизия для остальных только растёт');
++  await app.close();
++}
++
+ console.log('✓ v2: повтор в правках, «что я делаю», промпт, подарки');

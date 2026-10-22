@@ -1,0 +1,12 @@
+diff --git a/mobile-prod/app.json b/mobile-prod/app.json
+index ae0f5fd..60d8b3c 100644
+--- a/mobile-prod/app.json
++++ b/mobile-prod/app.json
+@@ -9,6 +9,7 @@
+     "android": {
+       "package": "ru.kstati.app",
+       "versionCode": 1,
++      "allowBackup": false,
+       "permissions": [
+         "RECORD_AUDIO"
+       ],

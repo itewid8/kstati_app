@@ -1,0 +1,76 @@
+{
+  "expo": {
+    "name": "Кстати β",
+    "slug": "kstati-prod",
+    "scheme": "kstatiapp",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "ru.kstati.app",
+      "versionCode": 1,
+      "allowBackup": false,
+      "permissions": [
+        "RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/monochrome-icon.png",
+        "backgroundColor": "#1E1E1E"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "ru.kstati.app",
+      "buildNumber": "1",
+      "supportsTablet": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Микрофон нужен для голосовых команд"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true,
+            "buildArchs": [
+              "arm64-v8a",
+              "armeabi-v7a"
+            ],
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          },
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 96,
+          "resizeMode": "contain",
+          "backgroundColor": "#1E1E1E"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#D13438"
+        }
+      ],
+      "./plugins/withIpv4First",
+      "expo-web-browser",
+      "./plugins/withoutPushEntitlement",
+      "./plugins/withWorkManagerFix",
+      "expo-background-task"
+    ],
+    "icon": "./assets/icon.png"
+  }
+}
