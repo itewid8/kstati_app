@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инструмент — код из письма</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 844px; display: flex; gap: 40px; font-family: 'Geist', sans-serif">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}; box-sizing: border-box; padding: 20px 16px 18px; display: flex; flex-direction: column">
+
+<div style="display: flex; align-items: center; gap: 8px; height: 40px">
+<button aria-label="Назад" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg></button>
+<div style="margin-left: auto; width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: #1E1E1E; box-sizing: border-box; display: flex; align-items: center; justify-content: center"><svg width="30" height="30" viewBox="0 0 100 100" aria-label="Кстати"><rect x="21" y="39" width="7" height="22" rx="3.5" fill="#E6E6E6"></rect><rect x="32.5" y="29" width="7" height="42" rx="3.5" fill="#E6E6E6"></rect><rect x="46.5" y="19.5" width="7" height="61" rx="3.5" fill="#D13438"></rect><rect x="60.5" y="29" width="7" height="42" rx="3.5" fill="#E6E6E6"></rect><rect x="72" y="39" width="7" height="22" rx="3.5" fill="#E6E6E6"></rect></svg></div>
+</div>
+
+<div style="margin-top: 36px; font-size: 40px; font-weight: 700; letter-spacing: -0.05em; line-height: 42px">Код</div>
+<div style="margin-top: 8px; display: flex; gap: 8px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.06em"><span style="color: {{t.muted}}">ИЗ ПИСЬМА →</span><span>SASHA@YANDEX.RU</span></div>
+
+<div style="margin-top: 22px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1.5px solid {{t.border}}">
+<sc-for list="{{t.cells}}" as="c" hint-placeholder-count="6">
+<div style="position: relative; height: 60px; background: {{t.panel}}; border-left: {{c.left}}; display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 28px; font-weight: 600; color: {{c.color}}">{{c.d}}<sc-if value="{{c.active}}" hint-placeholder-val="{{false}}"><span style="position: absolute; left: 9px; right: 9px; bottom: 10px; height: 3px; background: {{t.red}}; box-shadow: 0 0 6px {{t.glow}}"></span></sc-if></div>
+</sc-for>
+</div>
+
+<button style="margin-top: 8px; height: 40px; border: 1.5px solid {{t.hair}}; background: none; color: {{t.muted}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em">ОТПРАВИТЬ ЕЩЁ РАЗ · 0:42</button>
+
+<button style="margin-top: auto; height: 40px; border: 0; background: none; color: {{t.muted}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">УЖЕ ЕСТЬ АККАУНТ → ВОЙТИ</button>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; };
+    const pal = [
+      { bg: '#E7E6E1', panel: '#F4F3EF', border: '#161616', hair: '#B9B8B2', text: '#111111', muted: '#5E5E58', red: '#E0281E' },
+      { bg: '#0B0B0B', panel: '#151515', border: '#2E2E2E', hair: '#2E2E2E', text: '#F2F2F0', muted: '#7C7C78', red: '#FF3B30' },
+    ];
+    const digits = ['4', '8', '1', '', '', ''];
+    const themes = pal.map((p) => ({
+      ...p,
+      glow: rgba(p.red, 0.6),
+      cells: digits.map((d, i) => ({ d: d || '·', color: d ? p.text : p.muted, active: i === 3, left: i ? '1.5px solid ' + p.border : '0' })),
+    }));
+    return { themes };
+  }
+}
+</script>
+</body>
+</html>

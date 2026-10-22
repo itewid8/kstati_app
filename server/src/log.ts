@@ -15,6 +15,11 @@ export type LogEntry = {
   model: string;
   /** Кто говорил (id аккаунта) */
   userId?: string;
+  /** Версия клиента (S5): уровень API и приложение из заголовков x-kstati-api / x-kstati-app */
+  api?: number;
+  app?: string;
+  /** Язык распознавания, если не русский по умолчанию (S7) */
+  lang?: string;
   /** Длительность записи, с; размер файла, байт */
   audioSec?: number | null;
   audioBytes?: number;

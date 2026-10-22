@@ -1,3 +1,4 @@
+import { repeatShort } from './recur.js';
 import type { Context } from './types.js';
 import type { Msg } from './yandex.js';
 
@@ -83,6 +84,7 @@ fresh: new (вышло в этом или прошлом году), old (ран�
 - Вопрос о планах («какие у нас планы на субботу», «что у друзей на выходных», «когда у нас дача») — query_plans, записи не добавляются.
   scope — чьи планы:
     "us" — «мы», «у нас», «наши» без уточнения (это пара говорящего);
+    "me" — только сам говорящий: «что я делаю», «мои планы», «у меня» без других имён;
     "people" + people: имена в именительном падеже — «у нас с Кариной», «у меня с Димой»;
     "category" + category (couple | family | parents | friends | other) — «у наших друзей» → friends, «у родителей» → parents, «в семье» → family;
     "groups" + groups: названия — если во фразе названа группа из списка «Мои группы» («в Футболе»);
@@ -113,6 +115,10 @@ fresh: new (вышло в этом или прошлом году), old (ран�
 «Какие у нас с Кариной планы на следующую субботу?» → {"actions":[{"intent":"query_plans","scope":"people","people":["Карина"],"from":"2026-10-03","to":"2026-10-03","query":""}]}
 «Что у наших друзей на выходных?» → {"actions":[{"intent":"query_plans","scope":"category","category":"friends","from":"2026-09-26","to":"2026-09-27","query":""}]}
 «Когда у нас дача?» → {"actions":[{"intent":"query_plans","scope":"us","from":"2026-09-25","to":"2027-09-25","query":"дача"}]}
+«Что я делаю на выходных?» → {"actions":[{"intent":"query_plans","scope":"me","from":"2026-09-26","to":"2026-09-27","query":""}]}
+«Что у нас на этой неделе?» → {"actions":[{"intent":"query_plans","scope":"us","from":"2026-09-25","to":"2026-09-27","query":""}]}
+«Удали йогу в субботу» (есть task:t4 | Йога | 2026-09-26 19:00 | повтор: каждую сб) → {"actions":[{"intent":"delete","target":["t4"],"query":"йога"}]}
+«Перенеси стоматолога на пятницу на два и добавь Карину» (есть task:t6 | Стоматолог | 2026-09-29 10:00) → {"actions":[{"intent":"update","target":["t6"],"date":"2026-10-02","time":"14:00","people":["Карина"],"query":"стоматолог"}]}
 «Мы посмотрели Интерстеллар» (есть запись watch:m1 | Интерстеллар) → {"actions":[{"intent":"mark","target":["m1"],"query":"Интерстеллар"}]}
 «Запиши идею: в виджете показывать погоду на завтра» (есть тема «Идеи для приложения») → {"actions":[{"intent":"add","type":"idea","text":"В виджете показывать погоду на завтра.","topic":"Идеи для приложения"}]}
 «Добавь в поздравления с новым годом стих про кролика для бабушки» (такой темы нет) → {"actions":[{"intent":"add","type":"idea","text":"Стих про кролика для бабушки.","topic":"Поздравления с Новым годом"}]}
@@ -132,7 +138,8 @@ export function buildMessages(text: string, ctx: Context): Msg[] {
       const end = t.endDate || t.endTime ? ` – ${[t.endDate, t.endTime].filter(Boolean).join(' ')}` : '';
       const who = t.people?.length ? ` | кто: ${t.people.join(', ')}` : '';
       const plan = t.parentId ? ` | в плане task:${t.parentId}` : '';
-      return `task:${t.id} | ${t.title} | ${[t.date, t.time].filter(Boolean).join(' ') || 'без даты'}${end}${who}${plan}${t.done ? ' | выполнено' : ''}`;
+      const rep = t.repeat ? ` | повтор: ${repeatShort(t.repeat)}` : '';
+      return `task:${t.id} | ${t.title} | ${[t.date, t.time].filter(Boolean).join(' ') || 'без даты'}${end}${rep}${who}${plan}${t.done ? ' | выполнено' : ''}`;
     }),
     ...ex.watch.map((w) => `watch:${w.id} | ${w.title}${w.done ? ' | посмотрели' : ''}`),
     ...ex.wishes.map((w) => `wish:${w.id} | ${w.title}${w.done ? ' | подарили' : ''}`),

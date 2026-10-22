@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инструмент — профиль</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 844px; display: flex; gap: 40px; font-family: 'Geist', sans-serif">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}; box-sizing: border-box; padding: 20px 16px 0; display: flex; flex-direction: column">
+
+<div style="height: 40px; display: flex; align-items: center; gap: 8px">
+<button aria-label="Назад" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg></button>
+<span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: {{t.muted}}">НАСТРОЙКИ</span>
+</div>
+
+<div style="margin-top: 14px; display: flex; align-items: center; gap: 12px">
+<button aria-label="Цвет и символ" style="width: 64px; height: 64px; flex-shrink: 0; border: 1.5px solid {{t.border}}; background: {{t.s}}; color: {{t.sInk}}; font-size: 30px; font-weight: 700; letter-spacing: -0.04em; position: relative">С<span style="position: absolute; right: -1.5px; bottom: -1.5px; width: 20px; height: 20px; background: {{t.text}}; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="{{t.bg}}" stroke-width="2.5"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></span></button>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 32px; font-weight: 700; letter-spacing: -0.05em; line-height: 34px">Саня</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.04em; color: {{t.muted}}">@SASHA · SASHA@YANDEX.RU</span>
+</div>
+</div>
+
+<div style="margin-top: 14px; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{t.sections}}" as="sec" hint-placeholder-count="3">
+<div style="border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">{{sec.label}}</div>
+<sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="3">
+<button style="width: 100%; height: 44px; border: 0; border-top: 1px solid {{t.hair}}; background: {{t.panel}}; padding: 0 8px; display: flex; align-items: center; gap: 8px; font-family: inherit; color: {{r.color}}; text-align: left">
+<span style="flex: 1; font-size: 13px; font-weight: 500">{{r.label}}</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.04em; color: {{t.muted}}">{{r.value}}</span>
+<sc-if value="{{r.swatches}}" hint-placeholder-val="{{false}}"><span style="display: flex; gap: 3px"><sc-for list="{{t.swatches}}" as="w" hint-placeholder-count="8"><span style="width: 14px; height: 14px; background: {{w.c}}; box-shadow: {{w.ring}}"></span></sc-for></span></sc-if>
+<sc-if value="{{r.chev}}" hint-placeholder-val="{{true}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{t.muted}}" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg></sc-if>
+</button>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const pal = [
+      { bg: '#E7E6E1', panel: '#F4F3EF', border: '#161616', hair: '#CFCEC8', text: '#111111', muted: '#5E5E58', red: '#C8231A', s: '#2F6BDB', sInk: '#FFFFFF', sw: ['#2F6BDB', '#E2407E', '#1F9D57', '#E0A800', '#F2711C', '#7C4DDB', '#0E9AA7'] },
+      { bg: '#0B0B0B', panel: '#151515', border: '#2E2E2E', hair: '#222222', text: '#F2F2F0', muted: '#7C7C78', red: '#FF453A', s: '#5B8DEF', sInk: '#1A1A1A', sw: ['#5B8DEF', '#F06A9B', '#3DBE76', '#F2C230', '#FF8C42', '#9B74F0', '#2CC0CC'] },
+    ];
+    const themes = pal.map((p) => {
+      const r = (label, value, extra) => ({ label, value: value || '', color: p.text, chev: true, swatches: false, ...extra });
+      return {
+        ...p,
+        swatches: p.sw.map((c, i) => ({ c, ring: i === 0 ? '0 0 0 1.5px ' + p.bg + ', 0 0 0 3px ' + p.text : 'none' })).concat([{ c: 'conic-gradient(#E0281E, #E0A800, #1F9D57, #0E9AA7, #2F6BDB, #7C4DDB, #E0281E)', ring: 'none' }]),
+        sections: [
+          { label: 'ПРОФИЛЬ', rows: [r('Имя', 'САНЯ'), r('Никнейм', '@SASHA'), r('Пол', 'МУЖСКОЙ'), r('Цвет', '', { swatches: true, chev: false })] },
+          { label: 'ГРУППЫ', rows: [r('Мы с Кариной', 'ПАРА · 2'), r('Друзья', 'ДРУЗЬЯ · 4'), r('Родители', 'СЕМЬЯ · 3'), r('Новая группа', '+')] },
+          { label: 'ПРИЛОЖЕНИЕ И АККАУНТ', rows: [r('Настройки приложения'), r('Сменить пароль'), r('Выйти', '', { chev: false }), r('Удалить аккаунт', '', { chev: false, color: p.red })] },
+        ],
+      };
+    });
+    return { themes };
+  }
+}
+</script>
+</body>
+</html>

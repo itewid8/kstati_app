@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инструмент — план поездки</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 844px; display: flex; gap: 40px; font-family: 'Geist', sans-serif">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}">
+
+<div style="position: absolute; left: 16px; right: 16px; top: 20px; height: 40px; display: flex; align-items: center; gap: 8px">
+<button aria-label="Назад" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg></button>
+<span style="flex: 1; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: {{t.muted}}">ПЛАН · МЫ С КАРИНОЙ</span>
+<button aria-label="Добавить подзадачу" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg></button>
+<button aria-label="Ещё" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="{{t.text}}" stroke="none"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 70px">
+<div style="position: relative; padding-left: 10px">
+<span style="position: absolute; left: 0; top: 2px; bottom: 1px; width: 1.5px; background: {{t.k}}"></span>
+<div style="font-size: 24px; font-weight: 700; letter-spacing: -0.04em; line-height: 26px">Командировка в&#160;Казань</div>
+<div style="margin-top: 4px; font-family: 'Geist Mono', monospace; font-size: 9px; line-height: 11px; letter-spacing: 0.06em">{{t.range}} · <span style="color: {{t.muted}}">КАРИНА</span></div>
+</div>
+<div style="margin-top: 10px; display: flex; align-items: center; gap: 4px">
+<span style="flex: 1; height: 6px; background: {{t.k}}"></span><span style="flex: 1; height: 6px; border: 1.5px solid {{t.border}}; box-sizing: border-box"></span><span style="flex: 1; height: 6px; border: 1.5px solid {{t.border}}; box-sizing: border-box"></span><span style="flex: 1; height: 6px; border: 1.5px solid {{t.border}}; box-sizing: border-box"></span><span style="flex: 1; height: 6px; border: 1.5px solid {{t.border}}; box-sizing: border-box"></span>
+<span style="margin-left: 6px; font-family: 'Geist Mono', monospace; font-size: 10px; line-height: 12px; font-weight: 600">1/5</span>
+</div>
+<div style="margin-top: 10px; display: flex">
+<button style="height: 28px; padding: 0 10px; border: 1.5px solid {{t.border}}; background: {{t.text}}; color: {{t.bg}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em">СЕТКА</button>
+<button style="height: 28px; padding: 0 10px; border: 1.5px solid {{t.border}}; border-left: 0; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.08em">СПИСОК</button>
+</div>
+</div>
+
+<sc-for list="{{t.cols}}" as="c" hint-placeholder-count="3">
+<div style="position: absolute; left: {{c.x}}px; top: {{t.colTop}}px; width: {{c.w}}px; height: {{t.colH}}px; background: {{c.shade}}"></div>
+<div style="position: absolute; left: {{c.x}}px; top: {{t.labelTop}}px; width: {{c.w}}px; padding-left: 6px; box-sizing: border-box; font-family: 'Geist Mono', monospace; font-size: 9px; line-height: 11px; font-weight: 600; letter-spacing: 0.06em">{{c.label}}</div>
+</sc-for>
+<div style="position: absolute; left: 0; right: 0; top: {{t.sepTop}}px; height: 1.5px; background: {{t.border}}"></div>
+
+<sc-for list="{{t.hours}}" as="h" hint-placeholder-count="17">
+<div style="position: absolute; left: {{t.gx}}px; right: 16px; top: {{h.y}}px; height: 1px; background: {{t.hair}}"></div>
+<span style="position: absolute; left: 16px; top: {{h.ly}}px; font-family: 'Geist Mono', monospace; font-size: 8.5px; line-height: 10px; color: {{t.muted}}">{{h.label}}</span>
+</sc-for>
+
+<sc-for list="{{t.events}}" as="e" hint-placeholder-count="5">
+<div style="position: absolute; left: {{e.x}}px; top: {{e.y}}px; width: {{e.w}}px; height: {{e.h}}px; box-sizing: border-box; background: {{e.fill}}; padding: 3px 4px 0 7px; overflow: hidden; display: flex; flex-direction: column; gap: 1px">
+<span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1.5px; background: {{t.k}}"></span>
+<span style="font-size: 10px; font-weight: 600; line-height: 12px; text-decoration: {{e.deco}}">{{e.title}}</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; line-height: 10px">{{e.time}}</span>
+<span style="display: {{e.descShow}}; font-size: 8.5px; line-height: 10px; color: {{t.muted}}">{{e.desc}}</span>
+</div>
+</sc-for>
+
+<div style="position: absolute; left: 16px; right: 16px; bottom: 18px; height: 72px; display: flex; gap: 8px">
+<div style="flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px">
+<button style="border: 1.5px solid {{t.border}}; background: {{t.text}}; color: {{t.bg}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em">ДЕЛА</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ХОЧУ</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">СМОТРЕТЬ</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ИДЕИ</button>
+</div>
+<button aria-label="Голосовая команда в план" style="width: 104px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px"><span style="width: 26px; height: 26px; border-radius: 13px; background: {{t.red}}; box-shadow: 0 0 10px {{t.glow}}"></span><span style="font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; color: {{t.text}}">REC</span></button>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; };
+    const pal = [
+      { bg: '#E7E6E1', panel: '#F4F3EF', alt: '#DEDDD7', border: '#161616', hair: '#CFCEC8', text: '#111111', muted: '#5E5E58', red: '#E0281E', k: '#E2407E', a: 0.2 },
+      { bg: '#0B0B0B', panel: '#151515', alt: '#121212', border: '#2E2E2E', hair: '#1E1E1E', text: '#F2F2F0', muted: '#7C7C78', red: '#FF3B30', k: '#F06A9B', a: 0.24 },
+    ];
+    // Сетка: от шапки до нижней панели (верх панели 844 − 18 − 72 = 754, зазор 8)
+    const GX = 40, GW = 390 - GX - 16, COL = GW / 3, TOP = 178, BOTTOM = 754 - 8;
+    const ev = [
+      [0, 6, 12, 'Из Москвы в Казань', 'Ласточка, вагон 5', true],
+      [0, 14, 15, 'Заселение', 'Отель на Баумана'],
+      [1, 10, 13, 'Встреча с заказчиком', 'Офис на Петербургской'],
+      [1, 19, 21, 'Ужин с командой', 'Тюбетей'],
+      [2, 9, 15, 'Обратно в Москву', 'Ласточка, вагон 2'],
+    ];
+    // Видимые часы: за час до самого раннего начала и через час после самого позднего конца
+    const H0 = Math.max(0, Math.floor(Math.min(...ev.map((e) => e[1]))) - 1);
+    const H1 = Math.min(24, Math.ceil(Math.max(...ev.map((e) => e[2]))) + 1);
+    const HN = H1 - H0, GY = TOP + 24, GH = BOTTOM - GY, H = GH / HN;
+    const fmt = (h) => String(Math.floor(h)).padStart(2, '0') + ':' + String(Math.round((h % 1) * 60)).padStart(2, '0');
+    const themes = pal.map((p) => ({
+      ...p,
+      glow: rgba(p.red, 0.6),
+      range: '7 ОКТ ' + fmt(ev[0][1]) + ' → 9 ОКТ ' + fmt(ev[ev.length - 1][2]),
+      gx: GX, colTop: TOP, colH: BOTTOM - TOP, labelTop: TOP + 5, sepTop: TOP + 20,
+      cols: ['СР 07', 'ЧТ 08', 'ПТ 09'].map((label, i) => ({ label, x: GX + i * COL, w: COL, shade: i % 2 ? p.alt : 'transparent' })),
+      hours: Array.from({ length: HN }, (_, i) => ({ y: GY + i * H, ly: GY + i * H + 2, label: String(H0 + i).padStart(2, '0') })),
+      events: ev.map(([d, a, b, title, desc, done]) => ({
+        x: GX + d * COL + 1, w: COL - 2, y: GY + (a - H0) * H + 1, h: (b - a) * H - 2,
+        title, desc, time: fmt(a) + '–' + fmt(b), descShow: (b - a) * H - 2 >= 40 ? 'block' : 'none',
+        fill: rgba(p.k, done ? p.a * 0.5 : p.a), deco: done ? 'line-through' : 'none',
+      })),
+    }));
+    return { themes };
+  }
+}
+</script>
+</body>
+</html>

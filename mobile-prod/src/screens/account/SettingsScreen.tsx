@@ -1,0 +1,209 @@
+/**
+ * Настройки приложения (C-Settings): тема, режим кнопки REC, язык распознавания, напоминания,
+ * счётчик голосовых запросов за день, состояние соединения, «О приложении».
+ * Презентационный экран: данные — пропсами, действия — колбэками.
+ */
+import { memo } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { MicMode, ThemePref } from '@/lib/types';
+import { ScreenTitle, SectionBox, fonts, pad2, size as S, space, useTheme } from '@/ui';
+import { AccountHeader } from './components/AccountHeader';
+import { AccountRow } from './components/AccountRow';
+import { OptionGrid, type Option } from './components/OptionGrid';
+import { Toggle } from './components/Toggle';
+import { accountText, useAccountPalette } from './components/accountTheme';
+
+export type RecognitionLang = 'ru' | 'en' | 'auto';
+
+export type SettingsScreenProps = {
+  theme: ThemePref;
+  micMode: MicMode;
+  language: RecognitionLang;
+  remindersOn: boolean;
+  /** Сводка правил для дел со временем: «ЗА 2 Ч · НАКАНУНЕ В 20:00» */
+  timedReminders: string;
+  /** Сводка для дел на весь день: «НАКАНУНЕ В 20:00» */
+  allDayReminders: string;
+  /** Голосовые запросы за сегодня и дневной лимит */
+  voiceUsed: number;
+  voiceLimit: number;
+  /** Сервер отвечает */
+  serverOnline: boolean;
+  vpnOn: boolean;
+  /** «1.0.3 (42)» */
+  version: string;
+  insets?: { top: number; bottom: number };
+  /** Строки поддержки и политики; выключены, пока у приложения нет адресов */
+  showAboutLinks?: boolean;
+
+  onBack?: () => void;
+  onChangeTheme?: (theme: ThemePref) => void;
+  onChangeMicMode?: (mode: MicMode) => void;
+  onChangeLanguage?: (lang: RecognitionLang) => void;
+  onToggleReminders?: (on: boolean) => void;
+  onEditTimedReminders?: () => void;
+  onEditAllDayReminders?: () => void;
+  onContactSupport?: () => void;
+  onOpenPrivacy?: () => void;
+};
+
+const NO_INSETS = { top: 0, bottom: 0 };
+
+const THEME_OPTIONS: Option<ThemePref>[] = [
+  { key: 'system', label: 'СИСТЕМА' },
+  { key: 'light', label: 'СВЕТЛАЯ' },
+  { key: 'dark', label: 'ТЁМНАЯ' },
+];
+
+const MIC_OPTIONS: Option<MicMode>[] = [
+  { key: 'tap', label: 'НАЖАТЬ' },
+  { key: 'hold', label: 'УДЕРЖИВАТЬ' },
+];
+
+const LANG_OPTIONS: Option<RecognitionLang>[] = [
+  { key: 'ru', label: 'РУССКИЙ' },
+  { key: 'en', label: 'АНГЛИЙСКИЙ' },
+  { key: 'auto', label: 'АВТО' },
+];
+
+/** Деления «ГОЛОС СЕГОДНЯ»: по одному на запрос из дневного лимита */
+const VoiceMeter = memo(function VoiceMeter({ used, limit }: { used: number; limit: number }) {
+  const { c } = useTheme();
+  const pal = useAccountPalette();
+  return (
+    <View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: limit, now: used }}
+      style={[styles.meter, { backgroundColor: c.panel }]}
+    >
+      {Array.from({ length: limit }, (_, i) => (
+        <View key={i} style={[styles.meterCell, { backgroundColor: i < used ? c.text : pal.meterEmpty }]} />
+      ))}
+    </View>
+  );
+});
+
+type StatusProps = { label: string; on: boolean; divider?: boolean };
+
+/** Ячейка «СЕРВЕР» / «VPN ВЫКЛ»: зелёная точка — есть, пустое кольцо — нет */
+const StatusCell = memo(function StatusCell({ label, on, divider }: StatusProps) {
+  const { c } = useTheme();
+  const pal = useAccountPalette();
+  return (
+    <View style={[styles.status, divider && { borderLeftWidth: S.hairline, borderLeftColor: c.hair }]}>
+      <View
+        style={[
+          styles.statusDot,
+          on ? { backgroundColor: pal.ok, boxShadow: `0 0 6px ${pal.ok}` } : { borderWidth: S.border, borderColor: c.muted },
+        ]}
+      />
+      <Text numberOfLines={1} style={[styles.statusText, { color: on ? c.text : c.muted }]}>
+        {label}
+      </Text>
+    </View>
+  );
+});
+
+export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreenProps) {
+  const {
+    theme,
+    micMode,
+    language,
+    remindersOn,
+    timedReminders,
+    allDayReminders,
+    voiceUsed,
+    voiceLimit,
+    serverOnline,
+    vpnOn,
+    version,
+    insets = NO_INSETS,
+    showAboutLinks = true,
+    onBack,
+    onChangeTheme,
+    onChangeMicMode,
+    onChangeLanguage,
+    onToggleReminders,
+    onEditTimedReminders,
+    onEditAllDayReminders,
+    onContactSupport,
+    onOpenPrivacy,
+  } = props;
+  const { c } = useTheme();
+
+  return (
+    <ScrollView
+      style={{ backgroundColor: c.bg }}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + S.topBarTop, paddingBottom: insets.bottom + 24 }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <AccountHeader caption="НАСТРОЙКИ" onBack={onBack} />
+      <ScreenTitle title="Приложение" style={styles.title} />
+
+      <View style={styles.sections}>
+        <SectionBox title="ТЕМА">
+          <OptionGrid options={THEME_OPTIONS} value={theme} onChange={onChangeTheme} />
+        </SectionBox>
+
+        <SectionBox title="КНОПКА REC">
+          <OptionGrid options={MIC_OPTIONS} value={micMode} onChange={onChangeMicMode} />
+        </SectionBox>
+
+        <SectionBox title="ЯЗЫК РАСПОЗНАВАНИЯ">
+          <OptionGrid options={LANG_OPTIONS} value={language} onChange={onChangeLanguage} />
+        </SectionBox>
+
+        <SectionBox title="НАПОМИНАНИЯ">
+          <View style={[styles.switchRow, { backgroundColor: c.panel }]}>
+            <Text style={[accountText.rowLabel, { color: c.text }]}>Напоминать о делах</Text>
+            <Toggle value={remindersOn} onChange={onToggleReminders} accessibilityLabel="Напоминать о делах" />
+          </View>
+          {remindersOn ? (
+            <>
+              <AccountRow label="Дела со временем" meta={timedReminders} onPress={onEditTimedReminders} />
+              <AccountRow label="Дела на весь день" meta={allDayReminders} onPress={onEditAllDayReminders} />
+            </>
+          ) : null}
+        </SectionBox>
+
+        <SectionBox title="ГОЛОС СЕГОДНЯ" count={`${pad2(voiceUsed)} / ${pad2(voiceLimit)}`}>
+          <VoiceMeter used={voiceUsed} limit={voiceLimit} />
+        </SectionBox>
+
+        <SectionBox title="СОЕДИНЕНИЕ">
+          <View style={[styles.statusGrid, { backgroundColor: c.panel }]}>
+            <StatusCell label="СЕРВЕР" on={serverOnline} />
+            <StatusCell label={vpnOn ? 'VPN ВКЛ' : 'VPN ВЫКЛ'} on={vpnOn} divider />
+          </View>
+        </SectionBox>
+
+        <SectionBox title="О ПРИЛОЖЕНИИ">
+          <AccountRow label="Версия" value={version} smallValue chevron={false} />
+          {showAboutLinks ? <AccountRow label="Написать в поддержку" onPress={onContactSupport} /> : null}
+          {showAboutLinks ? <AccountRow label="Политика конфиденциальности" onPress={onOpenPrivacy} /> : null}
+        </SectionBox>
+      </View>
+    </ScrollView>
+  );
+});
+
+const styles = StyleSheet.create({
+  content: { paddingHorizontal: space.side },
+  title: { marginTop: 14 },
+  sections: { marginTop: 12, gap: 8 },
+  switchRow: {
+    height: S.row,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  meter: { padding: 8, flexDirection: 'row', gap: 2 },
+  meterCell: { flex: 1, flexBasis: 0, height: 14 },
+  statusGrid: { flexDirection: 'row' },
+  /** Половина ширины, как колонка grid: у flex:1 рамка слева добавилась бы к базе и сдвинула ячейку */
+  status: { width: '50%', height: 36, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusText: { fontFamily: fonts.mono400, fontSize: 9.5, letterSpacing: 0.57 },
+});

@@ -13,7 +13,8 @@ import { randomInt } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
-import { grev, irev, PERSON_COLORS, publicUser, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type Wish } from './store/index.js';
+import { apiLevel } from './client.js';
+import { giftrev, grev, irev, PERSON_COLORS, publicUser, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type Wish } from './store/index.js';
 import { CATEGORIES } from './types.js';
 
 const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
@@ -80,6 +81,11 @@ const WishIn = z.object({
   note: z.string().max(1000),
   link: z.string().max(1000),
   receivedAt: Stamp,
+  /**
+   * S1: от кого подарок — владелец указывает, когда сам отмечает «получил». Нет поля — не трогать (старое приложение),
+   * null — убрать. Пока хотелка не получена, поле от владельца не принимается: он не видит чужую отметку и не должен её стереть
+   */
+  giftedBy: Id.nullable().optional(),
 });
 
 /** Тема идей: название и группы, которым она открыта (только чтение) */
@@ -87,6 +93,8 @@ const TopicIn = z.object({
   id: Id,
   title: z.string().trim().min(1).max(80),
   groupIds: z.array(Id).max(20),
+  /** S2: в архиве с этого момента; null — вернуть из архива; нет поля — не трогать (старое приложение) */
+  archivedAt: Stamp.optional(),
 });
 /** Идея: текст и тема (null — «Без темы») */
 const IdeaIn = z.object({
@@ -101,6 +109,8 @@ const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('item.delete'), groupId: Id, id: Id }),
   z.object({ op: z.literal('wish.put'), wish: WishIn }),
   z.object({ op: z.literal('wish.delete'), id: Id }),
+  // S1: отметить чужую хотелку подаренной (или снять свою отметку). Владельцу не видно до его «получил»
+  z.object({ op: z.literal('wish.gift'), ownerId: Id, id: Id, gifted: z.boolean() }),
   z.object({ op: z.literal('topic.put'), topic: TopicIn }),
   z.object({ op: z.literal('topic.delete'), id: Id }),
   z.object({ op: z.literal('idea.put'), idea: IdeaIn }),
@@ -149,6 +159,20 @@ function taskChanges(a: Task, b: Task): string[] {
   return (Object.keys(x) as (keyof typeof x)[]).filter((k) => x[k] !== y[k]);
 }
 
+/**
+ * Хотелка глазами viewer (S1).
+ * Владелец: пока сам не отметил «получил», не видит, что её подарили и кто (сюрприз) — полей giftedBy/giftedAt нет вовсе.
+ * Остальные видят всё. Старому приложению (api 1) подарок показываем через receivedAt — других полей оно не знает,
+ * а чужие хотелки оно не отправляет на сервер, так что это ничего не перезапишет.
+ */
+export function wishView(w: Wish, viewerId: string, api: number): Wish {
+  const { giftedBy, giftedAt, ...rest } = w;
+  if (w.ownerId === viewerId) return w.receivedAt ? w : rest;
+  if (!giftedBy && !giftedAt) return w;
+  if (api < 2 && !w.receivedAt) return { ...w, receivedAt: giftedAt ?? w.updatedAt };
+  return w;
+}
+
 export class Data {
   constructor(private store: Store) {}
 
@@ -162,8 +186,12 @@ export class Data {
     }
   }
 
-  /** Лента для человека: события в его группах и хотелки соучастников. Свои действия не показываем */
-  async activity(user: User, since: string) {
+  /**
+   * Лента для человека: события в его группах и хотелки соучастников. Свои действия не показываем.
+   * api 1: подарок (wish.done от дарителя в ленте хотелок владельца, S1) отдаём от имени владельца — старое приложение
+   * считает автора wish.* владельцем хотелки («Маша отметила хотелку как подаренную» и переход к хотелкам Маши)
+   */
+  async activity(user: User, since: string, api = 1) {
     const s = this.store;
     const groups = (await s.getGroups(await s.listMemberships(user.id))).filter((g) => g.memberIds.includes(user.id));
     const people = [...new Set(groups.flatMap((g) => g.memberIds))].filter((id) => id !== user.id);
@@ -181,7 +209,25 @@ export class Data {
       .filter((a) => a.actor !== user.id)
       .sort((a, b) => b.id.localeCompare(a.id))
       .slice(0, 150);
-    return { events };
+    if (api >= 2) return { events };
+    const giftOwner = (a: Activity) => (a.kind === 'wish.done' && a.scope.startsWith('u:') && a.scope.slice(2) !== a.actor ? a.scope.slice(2) : null);
+    return { events: events.map((a) => (giftOwner(a) ? { ...a, actor: giftOwner(a)! } : a)) };
+  }
+
+  /**
+   * Есть ли у двух людей общая группа. Читаем только группы, общие по спискам членства, и по 20 за раз до первой
+   * подходящей: wish.gift и wish.put зовут это на каждую операцию (до 200 в /ops), а групп у человека может быть
+   * сколько угодно — чтение всех его групп на операцию давало ×200 обращений к базе (docs/security/REVIEW-v2.md, V2-3)
+   */
+  private async shareGroup(a: string, b: string): Promise<boolean> {
+    const [ma, mb] = await Promise.all([this.store.listMemberships(a), this.store.listMemberships(b)]);
+    const theirs = new Set(mb);
+    const common = [...new Set(ma)].filter((g) => theirs.has(g));
+    for (let i = 0; i < common.length; i += 20) {
+      const groups = await this.store.getGroups(common.slice(i, i + 20));
+      if (groups.some((g) => g.memberIds.includes(a) && g.memberIds.includes(b))) return true;
+    }
+    return false;
   }
 
   private async memberGroup(user: User, groupId: string): Promise<Group> {
@@ -318,12 +364,58 @@ export class Data {
       }
       case 'wish.put': {
         const old = await s.getWish(user.id, op.wish.id);
-        const w: Wish = { ...op.wish, ownerId: user.id, createdAt: old?.createdAt ?? now, updatedAt: now };
+        const { giftedBy: giftIn, ...fields } = op.wish;
+        // Подарок (S1). По умолчанию — как было: старое приложение полей подарка не шлёт и не должно их стирать
+        let giftedBy = old?.giftedBy ?? null;
+        let giftedAt = old?.giftedAt ?? null;
+        if (old?.receivedAt && !fields.receivedAt) {
+          // Владелец снял «получил» — хотелка снова открыта для всех
+          giftedBy = null;
+          giftedAt = null;
+        } else if (fields.receivedAt && giftIn !== undefined && giftIn !== giftedBy && (old?.receivedAt || !giftedBy)) {
+          // Менять «от кого» владелец может, только если видит его: скрытый от него подарок при «получил» не затирается
+          if (giftIn && (giftIn === user.id || !(await this.shareGroup(user.id, giftIn))))
+            throw new HttpError(400, 'bad_member', 'Подарить мог только человек из ваших групп');
+          giftedBy = giftIn;
+          giftedAt = giftIn ? (giftedAt ?? fields.receivedAt) : null;
+        }
+        const w: Wish = {
+          ...fields,
+          ownerId: user.id,
+          ...(giftedBy && { giftedBy }),
+          ...(giftedAt && { giftedAt }),
+          createdAt: old?.createdAt ?? now,
+          updatedAt: now,
+        };
         await s.putWish(w);
         await s.incr(urev(user.id));
         const base = { scope: `u:${user.id}`, itemId: w.id, title: w.title };
         if (!old) await this.log(user, { ...base, kind: 'wish.add' });
         else if (!old.receivedAt && w.receivedAt) await this.log(user, { ...base, kind: 'wish.done' });
+        return {};
+      }
+      case 'wish.gift': {
+        if (op.ownerId === user.id) throw new HttpError(400, 'own_wish', 'Свою хотелку отмечайте как полученную');
+        if (!(await this.shareGroup(user.id, op.ownerId))) throw new HttpError(403, 'forbidden', 'Нет общей группы с владельцем хотелки');
+        const w = await s.getWish(op.ownerId, op.id);
+        if (!w) throw new HttpError(404, 'not_found', 'Хотелка не найдена');
+        if (op.gifted) {
+          if (w.giftedBy === user.id) return {};
+          if (w.giftedBy || w.receivedAt) throw new HttpError(409, 'already_gifted', 'Эту хотелку уже подарили');
+          w.giftedBy = user.id;
+          w.giftedAt = now;
+        } else {
+          if (!w.giftedBy) return {};
+          if (w.giftedBy !== user.id) throw new HttpError(403, 'forbidden', 'Снять отметку может только тот, кто подарил');
+          if (w.receivedAt) throw new HttpError(409, 'received', 'Владелец уже отметил подарок полученным');
+          delete w.giftedBy;
+          delete w.giftedAt;
+        }
+        // updatedAt и urev владельца не трогаем: по ним он догадался бы о подарке. Остальным — своя ревизия (giftrev)
+        await s.putWish(w);
+        await s.incr(giftrev(op.ownerId));
+        // В ленту хотелок владельца: её видят все, кроме него самого (activity не показывает человеку его scope u:<id>)
+        if (op.gifted) await this.log(user, { scope: `u:${op.ownerId}`, itemId: w.id, title: w.title, kind: 'wish.done' });
         return {};
       }
       case 'wish.delete': {
@@ -339,12 +431,15 @@ export class Data {
         // Открыть тему можно только своим группам
         const mine = new Set(await s.listMemberships(user.id));
         const groupIds = [...new Set(op.topic.groupIds)].filter((g) => mine.has(g));
+        // Архив (S2): менять может только владелец — тема пишется только в его идеи. Нет поля — как было
+        const archivedAt = op.topic.archivedAt === undefined ? (old?.kind === 'topic' ? (old.archivedAt ?? null) : null) : op.topic.archivedAt;
         const t: Topic = {
           kind: 'topic',
           id: op.topic.id,
           ownerId: user.id,
           title: op.topic.title,
           groupIds,
+          ...(archivedAt && { archivedAt }),
           createdAt: old?.createdAt ?? now,
           updatedAt: now,
         };
@@ -504,14 +599,14 @@ export class Data {
     return { topics: own ? topics : topics.map((t) => ({ ...t, groupIds: t.groupIds.filter((g) => common.has(g)) })), ideas };
   }
 
-  async sync(user: User, known: { groups: Record<string, number>; owners: Record<string, number>; ideas?: Record<string, string> }) {
+  async sync(user: User, known: { groups: Record<string, number>; owners: Record<string, number>; ideas?: Record<string, string> }, api = 1) {
     const s = this.store;
     const groups = await s.getGroups(await s.listMemberships(user.id));
     const mine = groups.filter((g) => g.memberIds.includes(user.id));
     const peopleIds = [...new Set([user.id, ...mine.flatMap((g) => g.memberIds)])];
     const [users, counters] = await Promise.all([
       s.getUsers(peopleIds),
-      s.getCounters([...mine.map((g) => grev(g.id)), ...peopleIds.map(urev), ...peopleIds.map(irev)]),
+      s.getCounters([...mine.map((g) => grev(g.id)), ...peopleIds.map(urev), ...peopleIds.map(irev), ...peopleIds.map(giftrev)]),
     ]);
     // Ревизия идей: счётчик человека и общие с ним группы (вышли из группы — чужие темы надо убрать)
     const commonWith = (id: string) => new Set(mine.filter((g) => g.memberIds.includes(id)).map((g) => g.id));
@@ -523,7 +618,9 @@ export class Data {
     const changedIdeaOwners = known.ideas ? peopleIds.filter((id) => knownIdeas[id] !== ideaRevs[id]) : [];
     const revs = {
       groups: Object.fromEntries(mine.map((g) => [g.id, counters[grev(g.id)] ?? 0])),
-      owners: Object.fromEntries(peopleIds.map((id) => [id, counters[urev(id)] ?? 0])),
+      // Чужим хотелкам — ещё и подарки (giftrev); своя ревизия подарков не включает: сюрприз (S1, REVIEW-v2 V2-2).
+      // Сумма двух растущих счётчиков тоже только растёт — телефон по-прежнему сравнивает одно число
+      owners: Object.fromEntries(peopleIds.map((id) => [id, (counters[urev(id)] ?? 0) + (id === user.id ? 0 : (counters[giftrev(id)] ?? 0))])),
     };
     const changedGroups = mine.filter((g) => known.groups[g.id] !== revs.groups[g.id]);
     const changedOwners = peopleIds.filter((id) => known.owners[id] !== revs.owners[id]);
@@ -544,7 +641,7 @@ export class Data {
       users: users.map(publicUser),
       revs,
       items: Object.fromEntries(changedGroups.map((g, i) => [g.id, itemLists[i]])),
-      wishes: Object.fromEntries(changedOwners.map((id, i) => [id, wishLists[i]])),
+      wishes: Object.fromEntries(changedOwners.map((id, i) => [id, wishLists[i].map((w) => wishView(w, user.id, api))])),
       // Личные напоминания — всегда целиком (их немного); null — телефон ещё ни разу не присылал
       prefs,
       // Идеи: ревизии (не смогли прочитать — прежние, чтобы телефон спросил ещё раз) и содержимое изменившихся
@@ -586,7 +683,7 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
     const known = z
       .object({ groups: z.record(z.number()).default({}), owners: z.record(z.number()).default({}), ideas: z.record(z.string().max(2000)).optional() })
       .parse(req.body ?? {});
-    return data.sync(user, known);
+    return data.sync(user, known, apiLevel(req));
   });
 
   /** Лента активности: что сделали другие за последние 30 дней (или с since) */
@@ -595,7 +692,7 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
     const q = z.object({ since: z.string().max(40).optional() }).parse(req.query ?? {});
     const floor = new Date(Date.now() - 30 * 86400000).toISOString();
     const since = q.since && q.since > floor ? q.since : floor;
-    return data.activity(user, since);
+    return data.activity(user, since, apiLevel(req));
   });
 
   /** Пачка изменений. Ошибка одной операции не мешает остальным */

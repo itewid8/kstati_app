@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инструмент — месяц</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 844px; display: flex; gap: 40px; font-family: 'Geist', sans-serif">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}">
+
+<div style="position: absolute; left: 16px; right: 16px; top: 20px; height: 40px; display: flex; align-items: center; gap: 8px">
+<button style="height: 40px; flex: 1; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-align: left; padding: 0 12px; display: flex; align-items: center; justify-content: space-between">МЫ С КАРИНОЙ<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2.5"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button aria-label="Список" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg></button>
+<button aria-label="Добавить" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg></button>
+<button aria-label="Лента" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></button>
+<button aria-label="Настройки" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.s}}; color: {{t.sInk}}; font-family: 'Geist Mono', monospace; font-size: 15px; font-weight: 600">С</button>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 68px; height: 28px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr))">
+<sc-for list="{{t.views}}" as="v" hint-placeholder-count="4">
+<button style="border: 1.5px solid {{t.border}}; margin-left: {{v.ml}}; background: {{v.bg}}; color: {{v.color}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: {{v.weight}}; letter-spacing: 0.08em">{{v.label}}</button>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 104px; height: 40px; display: flex; align-items: center; gap: 6px">
+<span style="font-size: 34px; font-weight: 700; letter-spacing: -0.05em; line-height: 36px">Октябрь</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: {{t.muted}}; margin-left: 2px; align-self: flex-end; padding-bottom: 6px">2026</span>
+<button aria-label="Предыдущий месяц" style="margin-left: auto; width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg></button>
+<button aria-label="Следующий месяц" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg></button>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 152px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.08em; color: {{t.muted}}">
+<span style="padding-left: 4px">ПН</span><span style="padding-left: 4px">ВТ</span><span style="padding-left: 4px">СР</span><span style="padding-left: 4px">ЧТ</span><span style="padding-left: 4px">ПТ</span><span style="padding-left: 4px">СБ</span><span style="padding-left: 4px">ВС</span>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 168px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: repeat(5, 77px); border-top: 1.5px solid {{t.border}}; border-left: 1px solid {{t.hair}}">
+<sc-for list="{{t.cells}}" as="c" hint-placeholder-count="35">
+<button aria-label="{{c.aria}}" style="position: relative; border: 0; border-right: 1px solid {{t.hair}}; border-bottom: 1px solid {{t.hair}}; background: {{c.bg}}; box-shadow: {{c.sel}}; padding: 0; font-family: inherit; color: {{t.text}}; overflow: hidden; text-align: left">
+<span style="position: absolute; left: 0; right: 0; top: 0; height: 3px; background: {{c.plan}}"></span>
+<span style="position: absolute; left: 3px; top: 4px; min-width: 16px; height: 14px; padding: 0 2px; box-sizing: border-box; background: {{c.numBg}}; color: {{c.numColor}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600; line-height: 14px; text-align: center">{{c.n}}</span>
+<span style="position: absolute; left: 2px; right: 2px; top: 20px; display: flex; flex-direction: column; gap: 1px">
+<sc-for list="{{c.items}}" as="it" hint-placeholder-count="5">
+<span style="position: relative; height: 9px; padding-left: 3px; background: {{it.fill}}; font-size: 6.5px; font-weight: 600; line-height: 9px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: {{it.tip}}"></span>{{it.title}}</span>
+</sc-for>
+<sc-if value="{{c.more}}" hint-placeholder-val="{{false}}"><span style="font-family: 'Geist Mono', monospace; font-size: 6.5px; color: {{t.muted}}; line-height: 8px">{{c.more}}</span></sc-if>
+</span>
+</button>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 564px; border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>ПН 05 · СЕГОДНЯ</span><span>5 ДЕЛ</span></div>
+<sc-for list="{{t.day}}" as="r" hint-placeholder-count="5">
+<div style="position: relative; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 11px; background: {{t.panel}}; border-top: 1px solid {{t.hair}}">
+<span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1.5px; background: {{r.tip}}"></span>
+<span style="width: 32px; font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 500">{{r.time}}</span>
+<span style="flex: 1; font-size: 12px; font-weight: 500">{{r.title}}</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.04em; color: {{t.muted}}">{{r.who}}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; bottom: 18px; height: 72px; display: flex; gap: 8px">
+<div style="flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px">
+<button style="border: 1.5px solid {{t.border}}; background: {{t.text}}; color: {{t.bg}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em">ДЕЛА</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ХОЧУ</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">СМОТРЕТЬ</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ИДЕИ</button>
+</div>
+<button aria-label="Голосовая команда" style="width: 104px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px"><span style="width: 26px; height: 26px; border-radius: 13px; background: {{t.red}}; box-shadow: 0 0 10px {{t.glow}}"></span><span style="font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; color: {{t.text}}">REC</span></button>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; };
+    const pal = [
+      { bg: '#E7E6E1', panel: '#F4F3EF', border: '#161616', hair: '#CFCEC8', text: '#111111', muted: '#5E5E58', faint: '#A3A29C', red: '#E0281E', s: '#2F6BDB', k: '#E2407E', sInk: '#FFFFFF', a: 0.2 },
+      { bg: '#0B0B0B', panel: '#151515', border: '#2E2E2E', hair: '#222222', text: '#F2F2F0', muted: '#7C7C78', faint: '#4A4A47', red: '#FF3B30', s: '#5B8DEF', k: '#F06A9B', sInk: '#1A1A1A', a: 0.24 },
+    ];
+    const items = {
+      1: [['Отчёт', 's']], 2: [['Отчёт', 's'], ['Кино', 'sk']], 3: [['Дача', 'sk']],
+      5: [['Стоматолог', 's'], ['Созвон', 's'], ['Посылка', 'k'], ['Йога', 'k'], ['Сериал', 'sk']],
+      6: [['МФЦ', 's'], ['Ужин с Леной', 'sk']], 7: [['Футбол', 's']], 8: [['Встреча', 'k']], 9: [['Поезд домой', 'k'], ['Обед с Олегом', 's'], ['Кино', 'sk']],
+      10: [['Полить грядки', 's'], ['Шашлыки', 'k'], ['Созвон', 's'], ['Звонок маме', 's']], 11: [['Бранч у Ани', 'sk']], 13: [['Йога', 'k']], 14: [['Футбол', 's']],
+      15: [['МФЦ', 's'], ['Стрижка', 'k'], ['Встреча', 'k'], ['Футбол', 's'], ['Ужин', 'sk'], ['Театр', 'sk'], ['Йога', 'k']], 17: [['Дача', 'sk']], 20: [['Йога', 'k']], 21: [['Футбол', 's']], 22: [['ДР Лены', 'sk']],
+      24: [['Свадьба Ани', 'sk']], 27: [['Йога', 'k']], 28: [['Футбол', 's']], 31: [['Хэллоуин', 'sk']],
+    };
+    const views = ['ДЕНЬ', 'НЕДЕЛЯ', 'МЕСЯЦ', 'ГОД'];
+    const themes = pal.map((p) => {
+      const tip = (w) => (w === 'sk' ? 'linear-gradient(' + p.s + ' 50%, ' + p.k + ' 50%)' : w === 's' ? p.s : p.k);
+      const fill = (w) => (w === 'sk' ? 'linear-gradient(90deg, ' + rgba(p.s, p.a) + ', ' + rgba(p.k, p.a) + ')' : rgba(w === 's' ? p.s : p.k, p.a));
+      const cells = [];
+      for (let i = 0; i < 35; i++) {
+        const n = i - 2;
+        const inMonth = n >= 1 && n <= 31;
+        const list = inMonth ? items[n] || [] : [];
+        const plan = n >= 7 && n <= 9;
+        cells.push({
+          n: inMonth ? n : n < 1 ? 30 + n : n - 31,
+          aria: inMonth ? n + ' октября' : 'другой месяц',
+          bg: plan ? rgba(p.k, 0.08) : inMonth ? 'transparent' : p.panel,
+          plan: plan ? p.k : 'transparent',
+          sel: n === 5 ? 'inset 0 0 0 1.5px ' + p.text : 'none',
+          numBg: n === 5 ? p.red : 'transparent',
+          numColor: n === 5 ? '#FFFFFF' : inMonth ? p.text : p.faint,
+          // В ячейку входит до 5 дел; если больше — 4 и «+N»
+          items: list.slice(0, list.length > 5 ? 4 : 5).map(([title, w]) => ({ title, tip: tip(w), fill: fill(w) })),
+          more: list.length > 5 ? '+' + (list.length - 4) : '',
+        });
+      }
+      return {
+        ...p,
+        glow: rgba(p.red, 0.6),
+        views: views.map((v, i) => ({ label: v, bg: i === 2 ? p.text : p.panel, color: i === 2 ? p.bg : p.text, weight: i === 2 ? 600 : 400, ml: i ? '-1.5px' : '0' })),
+        cells,
+        day: [
+          { time: '09:30', title: 'Стоматолог', who: 'САНЯ', tip: tip('s') },
+          { time: '13:00', title: 'Созвон с Олегом', who: 'САНЯ', tip: tip('s') },
+          { time: '13:00', title: 'Забрать посылку', who: 'КАРИНА', tip: tip('k') },
+          { time: '19:00', title: 'Йога', who: 'КАРИНА', tip: tip('k') },
+          { time: '21:00', title: 'Сериал', who: 'САНЯ, КАРИНА', tip: tip('sk') },
+        ],
+      };
+    });
+    return { themes };
+  }
+}
+</script>
+</body>
+</html>

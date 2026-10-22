@@ -8,10 +8,12 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { buildApp } from '../src/app.js';
 import { config } from '../src/config.js';
+import { normalize } from '../src/parse.js';
 import { MemoryStore } from '../src/store/memory.js';
 import type { Store } from '../src/store/types.js';
 import { YdbStore } from '../src/store/ydb.js';
 import { startFakeDocApi } from './fake-docapi.js';
+import type { Context } from '../src/types.js';
 
 config.voiceDailyLimit = 3;
 
@@ -25,26 +27,41 @@ globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestIni
   return realFetch(input, init);
 }) as typeof fetch;
 
+/** Ответы «модели» для фраз v2: через настоящий normalize, чтобы проверить гейт по x-kstati-api целиком */
+const CANNED: Record<string, Record<string, unknown>[]> = {
+  'что я делаю на выходных': [{ intent: 'query_plans', scope: 'me', from: '2026-10-10', to: '2026-10-11', query: '' }],
+  'удали баню в субботу': [{ intent: 'delete', target: ['t5'], query: 'баня' }],
+};
+
 async function scenario(name: string, store: Store) {
   const parsed: string[] = [];
+  const sttLangs: (string | undefined)[] = [];
+  let lastCtx: Context | null = null;
   const app = await buildApp({
     store,
-    recognize: async () => 'хочу наушники',
+    recognize: async (_ogg, lang) => {
+      sttLangs.push(lang);
+      return 'хочу наушники';
+    },
     toOgg: async () => ({ ogg: Buffer.from('ogg'), seconds: 1.2 }),
     parse: async (text, ctx) => {
+      lastCtx = ctx;
       parsed.push(
         `${text} | people=${ctx.people.map((p) => p.name).join(',')} | tasks=${ctx.existing.tasks.length} | wishes=${ctx.existing.wishes.length} | ideas=${ctx.existing.ideas?.length ?? 0} | topics=${(ctx.topics ?? []).map((t) => t.title).join(',')} | current=${ctx.currentTopicId ?? ''}`,
       );
-      return { result: { type: 'unknown' }, raw: '{}', usage: { input: 1, output: 1, total: 2 }, attempts: 1 };
+      const canned = CANNED[text];
+      return { result: canned ? normalize(canned as any, ctx, text) : { type: 'unknown' }, raw: '{}', usage: { input: 1, output: 1, total: 2 }, attempts: 1 };
     },
   });
 
-  const call = async (method: string, url: string, body?: unknown, token?: string) => {
-    const r = await app.inject({ method: method as any, url, payload: body as any, headers: token ? { authorization: `Bearer ${token}` } : {} });
+  // Адрес клиента: блок v2 идёт со своего, чтобы не упереться в защиту от перебора (120 запросов в минуту)
+  let ip = '127.0.0.1';
+  const call = async (method: string, url: string, body?: unknown, token?: string, headers: Record<string, string> = {}) => {
+    const r = await app.inject({ method: method as any, url, payload: body as any, remoteAddress: ip, headers: { ...headers, ...(token && { authorization: `Bearer ${token}` }) } });
     return { status: r.statusCode, json: r.body ? JSON.parse(r.body) : null, headers: r.headers };
   };
-  const ok = async (method: string, url: string, body?: unknown, token?: string) => {
-    const r = await call(method, url, body, token);
+  const ok = async (method: string, url: string, body?: unknown, token?: string, headers?: Record<string, string>) => {
+    const r = await call(method, url, body, token, headers);
     assert.equal(r.status, 200, `${method} ${url} → ${r.status} ${JSON.stringify(r.json)}`);
     return r.json;
   };
@@ -274,6 +291,113 @@ async function scenario(name: string, store: Store) {
   await ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'запиши идею', topicId: 'tp1' }, T1);
   assert.match(parsed[before], /ideas=2 \| topics=Идеи для приложения \| current=tp1/);
 
+  /* ================= v2: новое приложение и совместимость со старым ================= */
+  const H2 = { 'x-kstati-api': '2', 'x-kstati-app': 'ru.kstati.app/1.0.0(1)' };
+  ip = '127.0.0.2';
+  const SA = sasha.me.id as string;
+  const MA = masha.me.id as string;
+  const wishOf = async (token: string, owner: string, id: string, headers?: Record<string, string>) =>
+    ((await ok('POST', '/sync', {}, token, headers)).wishes[owner] as any[]).find((w) => w.id === id);
+  const OLD_WISH_KEYS = ['createdAt', 'id', 'link', 'note', 'ownerId', 'receivedAt', 'title', 'updatedAt'];
+
+  /* ---------- S5: версия сервера ---------- */
+  assert.equal((await ok('GET', '/health')).api, 2, '/health отдаёт уровень API');
+
+  /* ---------- S1: подарок чужой хотелки — сюрприз для владельца ---------- */
+  const w1Before = await wishOf(T1, SA, 'w1');
+  assert.deepEqual((await ops(T2, { op: 'wish.gift', ownerId: SA, id: 'w1', gifted: true }))[0], { ok: true });
+  assert.deepEqual((await ops(T2, { op: 'wish.gift', ownerId: SA, id: 'w1', gifted: true }))[0], { ok: true }, 'повтор той же операции безопасен');
+  assert.equal((await ops(T1, { op: 'wish.gift', ownerId: SA, id: 'w1', gifted: true }))[0].error, 'own_wish');
+  assert.equal((await ops(vk.token, { op: 'wish.gift', ownerId: SA, id: 'w1', gifted: true }))[0].error, 'forbidden', 'без общей группы нельзя');
+  assert.equal((await ops(T2, { op: 'wish.gift', ownerId: SA, id: 'нет', gifted: true }))[0].error, 'not_found');
+  // Владелец не видит ни отметки, ни дарителя — ни в старом, ни в новом приложении; updatedAt не выдаёт
+  for (const h of [undefined, H2]) {
+    const own = await wishOf(T1, SA, 'w1', h);
+    assert.deepEqual(Object.keys(own).sort(), OLD_WISH_KEYS, 'у владельца — прежний вид хотелки');
+    assert.equal(own.receivedAt, null);
+    assert.equal(own.updatedAt, w1Before.updatedAt);
+  }
+  assert.ok(!(await ok('GET', '/activity', undefined, T1)).events.some((e: any) => e.kind === 'wish.done'), 'и в ленте владельца нет');
+  const giftFeed = await store.listActivity(`u:${SA}`, '', 50);
+  assert.ok(giftFeed.some((e) => e.kind === 'wish.done' && e.actor === MA), 'остальные увидят в ленте «отметила как подаренную»');
+  // Даритель в новом приложении видит, кто подарил; в старом — хотелка просто в «Подарено»
+  const giftNew = await wishOf(T2, SA, 'w1', H2);
+  assert.equal(giftNew.giftedBy, MA);
+  assert.ok(giftNew.giftedAt);
+  assert.equal(giftNew.receivedAt, null, 'новому клиенту receivedAt — только отметка владельца');
+  assert.equal((await wishOf(T2, SA, 'w1')).receivedAt, giftNew.giftedAt, 'старому клиенту подарок виден через receivedAt');
+
+  // Совместимость: старое приложение владельца шлёт хотелку целиком без новых полей — подарок не стирается
+  await ops(T1, { op: 'wish.put', wish: { id: 'w1', title: 'Наушники Sony', note: '', link: '', receivedAt: null } });
+  assert.equal((await wishOf(T2, SA, 'w1', H2)).giftedBy, MA, 'старый формат wish.put не стёр giftedBy');
+  // Новое приложение владельца шлёт giftedBy: null, пока не получил, — тоже не стирает (он отметки не видит)
+  await ops(T1, { op: 'wish.put', wish: { id: 'w1', title: 'Наушники Sony', note: '', link: '', receivedAt: null, giftedBy: null } });
+  assert.equal((await wishOf(T2, SA, 'w1', H2)).giftedBy, MA, 'скрытый подарок владелец стереть не может');
+  // Владелец отметил «получил» (старым приложением): теперь видит, от кого
+  await ops(T1, { op: 'wish.put', wish: { id: 'w1', title: 'Наушники Sony', note: '', link: '', receivedAt: '2026-10-06T10:00:00.000Z' } });
+  const received = await wishOf(T1, SA, 'w1', H2);
+  assert.deepEqual([received.giftedBy, received.receivedAt], [MA, '2026-10-06T10:00:00.000Z']);
+  assert.equal((await ops(T2, { op: 'wish.gift', ownerId: SA, id: 'w1', gifted: false }))[0].error, 'received', 'после «получил» даритель отметку не снимает');
+  // Снял «получил» — хотелка снова открыта для всех, подарок снят
+  await ops(T1, { op: 'wish.put', wish: { id: 'w1', title: 'Наушники Sony', note: '', link: '', receivedAt: null } });
+  const reopened = await wishOf(T2, SA, 'w1', H2);
+  assert.deepEqual([reopened.giftedBy, reopened.giftedAt, reopened.receivedAt], [undefined, undefined, null]);
+  // Даритель сам снимает свою отметку
+  await ops(T2, { op: 'wish.gift', ownerId: SA, id: 'w1', gifted: true });
+  assert.deepEqual((await ops(T2, { op: 'wish.gift', ownerId: SA, id: 'w1', gifted: false }))[0], { ok: true });
+  assert.equal((await wishOf(T2, SA, 'w1', H2)).giftedBy, undefined);
+  // Владелец сам указывает дарителя при «получил»: только человек из общих групп
+  assert.equal((await ops(T1, { op: 'wish.put', wish: { id: 'w1', title: 'Наушники Sony', note: '', link: '', receivedAt: '2026-10-06T11:00:00.000Z', giftedBy: vk.me.id } }))[0].error, 'bad_member');
+  await ops(T1, { op: 'wish.put', wish: { id: 'w1', title: 'Наушники Sony', note: '', link: '', receivedAt: '2026-10-06T11:00:00.000Z', giftedBy: MA } });
+  assert.equal((await wishOf(T1, SA, 'w1', H2)).giftedBy, MA);
+  assert.equal((await ops(T2, { op: 'wish.gift', ownerId: SA, id: 'w1', gifted: true }))[0].ok, true, 'тот же даритель — ничего не меняется');
+  await ops(T1, { op: 'wish.put', wish: { id: 'w1', title: 'Наушники', note: '', link: '', receivedAt: null } });
+
+  /* ---------- S2: архив тем: только владелец, старый формат не стирает ---------- */
+  await ops(T1, { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи для приложения', groupIds: ['g1'], archivedAt: '2026-10-06T09:00:00.000Z' } });
+  const topicOf = async (token: string, owner: string, headers?: Record<string, string>) =>
+    ((await ok('POST', '/sync', { ideas: {} }, token, headers)).notes[owner].topics as any[]).find((t) => t.id === 'tp1');
+  assert.equal((await topicOf(T2, SA)).archivedAt, '2026-10-06T09:00:00.000Z', 'участники видят архив владельца');
+  await ops(T1, { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи (архив)', groupIds: ['g1'] } });
+  const tArch = await topicOf(T1, SA);
+  assert.deepEqual([tArch.title, tArch.archivedAt], ['Идеи (архив)', '2026-10-06T09:00:00.000Z'], 'старый формат topic.put не стёр archivedAt');
+  // Чужую тему не заархивировать: topic.put пишет только в свои идеи
+  await ops(T2, { op: 'topic.put', topic: { id: 'tp1', title: 'Чужая', groupIds: [], archivedAt: null } });
+  assert.equal((await topicOf(T1, SA)).archivedAt, '2026-10-06T09:00:00.000Z');
+  await ops(T2, { op: 'topic.delete', id: 'tp1' });
+  await ops(T1, { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи для приложения', groupIds: ['g1'], archivedAt: null } });
+  assert.equal((await topicOf(T1, SA)).archivedAt, undefined, 'null возвращает из архива');
+
+  /* ---------- S3–S7: голос ---------- */
+  const savedLimit = config.voiceDailyLimit;
+  config.voiceDailyLimit = 50;
+  const vt = (text: string, headers?: Record<string, string>) => ok('POST', '/voice/text', { groupId: 'g1', today: '2026-10-06', now: '12:00', text }, T1, headers);
+  // S4: «что я делаю» — старому приложению текущая группа (его resolveGroups не знает kind 'me'), новому — me + who
+  const plansOld = (await vt('что я делаю на выходных')).result.plans;
+  assert.deepEqual(plansOld, { scope: { kind: 'current' }, from: '2026-10-10', to: '2026-10-11', query: '' }, 'старый клиент — прежний вид ответа');
+  assert.equal(lastCtx!.api, 1);
+  const plansNew = (await vt('что я делаю на выходных', H2)).result.plans;
+  assert.deepEqual([plansNew.scope, plansNew.who], [{ kind: 'me' }, [SA]]);
+  assert.equal(lastCtx!.api, 2);
+  // S3: в контексте есть повтор; названная суббота — ближайший существующий раз (10 октября удалён)
+  assert.deepEqual(lastCtx!.existing.tasks.find((t) => t.id === 't5')?.repeat, rep);
+  const del = (await vt('удали баню в субботу', H2)).result;
+  assert.deepEqual([del.type, del.changes[0].action, del.changes[0].occ, del.changes[0].patch], ['changes', 'delete', '2026-10-17', undefined]);
+  // S7: язык распознавания; по умолчанию русский, неизвестный — 400 без списания лимита
+  const voice = (lang?: string) => call('POST', '/voice', { groupId: 'g1', today: '2026-10-06', now: '12:00', audio: 'AAAA', ...(lang && { lang }) }, T1, H2);
+  assert.equal((await voice('en-US')).status, 200);
+  assert.equal(sttLangs.at(-1), 'en-US');
+  assert.equal((await voice()).status, 200);
+  assert.equal(sttLangs.at(-1), 'ru-RU');
+  assert.equal((await voice('de-DE')).status, 400);
+  // S6: счётчик голоса без списания (до блока Саша потратил 1)
+  const q1 = await ok('GET', '/voice/quota', undefined, T1);
+  assert.deepEqual(q1, { limit: 50, used: 6, left: 44 });
+  assert.deepEqual(await ok('GET', '/voice/quota', undefined, T1), q1, 'запрос счётчика лимит не тратит');
+  assert.equal((await call('GET', '/voice/quota')).status, 401);
+  config.voiceDailyLimit = savedLimit;
+  ip = '127.0.0.3';
+
   /* ---------- ник и профиль ---------- */
   assert.equal((await ok('GET', '/nick/check?nick=' + encodeURIComponent('саша'), undefined, T2)).status, 'free');
   assert.equal((await ops(T1, { op: 'profile', nick: 'Саша', gender: 'm' }))[0].ok, true);
@@ -306,6 +430,7 @@ async function scenario(name: string, store: Store) {
   const lim = await call('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'ещё' }, T2);
   assert.equal(lim.status, 429);
   assert.equal(lim.json.error, 'daily_limit');
+  assert.deepEqual(await ok('GET', '/voice/quota', undefined, T2), { limit: 3, used: 3, left: 0 }, 'S6: лимит исчерпан');
   assert.equal((await call('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'ещё' })).status, 401, 'без входа нельзя');
 
   /* ---------- исключение: его дела в группе удаляются, хотелки остаются у него ---------- */

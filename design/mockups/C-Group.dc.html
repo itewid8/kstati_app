@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инструмент — группа</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 844px; display: flex; gap: 40px; font-family: 'Geist', sans-serif">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}; box-sizing: border-box; padding: 20px 16px 0; display: flex; flex-direction: column">
+
+<div style="height: 40px; display: flex; align-items: center; gap: 8px">
+<button aria-label="Назад" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg></button>
+<span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: {{t.muted}}">ГРУППА · ВЫ СОЗДАТЕЛЬ</span>
+</div>
+
+<div style="margin-top: 14px; font-size: 40px; font-weight: 700; letter-spacing: -0.05em; line-height: 42px">Мы с Кариной</div>
+
+<div style="margin-top: 8px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr))">
+<sc-for list="{{t.cats}}" as="c" hint-placeholder-count="5">
+<button style="height: 32px; margin-left: {{c.ml}}; border: 1.5px solid {{t.border}}; background: {{c.bg}}; color: {{c.color}}; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: {{c.weight}}; letter-spacing: 0.04em; padding: 0">{{c.label}}</button>
+</sc-for>
+</div>
+
+<div style="margin-top: 10px; border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>КОД ПРИГЛАШЕНИЯ</span><span>06</span></div>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); background: {{t.panel}}">
+<sc-for list="{{t.code}}" as="c" hint-placeholder-count="6">
+<span style="height: 52px; border-left: {{c.left}}; display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 26px; font-weight: 600">{{c.ch}}</span>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1.5px solid {{t.border}}">
+<button style="height: 40px; border: 0; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; display: flex; align-items: center; justify-content: center; gap: 8px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><rect x="9" y="9" width="12" height="12"></rect><path d="M5 15H3V3h12v2"></path></svg>КОПИРОВАТЬ</button>
+<button style="height: 40px; border: 0; border-left: 1.5px solid {{t.border}}; background: {{t.text}}; color: {{t.bg}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; display: flex; align-items: center; justify-content: center; gap: 8px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{t.bg}}" stroke-width="2"><path d="M4 12v8h16v-8M16 6l-4-4-4 4M12 2v13"></path></svg>ПОДЕЛИТЬСЯ</button>
+</div>
+</div>
+
+<div style="margin-top: 10px; border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>УЧАСТНИКИ</span><span>{{t.memberCount}}</span></div>
+<sc-for list="{{t.members}}" as="m" hint-placeholder-count="2">
+<button style="width: 100%; height: 44px; border: 0; border-top: 1px solid {{t.hair}}; background: {{t.panel}}; padding: 0 8px; display: flex; align-items: center; gap: 10px; font-family: inherit; color: {{t.text}}; text-align: left">
+<span style="width: 28px; height: 28px; flex-shrink: 0; background: {{m.color}}; color: {{m.ink}}; display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 600">{{m.letter}}</span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 13px; font-weight: 600; line-height: 16px">{{m.name}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.04em; line-height: 11px; color: {{t.muted}}">{{m.nick}}</span></span>
+<span style="height: 20px; box-sizing: border-box; padding: 0 6px; border: 1.5px solid {{t.border}}; font-family: 'Geist Mono', monospace; font-size: 8.5px; font-weight: 600; letter-spacing: 0.08em; line-height: 17px">{{m.role}}</span>
+</button>
+</sc-for>
+</div>
+
+<div style="margin-top: 10px; border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>ОБЩИЕ СПИСКИ</span><span>{{t.listCount}}</span></div>
+<sc-for list="{{t.lists}}" as="l" hint-placeholder-count="4">
+<button style="width: 100%; height: 44px; border: 0; border-top: 1px solid {{t.hair}}; background: {{t.panel}}; padding: 0 8px; display: flex; align-items: center; gap: 8px; font-family: inherit; color: {{t.text}}; text-align: left">
+<span style="flex: 1; font-size: 13px; font-weight: 500">{{l.label}}</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.04em; color: {{t.muted}}">{{l.value}}</span>
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{t.muted}}" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg>
+</button>
+</sc-for>
+</div>
+
+<button style="margin-top: 10px; height: 40px; border: 1.5px solid {{t.red}}; background: none; color: {{t.red}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em">ПОКИНУТЬ ГРУППУ</button>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const pal = [
+      { bg: '#E7E6E1', panel: '#F4F3EF', border: '#161616', hair: '#CFCEC8', text: '#111111', muted: '#5E5E58', red: '#C8231A', s: '#2F6BDB', k: '#E2407E', g: '#1F9D57', sInk: '#FFFFFF', kInk: '#1A1A1A', gInk: '#FFFFFF' },
+      { bg: '#0B0B0B', panel: '#151515', border: '#2E2E2E', hair: '#222222', text: '#F2F2F0', muted: '#7C7C78', red: '#FF453A', s: '#5B8DEF', k: '#F06A9B', g: '#3DBE76', sInk: '#1A1A1A', kInk: '#1A1A1A', gInk: '#1A1A1A' },
+    ];
+    const lists = [
+      { label: 'Дела', value: '12 ОТКРЫТЫХ' },
+      { label: 'Хочу', value: '04 ЖЕЛАНИЯ' },
+      { label: 'Смотреть', value: '07 В ОЧЕРЕДИ' },
+      { label: 'Идеи', value: '09 ИДЕЙ' },
+    ];
+    const themes = pal.map((p) => {
+      const members = [
+        { letter: 'С', name: 'Саня (вы)', nick: '@SASHA', role: 'СОЗДАТЕЛЬ', color: p.s, ink: p.sInk },
+        { letter: 'К', name: 'Карина', nick: '@KARINA', role: 'АДМИН', color: p.k, ink: p.kInk },
+      ];
+      return {
+        ...p,
+        cats: ['ПАРА', 'СЕМЬЯ', 'РОДИТ.', 'ДРУЗЬЯ', 'ДРУГОЕ'].map((label, i) => ({ label, ml: i ? '-1.5px' : '0', bg: i === 0 ? p.text : p.panel, color: i === 0 ? p.bg : p.text, weight: i === 0 ? 600 : 400 })),
+        code: 'K7P2QX'.split('').map((ch, i) => ({ ch, left: i ? '1px solid ' + p.hair : '0' })),
+        members,
+        memberCount: String(members.length).padStart(2, '0'),
+        lists,
+        listCount: String(lists.length).padStart(2, '0'),
+      };
+    });
+    return { themes };
+  }
+}
+</script>
+</body>
+</html>

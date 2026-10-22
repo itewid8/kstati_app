@@ -6,13 +6,14 @@ import { z } from 'zod';
 import { Data, registerData } from './api.js';
 import { toOggOpus } from './audio.js';
 import { HttpError, registerAuth, requireUser } from './auth.js';
+import { API_LEVEL, apiLevel, appVersion } from './client.js';
 import { config } from './config.js';
 import { writeLog } from './log.js';
 import { parseText } from './parse.js';
 import { normalizeTimes } from './spoken.js';
 import type { Store, User } from './store/index.js';
 import type { Context } from './types.js';
-import { recognize, YandexError } from './yandex.js';
+import { recognize, STT_LANGS, YandexError, type SttLang } from './yandex.js';
 
 /** Текст ошибки для журнала — с причиной из cause (код сети и т. п.), иначе видно только «fetch failed» */
 const errText = (e: unknown) => {
@@ -34,12 +35,14 @@ const VoiceMeta = z.object({
   topicId: z.string().max(64).nullable().optional(),
   /** Открытый план большого дела: новое дело станет его подзадачей */
   parentId: z.string().max(64).nullable().optional(),
+  /** Язык распознавания (S7); нет — русский. Для /voice/text не важен */
+  lang: z.enum(STT_LANGS).optional(),
 });
 
 export type Deps = {
   store: Store;
   /** Для тестов можно подменить распознавание и разбор */
-  recognize?: (ogg: Buffer) => Promise<string>;
+  recognize?: (ogg: Buffer, lang?: SttLang) => Promise<string>;
   parse?: typeof parseText;
   toOgg?: typeof toOggOpus;
 };
@@ -76,13 +79,14 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     return reply.code(500).send({ error: 'server' });
   });
 
-  app.get('/health', async () => ({ ok: true, model: config.model, db: config.db }));
+  // api — самый новый уровень API сервера (S5): новое приложение проверяет api >= 2
+  app.get('/health', async () => ({ ok: true, model: config.model, db: config.db, api: API_LEVEL }));
 
   registerAuth(app, store);
   registerData(app, store, data);
 
   /** Контекст для ИИ собирает сервер из базы: люди моих групп, дела текущей группы, мои хотелки */
-  async function buildContext(user: User, meta: z.infer<typeof VoiceMeta>): Promise<Context> {
+  async function buildContext(user: User, meta: z.infer<typeof VoiceMeta>, api: number): Promise<Context> {
     const { groups, people } = await data.circle(user);
     const group = groups.find((g) => g.id === meta.groupId);
     if (!group) throw new HttpError(403, 'not_member', 'Нет доступа к группе');
@@ -119,6 +123,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
                   endTime: t.endTime ?? null,
                   people: (t.people?.length ? t.people : [t.createdBy]).map(nameOf).filter(Boolean),
                   parentId: t.parentId ?? null,
+                  ...(t.repeat && { repeat: t.repeat, skipDates: t.skipDates ?? [] }),
                 },
               ]
             : [],
@@ -131,29 +136,40 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       currentTopicId: meta.topicId && topics.some((t) => t.id === meta.topicId) ? meta.topicId : null,
       groupMembers: group.memberIds,
       currentParentId: meta.parentId && items.some((t) => t.id === meta.parentId && t.type === 'task' && !t.parentId) ? meta.parentId : null,
+      api,
     };
   }
 
   /** Суточный лимит голосовых команд на человека */
+  const quotaKey = (user: User) => `voice#${user.id}#${mskDay()}`;
   async function takeVoiceQuota(user: User) {
-    const n = await store.incrUpTo(`voice#${user.id}#${mskDay()}`, config.voiceDailyLimit);
+    const n = await store.incrUpTo(quotaKey(user), config.voiceDailyLimit);
     if (n === null) throw new HttpError(429, 'daily_limit', `На сегодня голосовые команды закончились (${config.voiceDailyLimit} в день). Завтра лимит обновится.`);
     return config.voiceDailyLimit - n;
   }
+
+  /** S6: сколько голосовых команд потрачено сегодня (по Москве), без списания */
+  app.get('/voice/quota', async (req) => {
+    const user = await requireUser(req, store);
+    const key = quotaKey(user);
+    const used = Math.min((await store.getCounters([key]))[key] ?? 0, config.voiceDailyLimit);
+    return { limit: config.voiceDailyLimit, used, left: config.voiceDailyLimit - used };
+  });
 
   /** Разбор текста — «Разобрать заново» */
   app.post('/voice/text', async (req) => {
     const user = await requireUser(req, store);
     const body = VoiceMeta.extend({ text: z.string().min(1).max(1000) }).parse(req.body);
-    const context = await buildContext(user, body);
+    const client = { api: apiLevel(req), app: appVersion(req) };
+    const context = await buildContext(user, body, client.api);
     const left = await takeVoiceQuota(user);
     const t0 = Date.now();
     try {
       const { result, raw, usage, attempts } = await parse(body.text, context);
-      await writeLog({ source: 'text', userId: user.id, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
+      await writeLog({ source: 'text', userId: user.id, ...client, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
       return { transcript: body.text, result, left };
     } catch (e) {
-      await writeLog({ source: 'text', userId: user.id, transcript: body.text, ctx: ctxSize(context), llmMs: Date.now() - t0, error: errText(e) });
+      await writeLog({ source: 'text', userId: user.id, ...client, transcript: body.text, ctx: ctxSize(context), llmMs: Date.now() - t0, error: errText(e) });
       throw e;
     }
   });
@@ -162,7 +178,9 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   app.post('/voice', async (req) => {
     const user = await requireUser(req, store);
     const body = VoiceMeta.extend({ audio: z.string().min(1).max(1_500_000) }).parse(req.body);
-    const context = await buildContext(user, body);
+    const lang = body.lang ?? 'ru-RU';
+    const client = { api: apiLevel(req), app: appVersion(req), ...(lang !== 'ru-RU' && { lang }) };
+    const context = await buildContext(user, body, client.api);
     const left = await takeVoiceQuota(user);
     const audio = Buffer.from(body.audio, 'base64');
 
@@ -174,20 +192,20 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       const conv = await toOgg(audio);
       audioSec = conv.seconds;
       // Время через пробел («в 18 0 0») показываем и разбираем как «18:00»
-      transcript = normalizeTimes(await stt(conv.ogg));
+      transcript = normalizeTimes(await stt(conv.ogg, lang));
       t1 = Date.now();
       if (!transcript) {
-        await writeLog({ source: 'voice', userId: user.id, audioSec, audioBytes: audio.length, transcript: '', result: 'unknown', sttMs: t1 - t0 });
+        await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript: '', result: 'unknown', sttMs: t1 - t0 });
         return { transcript: '', result: { type: 'unknown' }, left };
       }
       const { result, raw, usage, attempts } = await parse(transcript, context);
       await writeLog({
-        source: 'voice', userId: user.id, audioSec, audioBytes: audio.length, transcript, result: result.type, detail: result,
+        source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, result: result.type, detail: result,
         raw, attempts, tokens: usage, ctx: ctxSize(context), sttMs: t1 - t0, llmMs: Date.now() - t1,
       });
       return { transcript, result, left };
     } catch (e) {
-      await writeLog({ source: 'voice', userId: user.id, audioSec, audioBytes: audio.length, transcript, ctx: ctxSize(context), error: errText(e) });
+      await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, ctx: ctxSize(context), error: errText(e) });
       throw e;
     }
   });

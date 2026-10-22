@@ -1,0 +1,76 @@
+diff --git a/mobile-prod/src/lib/api.ts b/mobile-prod/src/lib/api.ts
+index 2a91c73..6d3e093 100644
+--- a/mobile-prod/src/lib/api.ts
++++ b/mobile-prod/src/lib/api.ts
+@@ -56,6 +56,22 @@ function toBase64(buf: ArrayBuffer): string {
+   return out;
+ }
+ 
++const fileUriOf = (uri: string) => (/^(file|content):\/\//.test(uri) ? uri : `file://${uri}`);
++
++/**
++ * Удалить файл записи: после отправки, отмены или слишком короткой записи он не нужен.
++ * expo-audio на каждую запись создаёт новый файл в кэше и сам их не удаляет — голос копился бы на телефоне
++ */
++export function deleteRecording(uri: string | null | undefined) {
++  if (!uri) return;
++  try {
++    const f = new File(fileUriOf(uri));
++    if (f.exists) f.delete();
++  } catch {
++    /* файла уже нет */
++  }
++}
++
+ /**
+  * POST /voice: запись → { transcript, result }.
+  * Файл читаем сами и шлём JSON с base64 — без FormData, с которым у fetch в Expo проблемы на Android.
+@@ -63,8 +79,7 @@ function toBase64(buf: ArrayBuffer): string {
+ export async function uploadVoice(uri: string): Promise<{ ok: true; transcript: string; result: ParseResult; left?: number } | VoiceFail> {
+   let audio: string;
+   try {
+-    const fileUri = /^(file|content):\/\//.test(uri) ? uri : `file://${uri}`;
+-    audio = toBase64(await new File(fileUri).arrayBuffer());
++    audio = toBase64(await new File(fileUriOf(uri)).arrayBuffer());
+   } catch (e) {
+     return { ok: false, problem: 'server', detail: `чтение записи: ${(e as Error).message ?? e}` };
+   }
+diff --git a/mobile-prod/src/lib/voice.ts b/mobile-prod/src/lib/voice.ts
+index b1b025f..ae5a96e 100644
+--- a/mobile-prod/src/lib/voice.ts
++++ b/mobile-prod/src/lib/voice.ts
+@@ -11,7 +11,7 @@ import { router } from 'expo-router';
+ import { create } from 'zustand';
+ import { QUOTA_DETAIL, quotaText } from '@/adapters/voice/problem';
+ import { nav } from '@/containers/common/nav';
+-import { fetchVoiceQuota, parseOnServer, uploadVoice, type VoiceProblem } from './api';
++import { deleteRecording, fetchVoiceQuota, parseOnServer, uploadVoice, type VoiceProblem } from './api';
+ import { track } from './analytics';
+ import { API_URL } from './config';
+ import { toISODate } from './dates';
+@@ -187,7 +187,7 @@ export async function cancelRecording() {
+   lastMs = 0;
+   useVoiceUi.setState({ cancelling: true });
+   useStore.getState().setVoice('processing');
+-  if (useRealMic() && recorder) await recorder.stop().catch(() => null);
++  if (useRealMic() && recorder) deleteRecording(await recorder.stop().catch(() => null));
+   useStore.getState().setVoice('idle');
+   useVoiceUi.setState({ cancelling: false });
+   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+@@ -217,9 +217,14 @@ export async function stopRecording() {
+ 
+   if (useRealMic() && recorder) {
+     const uri = await recorder.stop();
+-    if (id !== run) return;
+-    if (!uri || duration < MIN_MS) return silence();
++    if (id !== run || !uri || duration < MIN_MS) {
++      deleteRecording(uri);
++      if (id !== run) return;
++      return silence();
++    }
+     const res = await uploadVoice(uri);
++    // Запись уже на сервере (или не дошла — повтор всё равно новой записью): файл больше не нужен
++    deleteRecording(uri);
+     if (id !== run) return;
+     useStore.getState().setVoice('idle');
+     if (!res.ok) return showFail('', res);

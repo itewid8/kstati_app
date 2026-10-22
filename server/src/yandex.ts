@@ -36,14 +36,23 @@ export class YandexError extends Error {
   }
 }
 
+/** Язык распознавания (S7): по умолчанию русский; auto — SpeechKit определяет сам */
+export const STT_LANGS = ['ru-RU', 'en-US', 'auto'] as const;
+export type SttLang = (typeof STT_LANGS)[number];
+
 /** SpeechKit v1, синхронное распознавание: OggOpus до 30 с и 1 МБ → текст */
-export async function recognize(ogg: Buffer): Promise<string> {
-  const url = new URL('https://stt.api.cloud.yandex.net/speech/v1/stt:recognize');
-  url.searchParams.set('folderId', config.folderId);
-  url.searchParams.set('lang', 'ru-RU');
-  url.searchParams.set('format', 'oggopus');
-  const res = await retryNet('stt', () => fetch(url, { method: 'POST', headers: headers(), body: new Uint8Array(ogg), signal: AbortSignal.timeout(20_000) }));
-  const text = await res.text();
+export async function recognize(ogg: Buffer, lang: SttLang = 'ru-RU'): Promise<string> {
+  const call = async (l: SttLang) => {
+    const url = new URL('https://stt.api.cloud.yandex.net/speech/v1/stt:recognize');
+    url.searchParams.set('folderId', config.folderId);
+    url.searchParams.set('lang', l);
+    url.searchParams.set('format', 'oggopus');
+    const res = await retryNet('stt', () => fetch(url, { method: 'POST', headers: headers(), body: new Uint8Array(ogg), signal: AbortSignal.timeout(20_000) }));
+    return { res, text: await res.text() };
+  };
+  let { res, text } = await call(lang);
+  // auto поддерживается не всеми моделями SpeechKit v1 — при отказе распознаём по-русски, а не теряем запись
+  if (res.status === 400 && lang === 'auto') ({ res, text } = await call('ru-RU'));
   if (!res.ok) throw new YandexError('stt', res.status, text);
   return (JSON.parse(text).result as string | undefined)?.trim() ?? '';
 }

@@ -51,6 +51,12 @@ export type ChangeDraft = {
   type: ItemType;
   candidates: string[];
   chosen: string;
+  /**
+   * S3: какой раз повторяющегося дела назван во фразе («удали йогу в субботу») — YYYY-MM-DD.
+   * Относится к chosen. Нет — день не назван или дело не повторяется. «Только этот раз / все» решает клиент.
+   * Старое приложение поле не знает и действует на всю серию, как раньше.
+   */
+  occ?: string;
   patch?: Partial<{
     title: string;
     date: string | null;
@@ -72,8 +78,11 @@ export type PlansScope =
   | { kind: 'current' }
   | { kind: 'category'; category: GroupCategory }
   | { kind: 'groups'; names: string[] }
-  | { kind: 'people'; names: string[] };
-export type PlansQuery = { scope: PlansScope; from: string; to: string; query: string };
+  | { kind: 'people'; names: string[] }
+  /** S4: все мои группы («что я делаю…»). Только клиентам с x-kstati-api ≥ 2 — старые получают current */
+  | { kind: 'me' };
+/** who (S4, только api ≥ 2) — чьи дела показывать: id людей; нет — все дела выбранных групп */
+export type PlansQuery = { scope: PlansScope; from: string; to: string; query: string; who?: string[] };
 
 export type WatchFilters = { kind: Kind[]; genre: Genre[]; origin: Origin[]; fresh: Freshness[] };
 
@@ -109,6 +118,9 @@ export type Context = {
       /** Имена участников дела */
       people?: string[];
       parentId?: string | null;
+      /** Повтор и удалённые разы — чтобы найти названный во фразе раз серии (S3) */
+      repeat?: Repeat | null;
+      skipDates?: string[];
     }[];
     watch: { id: string; title: string; done?: boolean }[];
     wishes: { id: string; title: string; done?: boolean }[];
@@ -123,4 +135,6 @@ export type Context = {
   groupMembers?: string[];
   /** План (большое дело), открытый на экране: новое дело без названного плана становится его подзадачей */
   currentParentId?: string | null;
+  /** Уровень API клиента (x-kstati-api, S5): от него зависят новые виды ответа. Нет — 1 */
+  api?: number;
 };

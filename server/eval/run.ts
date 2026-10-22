@@ -39,6 +39,8 @@ const ctx: Context = {
       { id: 't4', title: 'Поездка на дачу', date: '2026-10-03', time: null },
       { id: 't5', title: 'Забрать документы', date: '2026-10-09', time: null },
       { id: 't7', title: 'Купить лампочки', date: null, time: null },
+      { id: 't8', title: 'Йога', date: '2026-09-19', time: '19:00', repeat: { freq: 'week', every: 1, weekdays: [6] } },
+      { id: 't9', title: 'Стоматолог', date: '2026-09-29', time: '10:00' },
     ],
     watch: [
       { id: 'm1', title: 'Интерстеллар' },
@@ -50,6 +52,8 @@ const ctx: Context = {
       { id: 'w2', title: 'Кроссовки New Balance 574', done: false },
     ],
   },
+  // Как новое приложение (x-kstati-api: 2): «что я делаю» → scope me, перенос раза серии — от него
+  api: 2,
 };
 
 type Check = (r: ParseResult) => string | true; // true — ок, строка — что не так
@@ -128,6 +132,13 @@ const repeatChange = (id: string, r: Record<string, unknown> | null): Check => (
   for (const [k, v] of Object.entries(r)) if (JSON.stringify(got[k]) !== JSON.stringify(v)) return `repeat.${k}=${JSON.stringify(got[k])}, нужно ${JSON.stringify(v)}`;
   return true;
 };
+/** Правка одного раза серии (S3): occ — названный во фразе день */
+const occChange = (action: string, id: string, occ: string, patch?: Record<string, unknown>): Check => (r) => {
+  const base = change(action, id, patch)(r);
+  if (base !== true) return base;
+  const got = (r as Extract<ParseResult, { type: 'changes' }>).changes[0].occ;
+  return got === occ ? true : `occ=${got}, нужен ${occ}`;
+};
 const is = (type: ParseResult['type']): Check => (r) => (r.type === type ? true : `получено ${r.type}`);
 
 const CASES: [string, Check][] = [
@@ -166,6 +177,9 @@ const CASES: [string, Check][] = [
   ['Переименуй лампочки в купить лампочки и батарейки', change('update', 't7')],
   ['Верни посылку в невыполненные', change('unmark', 't2')],
   ['Удали слона', is('notFound')],
+  // Редизайн: C-AskDelete, C-AskMove
+  ['Удали йогу в субботу', occChange('delete', 't8', '2026-09-26')],
+  ['Перенеси стоматолога на пятницу на два и добавь Карину', change('update', 't9', { date: '2026-10-02', time: '14:00' })],
   // Повторы
   ['Баня каждую субботу', repeating(/^баня$/i, '2026-09-26', null, { freq: 'week', weekdays: [6] })],
   ['Каждую субботу в три баня', repeating(/^баня$/i, '2026-09-26', '15:00', { freq: 'week', weekdays: [6] })],
@@ -184,6 +198,9 @@ const CASES: [string, Check][] = [
   ['Что у нас в Футболе в воскресенье?', plans({ kind: 'groups', names: ['футбол'] }, '2026-09-27', '2026-09-27')],
   ['Когда у нас дача?', plans({ kind: 'us' }, '2026-09-25', '2027-09-25', 'дач')],
   ['Какие у нас планы на завтра?', plans({ kind: 'us' }, '2026-09-26', '2026-09-26')],
+  // Редизайн: C-AskWeek, C-AskWeekend
+  ['Что у нас на этой неделе?', plans({ kind: 'us' }, '2026-09-25', '2026-09-27')],
+  ['Что я делаю на выходных?', plans({ kind: 'me' }, '2026-09-26', '2026-09-27')],
   // Мусор
   ['ммм', is('unknown')],
   ['Какая погода завтра', is('unknown')],

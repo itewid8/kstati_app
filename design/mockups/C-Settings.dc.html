@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инструмент — настройки приложения</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 844px; display: flex; gap: 40px; font-family: 'Geist', sans-serif">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}; box-sizing: border-box; padding: 20px 16px 0; display: flex; flex-direction: column">
+
+<div style="height: 40px; display: flex; align-items: center; gap: 8px">
+<button aria-label="Назад" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg></button>
+<span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: {{t.muted}}">НАСТРОЙКИ</span>
+</div>
+
+<div style="margin-top: 14px; font-size: 40px; font-weight: 700; letter-spacing: -0.05em; line-height: 42px">Приложение</div>
+
+<div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px">
+
+<div style="border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">ТЕМА</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: {{t.panel}}; padding: 6px; gap: 6px">
+<sc-for list="{{t.themeOpts}}" as="o" hint-placeholder-count="3">
+<button style="height: 32px; border: 1.5px solid {{t.border}}; background: {{o.bg}}; color: {{o.color}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: {{o.weight}}; letter-spacing: 0.08em">{{o.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">КНОПКА REC</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); background: {{t.panel}}; padding: 6px; gap: 6px">
+<button style="height: 32px; border: 1.5px solid {{t.border}}; background: {{t.text}}; color: {{t.bg}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em">НАЖАТЬ</button>
+<button style="height: 32px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.08em">УДЕРЖИВАТЬ</button>
+</div>
+</div>
+
+<div style="border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">ЯЗЫК РАСПОЗНАВАНИЯ</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: {{t.panel}}; padding: 6px; gap: 6px">
+<sc-for list="{{t.langOpts}}" as="o" hint-placeholder-count="3">
+<button style="height: 32px; border: 1.5px solid {{t.border}}; background: {{o.bg}}; color: {{o.color}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: {{o.weight}}; letter-spacing: 0.08em">{{o.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">НАПОМИНАНИЯ</div>
+<div style="height: 44px; padding: 0 8px; background: {{t.panel}}; display: flex; align-items: center; justify-content: space-between">
+<span style="font-size: 13px; font-weight: 500">Напоминать о делах</span>
+<button role="switch" aria-checked="true" aria-label="Напоминать о делах" style="width: 48px; height: 26px; box-sizing: border-box; border: 1.5px solid {{t.border}}; background: {{t.bg}}; padding: 0; display: flex; align-items: center; justify-content: space-between"><span style="margin-left: 7px; width: 7px; height: 7px; border-radius: 4px; background: {{t.red}}; box-shadow: 0 0 6px {{t.glow}}"></span><span style="width: 22px; height: 22px; background: {{t.text}}"></span></button>
+</div>
+<sc-for list="{{rem}}" as="r" hint-placeholder-count="2">
+<button style="width: 100%; height: 44px; border: 0; border-top: 1px solid {{t.hair}}; background: {{t.panel}}; padding: 0 8px; display: flex; align-items: center; gap: 8px; font-family: inherit; color: {{t.text}}; text-align: left">
+<span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 500; line-height: 16px">{{r.label}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.04em; line-height: 11px; color: {{t.muted}}">{{r.value}}</span></span>
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{t.muted}}" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg>
+</button>
+</sc-for>
+</div>
+
+<div style="border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>ГОЛОС СЕГОДНЯ</span><span>03 / 30</span></div>
+<div style="background: {{t.panel}}; padding: 8px; display: flex; gap: 2px">
+<sc-for list="{{t.meter}}" as="m" hint-placeholder-count="30"><span style="flex: 1; height: 14px; background: {{m.c}}"></span></sc-for>
+</div>
+</div>
+
+<div style="border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">СОЕДИНЕНИЕ</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); background: {{t.panel}}">
+<div style="height: 36px; padding: 0 8px; display: flex; align-items: center; gap: 8px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.06em"><span style="width: 7px; height: 7px; border-radius: 4px; background: {{t.green}}; box-shadow: 0 0 6px {{t.green}}"></span>СЕРВЕР</div>
+<div style="height: 36px; padding: 0 8px; display: flex; align-items: center; gap: 8px; border-left: 1px solid {{t.hair}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.06em; color: {{t.muted}}"><span style="width: 7px; height: 7px; border-radius: 4px; border: 1.5px solid {{t.muted}}; box-sizing: border-box"></span>VPN ВЫКЛ</div>
+</div>
+</div>
+
+<div style="border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">О ПРИЛОЖЕНИИ</div>
+<sc-for list="{{about}}" as="r" hint-placeholder-count="3">
+<button style="width: 100%; height: 44px; border: 0; border-top: 1px solid {{t.hair}}; background: {{t.panel}}; padding: 0 8px; display: flex; align-items: center; gap: 8px; font-family: inherit; color: {{t.text}}; text-align: left">
+<span style="flex: 1; font-size: 13px; font-weight: 500">{{r.label}}</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.04em; color: {{t.muted}}">{{r.value}}</span>
+<sc-if value="{{r.chev}}" hint-placeholder-val="{{true}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{t.muted}}" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg></sc-if>
+</button>
+</sc-for>
+</div>
+
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; };
+    const pal = [
+      { bg: '#E7E6E1', panel: '#F4F3EF', border: '#161616', hair: '#CFCEC8', empty: '#E2E1DB', text: '#111111', muted: '#5E5E58', red: '#E0281E', green: '#1F9D57' },
+      { bg: '#0B0B0B', panel: '#151515', border: '#2E2E2E', hair: '#222222', empty: '#222222', text: '#F2F2F0', muted: '#7C7C78', red: '#FF3B30', green: '#3DBE76' },
+    ];
+    const opts = (p, labels) => labels.map((label, i) => ({ label, bg: i === 0 ? p.text : p.panel, color: i === 0 ? p.bg : p.text, weight: i === 0 ? 600 : 400 }));
+    const themes = pal.map((p) => ({
+      ...p,
+      glow: rgba(p.red, 0.6),
+      themeOpts: opts(p, ['СИСТЕМА', 'СВЕТЛАЯ', 'ТЁМНАЯ']),
+      langOpts: opts(p, ['РУССКИЙ', 'АНГЛИЙСКИЙ', 'АВТО']),
+      meter: Array.from({ length: 30 }, (_, i) => ({ c: i < 3 ? p.text : p.empty })),
+    }));
+    const about = [
+      { label: 'Версия', value: '1.0.3 (42)', chev: false },
+      { label: 'Написать в поддержку', value: '', chev: true },
+      { label: 'Политика конфиденциальности', value: '', chev: true },
+    ];
+    return {
+      themes,
+      rem: [
+        { label: 'Дела со временем', value: 'ЗА 2 Ч · НАКАНУНЕ В 20:00' },
+        { label: 'Дела на весь день', value: 'НАКАНУНЕ В 20:00' },
+      ],
+      about,
+    };
+  }
+}
+</script>
+</body>
+</html>
