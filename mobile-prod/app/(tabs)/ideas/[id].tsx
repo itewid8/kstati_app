@@ -11,12 +11,13 @@ import { useBottomSpace } from '@/containers/common/layout';
 import { useChrome } from '@/containers/common/useChrome';
 import { Divider, T } from '@/components/ui';
 import { shortDate, toISODate } from '@/lib/dates';
-import { editIdea, ideaMenu, ideasOf, topicMenu } from '@/lib/ideas';
+import { holdIdea } from '@/containers/quick/quickStore';
+import { editIdea, ideasOf, topicMenu } from '@/lib/ideas';
 import { uid } from '@/lib/ids';
 import { useStore } from '@/lib/store';
 import { INBOX, type Idea } from '@/lib/types';
 import { ICON, space, useColors } from '@/theme';
-import { BottomNav, size as S, space as uiSpace } from '@/ui';
+import { BottomNav, LONG_PRESS_MS, size as S, space as uiSpace, useLift, type LiftTarget } from '@/ui';
 
 /**
  * Тема идей: новые сверху. Своя — можно добавлять, править, переносить, открывать группам.
@@ -122,13 +123,20 @@ export default function TopicScreen() {
   );
 }
 
-function IdeaRow({ idea, own }: { idea: Idea; own: boolean }) {
+type IdeaRowProps = { idea: Idea; own: boolean };
+
+/** Нажатие: своя — правка, чужая — быстрые действия (в дела, копия к себе); удержание — быстрые действия над поднятой строкой */
+function IdeaRow(props: IdeaRowProps) {
+  const { idea, own } = props;
   const c = useColors();
+  const hold = useCallback((lift: LiftTarget) => holdIdea(idea.id, lift), [idea.id]);
+  const lift = useLift(hold, 'row', () => <IdeaRow {...props} />);
   return (
     <Pressable
-      onPress={() => (own ? editIdea(idea) : ideaMenu(idea, false))}
-      onLongPress={() => ideaMenu(idea, own)}
-      delayLongPress={350}
+      ref={lift.ref}
+      onPress={() => (own ? editIdea(idea) : holdIdea(idea.id))}
+      onLongPress={lift.onLongPress}
+      delayLongPress={LONG_PRESS_MS}
       style={({ pressed }) => [styles.row, { backgroundColor: pressed ? c.surface : c.background }]}
     >
       <T numberOfLines={8}>{idea.text}</T>

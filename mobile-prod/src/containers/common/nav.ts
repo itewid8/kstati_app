@@ -18,7 +18,9 @@ function query(params: Record<string, string | null | undefined>): string {
 /** Новое дело — id «new» */
 export const NEW_TASK = 'new';
 
-export type TaskEditorParams = { id?: ID; occ?: string; date?: string | null; time?: string | null; parentId?: ID | null };
+/** Строка окна дела, раскрытая при открытии: when — дата и время (ДАТА… в быстрых действиях) */
+export type TaskEditorField = 'when';
+export type TaskEditorParams = { id?: ID; occ?: string; date?: string | null; time?: string | null; parentId?: ID | null; field?: TaskEditorField };
 /** Поле, которое раскрыть при открытии окна плана */
 export type PlanEditorField = 'period' | 'note' | 'subtasks';
 /** Поле старой формы профиля (app/settings/edit.tsx) */
@@ -26,9 +28,12 @@ export type ProfileField = 'name' | 'nick' | 'gender' | 'password';
 
 export const nav = {
   tab: (tab: NavTab): Href => TAB[tab],
-  /** Окно дела: id — правка (occ — открытый раз серии), без id — новое (date, time, parentId — подзадача плана) */
-  taskEditor: ({ id, occ, date, time, parentId }: TaskEditorParams = {}): Href =>
-    `/edit/task/${encodeURIComponent(id ?? NEW_TASK)}${query({ occ, date, time, parentId })}`,
+  /**
+   * Окно дела: id — правка (occ — открытый раз серии), без id — новое (date, time, parentId — подзадача плана);
+   * field — сразу раскрыть строку
+   */
+  taskEditor: ({ id, occ, date, time, parentId, field }: TaskEditorParams = {}): Href =>
+    `/edit/task/${encodeURIComponent(id ?? NEW_TASK)}${query({ occ, date, time, parentId, field })}`,
   planEditor: (id: ID, field?: PlanEditorField): Href => `/edit/plan/${encodeURIComponent(id)}${query({ field })}`,
   /** Сетка плана по дням (C-Plan) — внутри вкладки «Дела» */
   planGrid: (id: ID): Href => `/tasks/plan/${encodeURIComponent(id)}`,

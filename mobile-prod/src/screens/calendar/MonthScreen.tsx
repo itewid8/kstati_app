@@ -10,9 +10,10 @@ import { memo, useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { dayNo, monthCellItems, type IsoDate } from '@/lib/calendarLayout';
 import type { ID, PersonColor } from '@/lib/types';
-import { Marquee, SectionBox, fonts, size as S, space, tint, useTheme } from '@/ui';
+import { LONG_PRESS_MS, Marquee, SectionBox, fonts, size as S, space, tint, useLift, useTheme, type LiftTarget } from '@/ui';
 import { CalendarScaffold, NO_INSETS, useScreenSize } from './components/CalendarScaffold';
 import { PeopleFill, PeopleTip, usePeopleColors, usePeopleMap } from './components/PeopleColor';
+import { useLongPressId } from './components/longPress';
 import { PeriodArrows, PeriodTitle } from './components/PeriodBar';
 import {
   MONTHS,
@@ -71,6 +72,8 @@ export type MonthScreenProps = CalendarChromeProps & {
   onNext?: () => void;
   onSelectDate?: (date: IsoDate) => void;
   onOpenEvent?: (id: ID) => void;
+  /** Удержание дела в ячейке или в панели дня (быстрые действия): id и нажатый элемент */
+  onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
   /** Нажатие на «Октябрь 2026» — к году */
   onOpenYear?: () => void;
 };
@@ -100,17 +103,42 @@ type CellData = {
   inMonth: boolean;
 };
 
-const CellItem = memo(function CellItem({ item, byId }: { item: MonthItem; byId: ReadonlyMap<ID, CalendarPerson> }) {
+type CellItemProps = {
+  item: MonthItem;
+  byId: ReadonlyMap<ID, CalendarPerson>;
+  /** Нажатие — как по ячейке (выбрать день); удерживаемое дело перехватывает касание у ячейки */
+  onPress?: () => void;
+  onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
+};
+
+const CellItem = memo(function CellItem({ item, byId, onPress, onLongPressEvent }: CellItemProps) {
   const { c } = useTheme();
   const colors = usePeopleColors(item.people, byId);
-  return (
-    <View style={styles.item}>
+  const hold = useLongPressId(item.id, onLongPressEvent);
+  const lift = useLift(hold, 'block', () => <CellItem item={item} byId={byId} />);
+  const body = (
+    <>
       <PeopleFill colors={colors} alpha={c.tintAlpha} />
       <PeopleTip colors={colors} width={1} />
       <Marquee ellipsis={false} style={[styles.itemText, { color: c.text }]}>
         {item.title}
       </Marquee>
-    </View>
+    </>
+  );
+  // Без удержания — простой блок, как в макете
+  if (!lift.onLongPress) return <View style={styles.item}>{body}</View>;
+  return (
+    <Pressable
+      ref={lift.ref}
+      accessibilityRole="button"
+      accessibilityLabel={item.title}
+      onPress={onPress}
+      onLongPress={lift.onLongPress}
+      delayLongPress={LONG_PRESS_MS}
+      style={styles.item}
+    >
+      {body}
+    </Pressable>
   );
 });
 
@@ -123,9 +151,10 @@ type CellProps = {
   selected: boolean;
   byId: ReadonlyMap<ID, CalendarPerson>;
   onSelectDate?: (date: IsoDate) => void;
+  onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
 };
 
-const MonthCell = memo(function MonthCell({ cell, height, items, plan, today, selected, byId, onSelectDate }: CellProps) {
+const MonthCell = memo(function MonthCell({ cell, height, items, plan, today, selected, byId, onSelectDate, onLongPressEvent }: CellProps) {
   const { c } = useTheme();
   const { shown, more } = monthCellItems(items);
   const { m } = parts(cell.date);
@@ -149,7 +178,13 @@ const MonthCell = memo(function MonthCell({ cell, height, items, plan, today, se
       </View>
       <View style={styles.items}>
         {shown.map((it) => (
-          <CellItem key={it.id} item={it} byId={byId} />
+          <CellItem
+            key={it.id}
+            item={it}
+            byId={byId}
+            onPress={onSelectDate ? select : undefined}
+            onLongPressEvent={onLongPressEvent}
+          />
         ))}
         {more ? <Text style={[styles.more, { color: c.muted }]}>{`+${more}`}</Text> : null}
       </View>
@@ -161,19 +196,26 @@ const AgendaItem = memo(function AgendaItem({
   row,
   byId,
   onOpenEvent,
+  onLongPressEvent,
 }: {
   row: AgendaRow;
   byId: ReadonlyMap<ID, CalendarPerson>;
   onOpenEvent?: (id: ID) => void;
+  onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
 }) {
   const { c } = useTheme();
   const colors = usePeopleColors(row.people, byId);
   const open = useCallback(() => onOpenEvent?.(row.id), [onOpenEvent, row.id]);
+  const hold = useLongPressId(row.id, onLongPressEvent);
+  const lift = useLift(hold, 'row', () => <AgendaItem row={row} byId={byId} />);
   return (
     <Pressable
+      ref={lift.ref}
       accessibilityRole="button"
       accessibilityLabel={`${row.time} ${row.title}`}
       onPress={onOpenEvent ? open : undefined}
+      onLongPress={lift.onLongPress}
+      delayLongPress={LONG_PRESS_MS}
       style={[styles.agenda, { backgroundColor: c.panel, borderTopColor: c.hair }]}
     >
       <PeopleTip colors={colors} width={S.strip} />
@@ -200,6 +242,7 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
     onNext,
     onSelectDate,
     onOpenEvent,
+    onLongPressEvent,
     onOpenYear,
     insets = NO_INSETS,
     ...chrome
@@ -276,6 +319,7 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
                 selected={cell.date === selectedDate}
                 byId={byId}
                 onSelectDate={onSelectDate}
+                onLongPressEvent={onLongPressEvent}
               />
             ))}
           </View>
@@ -290,7 +334,7 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
           style={[styles.side, styles.panel, { top: top + M.panelTop, maxHeight: Math.max(0, panelMax) }]}
         >
           {agenda.map((r) => (
-            <AgendaItem key={r.id} row={r} byId={byId} onOpenEvent={onOpenEvent} />
+            <AgendaItem key={r.id} row={r} byId={byId} onOpenEvent={onOpenEvent} onLongPressEvent={onLongPressEvent} />
           ))}
         </SectionBox>
       ) : null}

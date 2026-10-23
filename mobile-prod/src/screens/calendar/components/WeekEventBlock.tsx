@@ -12,7 +12,7 @@ import { memo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { ClipPath, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { COLUMN, type ColumnBlock } from '@/lib/calendarLayout';
-import { fonts, useTheme } from '@/ui';
+import { LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { hardStops, useSvgId } from './PeopleColor';
 
 /** Обводка края 4px, половина обрезается контуром — видимая полоса 2px */
@@ -59,10 +59,17 @@ type Props = {
   done?: boolean;
   colors: readonly string[];
   onPress?: () => void;
+  /** Удержание: блок отдаёт своё место в окне и копию (быстрые действия) */
+  onLongPress?: LiftHandler;
 };
 
-export const WeekEventBlock = memo(function WeekEventBlock({ colX, gridY, block, title, time, who, done, colors, onPress }: Props) {
+export const WeekEventBlock = memo(function WeekEventBlock(props: Props) {
+  const { colX, gridY, block, title, time, who, done, colors, onPress, onLongPress } = props;
   const { c } = useTheme();
+  // Копия — в начале координат рамки: колонка и сетка сдвинуты на положение блока
+  const lift = useLift(onLongPress, 'block', () => (
+    <WeekEventBlock {...props} colX={-block.x} gridY={-block.y} onPress={undefined} onLongPress={undefined} />
+  ));
   const fid = useSvgId('wf');
   const tid = useSvgId('wt');
   const cid = useSvgId('wc');
@@ -79,7 +86,7 @@ export const WeekEventBlock = memo(function WeekEventBlock({ colX, gridY, block,
   );
 
   return (
-    <View pointerEvents="box-none" style={[styles.block, { left: colX + x, top: gridY + y, width: w, height: h }]}>
+    <View ref={lift.ref} pointerEvents="box-none" style={[styles.block, { left: colX + x, top: gridY + y, width: w, height: h }]}>
       <Svg width={w} height={h} style={StyleSheet.absoluteFill} pointerEvents="none">
         <Defs>
           {multi ? (
@@ -119,6 +126,8 @@ export const WeekEventBlock = memo(function WeekEventBlock({ colX, gridY, block,
             accessibilityRole="button"
             accessibilityLabel={i === 0 ? `${title}, ${time}, ${who}` : undefined}
             onPress={onPress}
+            onLongPress={lift.onLongPress}
+            delayLongPress={LONG_PRESS_MS}
             style={[styles.band, { left: b.left, top: b.y0, width: bw, height: b.y1 - b.y0 }]}
           >
             {bw > COLUMN.STRIP + EPS ? (

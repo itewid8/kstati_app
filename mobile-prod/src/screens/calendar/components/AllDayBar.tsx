@@ -4,7 +4,7 @@
  */
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
-import { Marquee, fonts, useTheme } from '@/ui';
+import { LONG_PRESS_MS, Marquee, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { PeopleFill, PeopleTip } from './PeopleColor';
 
 export type AllDayBarSize = {
@@ -31,16 +31,23 @@ type Props = {
   meta?: string;
   colors: readonly string[];
   onPress?: () => void;
+  /** Удержание: полоса отдаёт своё место в окне и копию (быстрые действия) */
+  onLongPress?: LiftHandler;
 };
 
-export const AllDayBar = memo(function AllDayBar({ x, y, width, size, title, meta, colors, onPress }: Props) {
+export const AllDayBar = memo(function AllDayBar(props: Props) {
+  const { x, y, width, size, title, meta, colors, onPress, onLongPress } = props;
   const { c } = useTheme();
   const { height, fontSize, letterSpacing, paddingLeft } = size;
+  const lift = useLift(onLongPress, 'block', () => <AllDayBar {...props} x={0} y={0} onPress={undefined} onLongPress={undefined} />);
   return (
     <Pressable
+      ref={lift.ref}
       accessibilityRole="button"
       accessibilityLabel={title}
       onPress={onPress}
+      onLongPress={lift.onLongPress}
+      delayLongPress={LONG_PRESS_MS}
       style={[styles.bar, { left: x, top: y, width, height, paddingLeft }]}
     >
       <PeopleFill colors={colors} alpha={c.tintAlpha} />

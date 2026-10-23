@@ -33,8 +33,16 @@ declare module 'react-native-reanimated' {
     bezier(x1: number, y1: number, x2: number, y2: number): EasingFunction;
   };
 
+  /** Анимации появления и ухода (entering / exiting у Animated.View) */
+  export type LayoutAnimationBuilder = { duration(ms: number): LayoutAnimationBuilder; delay(ms: number): LayoutAnimationBuilder };
+  export const FadeIn: LayoutAnimationBuilder;
+  export const FadeOut: LayoutAnimationBuilder;
+  export const SlideInDown: LayoutAnimationBuilder;
+  export const SlideOutDown: LayoutAnimationBuilder;
+  export type AnimatedViewProps = ViewProps & { entering?: LayoutAnimationBuilder; exiting?: LayoutAnimationBuilder };
+
   const Animated: {
-    View: ComponentType<ViewProps>;
+    View: ComponentType<AnimatedViewProps>;
     Text: ComponentType<TextProps>;
     ScrollView: ComponentType<ScrollViewProps>;
   };

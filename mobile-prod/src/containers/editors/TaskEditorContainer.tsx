@@ -20,7 +20,7 @@ import type { CustomReminder } from '@/screens/editors/panels/RemindPanel';
 import { TaskEditorScreen, type TaskEditorScreenProps, type TaskField } from '@/screens/editors/TaskEditorScreen';
 import { InputSheet } from '@/ui';
 import { openPlanEditor } from '../common/go';
-import { nav } from '../common/nav';
+import { nav, type TaskEditorField } from '../common/nav';
 import { signedInOnly } from '../common/signedIn';
 import { useClock } from '../common/useClock';
 import { useInsets } from '../common/useInsets';
@@ -38,7 +38,8 @@ import {
   type EditorContext,
 } from './useEditorState';
 
-export type TaskEditorContainerProps = { id: ID | null; occ?: string; date?: string; time?: string; parentId?: ID };
+/** field — строка, раскрытая при открытии (ДАТА… из быстрых действий) */
+export type TaskEditorContainerProps = { id: ID | null; occ?: string; date?: string; time?: string; parentId?: ID; field?: TaskEditorField };
 
 type Sheet = 'title' | 'note' | 'end' | 'until';
 
@@ -59,7 +60,7 @@ function initial(props: TaskEditorContainerProps, today: string): EditorState | 
         : props.id
           ? null
           : emptyDraft(s, { date: props.date, time: props.time, parentId: props.parentId });
-  return draft ? { draft, ui: initialUi(draft, today) } : null;
+  return draft ? { draft, ui: initialUi(draft, today, props.field ?? null) } : null;
 }
 
 /** Раз серии для «только этот раз» и «этот и все следующие»: открытый в окне, иначе ближайший несделанный */
