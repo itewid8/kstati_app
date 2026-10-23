@@ -18,6 +18,7 @@ import {
   space,
   type as T,
   useTheme,
+  type LiftTarget,
   type NavTab,
   type TopBarAction,
 } from '@/ui';
@@ -64,6 +65,8 @@ export type WatchScreenProps = {
   /** Посмотрели (true) или вернуть в очередь (false) */
   onToggleWatched?: (id: ID, watched: boolean) => void;
   onOpenItem?: (id: ID) => void;
+  /** Удержание фильма в очереди (быстрые действия): id и нажатая строка */
+  onLongPressItem?: (id: ID, lift: LiftTarget) => void;
   onToggleSection?: (section: WatchSection) => void;
   onAdd?: () => void;
   onOpenFeed?: () => void;
@@ -83,9 +86,10 @@ type QueueRowProps = {
   item: WatchItem;
   onToggleWatched?: (id: ID, watched: boolean) => void;
   onOpenItem?: (id: ID) => void;
+  onLongPressItem?: (id: ID, lift: LiftTarget) => void;
 };
 
-const QueueRow = memo(function QueueRow({ item, onToggleWatched, onOpenItem }: QueueRowProps) {
+const QueueRow = memo(function QueueRow({ item, onToggleWatched, onOpenItem, onLongPressItem }: QueueRowProps) {
   const { c, person } = useTheme();
   return (
     <ListRow
@@ -95,6 +99,7 @@ const QueueRow = memo(function QueueRow({ item, onToggleWatched, onOpenItem }: Q
       checkLabel="Посмотрели"
       onToggle={onToggleWatched ? () => onToggleWatched(item.id, true) : undefined}
       onPress={onOpenItem ? () => onOpenItem(item.id) : undefined}
+      onLongPress={onLongPressItem ? (lift) => onLongPressItem(item.id, lift) : undefined}
       right={<Text style={[T.rowValue, { color: c.text }]}>{item.year}</Text>}
     />
   );
@@ -117,6 +122,7 @@ export const WatchScreen = memo(function WatchScreen(props: WatchScreenProps) {
     onOpenFilters,
     onToggleWatched,
     onOpenItem,
+    onLongPressItem,
     onToggleSection,
     onAdd,
     onOpenFeed,
@@ -164,7 +170,13 @@ export const WatchScreen = memo(function WatchScreen(props: WatchScreenProps) {
       <View style={[styles.abs, { top: insets.top + S.contentTop, bottom: insets.bottom + S.contentBottom }]}>
         <SectionBox title="В ОЧЕРЕДИ" count={pad2(queue.length)} collapsed={!queueOpen} onToggle={toggleQueue} scrollable>
           {queue.map((item) => (
-            <QueueRow key={item.id} item={item} onToggleWatched={onToggleWatched} onOpenItem={onOpenItem} />
+            <QueueRow
+              key={item.id}
+              item={item}
+              onToggleWatched={onToggleWatched}
+              onOpenItem={onOpenItem}
+              onLongPressItem={onLongPressItem}
+            />
           ))}
         </SectionBox>
         <View style={styles.spacer} />

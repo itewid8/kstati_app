@@ -18,7 +18,7 @@ import {
   type IsoDate,
 } from '@/lib/calendarLayout';
 import type { ID } from '@/lib/types';
-import { fonts, size as S, useTheme } from '@/ui';
+import { fonts, size as S, useTheme, type LiftTarget } from '@/ui';
 import { AllDayBar, WEEK_BAR } from './components/AllDayBar';
 import { CAL, CalendarScaffold, NO_INSETS, useScreenSize } from './components/CalendarScaffold';
 import { HourLines } from './components/HourLines';
@@ -26,6 +26,7 @@ import { NowMarker } from './components/NowMarker';
 import { usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { PeriodArrows, PeriodNote, PeriodTitle, TodayButton } from './components/PeriodBar';
 import { PERSON_TAB, PersonTabs } from './components/PersonTabs';
+import { useLongPressId } from './components/longPress';
 import { WeekEventBlock } from './components/WeekEventBlock';
 import { MONTHS_SHORT, WEEKDAYS, addDays, namesOf, pad2, parts, peopleOf, timeRange } from './format';
 import type { CalendarBar, CalendarChromeProps, CalendarPerson, PersonFilterProps, TimedEvent } from './types';
@@ -48,6 +49,9 @@ export type WeekScreenProps = CalendarChromeProps &
     onOpenDay?: (date: IsoDate) => void;
     onOpenEvent?: (id: ID) => void;
     onOpenBar?: (id: ID) => void;
+    /** Удержание дела или полосы (быстрые действия): id и нажатый блок */
+    onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
+    onLongPressBar?: (id: ID, lift: LiftTarget) => void;
   };
 
 /** Вертикаль недели (px от верха экрана, без safe area) */
@@ -73,6 +77,7 @@ type DayEventsProps = {
   events: readonly TimedEvent[];
   byId: ReadonlyMap<ID, CalendarPerson>;
   onOpenEvent?: (id: ID) => void;
+  onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
 };
 
 const WeekEvent = memo(function WeekEvent({
@@ -82,10 +87,12 @@ const WeekEvent = memo(function WeekEvent({
   gridY,
   byId,
   onOpenEvent,
+  onLongPressEvent,
 }: { event: TimedEvent; block: ColumnBlock } & Omit<DayEventsProps, 'blocks' | 'events'>) {
   const colors = usePeopleColors(event.people, byId);
   const who = namesOf(peopleOf(event.people, byId)) + (event.parentTitle ? ` · ${event.parentTitle}` : '');
   const open = useCallback(() => onOpenEvent?.(event.id), [onOpenEvent, event.id]);
+  const hold = useLongPressId(event.id, onLongPressEvent);
   return (
     <WeekEventBlock
       colX={colX}
@@ -97,6 +104,7 @@ const WeekEvent = memo(function WeekEvent({
       done={event.done}
       colors={colors}
       onPress={onOpenEvent ? open : undefined}
+      onLongPress={hold}
     />
   );
 });
@@ -108,6 +116,7 @@ const WeekBar = memo(function WeekBar({
   width,
   byId,
   onOpenBar,
+  onLongPressBar,
 }: {
   bar: CalendarBar;
   x: number;
@@ -115,9 +124,11 @@ const WeekBar = memo(function WeekBar({
   width: number;
   byId: ReadonlyMap<ID, CalendarPerson>;
   onOpenBar?: (id: ID) => void;
+  onLongPressBar?: (id: ID, lift: LiftTarget) => void;
 }) {
   const colors = usePeopleColors(bar.people, byId);
   const open = useCallback(() => onOpenBar?.(bar.id), [onOpenBar, bar.id]);
+  const hold = useLongPressId(bar.id, onLongPressBar);
   return (
     <AllDayBar
       x={x}
@@ -128,6 +139,7 @@ const WeekBar = memo(function WeekBar({
       meta={bar.meta}
       colors={colors}
       onPress={onOpenBar ? open : undefined}
+      onLongPress={hold}
     />
   );
 });
@@ -148,6 +160,8 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
     onOpenDay,
     onOpenEvent,
     onOpenBar,
+    onLongPressEvent,
+    onLongPressBar,
     insets = NO_INSETS,
     ...chrome
   } = props;
@@ -232,6 +246,7 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
             width={(pb.d1 - pb.d0 + 1) * col - 2}
             byId={byId}
             onOpenBar={onOpenBar}
+            onLongPressBar={onLongPressBar}
           />
         );
       })}
@@ -254,7 +269,16 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
         return blocks.map((b) => {
           const ev = evById.get(b.id);
           return ev ? (
-            <WeekEvent key={`${d}:${b.id}`} event={ev} block={b} colX={gx + i * col} gridY={gridY} byId={byId} onOpenEvent={onOpenEvent} />
+            <WeekEvent
+              key={`${d}:${b.id}`}
+              event={ev}
+              block={b}
+              colX={gx + i * col}
+              gridY={gridY}
+              byId={byId}
+              onOpenEvent={onOpenEvent}
+              onLongPressEvent={onLongPressEvent}
+            />
           ) : null;
         });
       })}

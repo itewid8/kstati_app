@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { PlanScreen, type PlanMode } from '@/screens/calendar/PlanScreen';
 import { nav, signedInOnly, useChrome, useClock, useInsets, usePersonColors } from '../common';
+import { holdTask } from '../quick/quickStore';
 import { useCalendarSnapshot } from './useCalendar';
 
 export type PlanContainerProps = { id: ID };
@@ -56,6 +57,7 @@ export const PlanContainer = signedInOnly(function Plan({ id }: PlanContainerPro
       onMore={onMore}
       onChangeMode={onChangeMode}
       onOpenStep={openStep}
+      onLongPressStep={holdTask}
       onNavigate={onNavigate}
       onRec={onRec}
     />

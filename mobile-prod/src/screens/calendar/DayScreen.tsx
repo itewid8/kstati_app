@@ -18,11 +18,12 @@ import {
   type LaneBlock,
 } from '@/lib/calendarLayout';
 import type { ID } from '@/lib/types';
-import { size as S, useTheme } from '@/ui';
+import { size as S, useTheme, type LiftTarget } from '@/ui';
 import { AllDayBar, DAY_BAR } from './components/AllDayBar';
 import { CAL, CalendarScaffold, NO_INSETS, useScreenSize } from './components/CalendarScaffold';
 import { DayEventBlock } from './components/DayEventBlock';
 import { HourLines } from './components/HourLines';
+import { useLongPressId } from './components/longPress';
 import { NowMarker } from './components/NowMarker';
 import { usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { PeriodArrows, PeriodNote, PeriodTitle, PeriodWeekday, TodayButton } from './components/PeriodBar';
@@ -47,6 +48,9 @@ export type DayScreenProps = CalendarChromeProps &
     onToday?: () => void;
     onOpenEvent?: (id: ID) => void;
     onOpenBar?: (id: ID) => void;
+    /** Удержание дела или полосы (быстрые действия): id и нажатый блок */
+    onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
+    onLongPressBar?: (id: ID, lift: LiftTarget) => void;
   };
 
 /** Вертикаль дня (px от верха экрана, без safe area) */
@@ -84,9 +88,18 @@ const DayEvent = memo(function DayEvent({
   gridY,
   byId,
   onOpenEvent,
-}: ItemProps & { event: TimedEvent; lane: LaneBlock; gridX: number; gridY: number; onOpenEvent?: (id: ID) => void }) {
+  onLongPressEvent,
+}: ItemProps & {
+  event: TimedEvent;
+  lane: LaneBlock;
+  gridX: number;
+  gridY: number;
+  onOpenEvent?: (id: ID) => void;
+  onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
+}) {
   const colors = usePeopleColors(event.people, byId);
   const open = useCallback(() => onOpenEvent?.(event.id), [onOpenEvent, event.id]);
+  const hold = useLongPressId(event.id, onLongPressEvent);
   const who = namesOf(peopleOf(event.people, byId)).toUpperCase() + (event.parentTitle ? ` · ${event.parentTitle.toUpperCase()}` : '');
   return (
     <DayEventBlock
@@ -101,6 +114,7 @@ const DayEvent = memo(function DayEvent({
       done={event.done}
       colors={colors}
       onPress={onOpenEvent ? open : undefined}
+      onLongPress={hold}
     />
   );
 });
@@ -112,9 +126,18 @@ const DayBar = memo(function DayBar({
   width,
   byId,
   onOpenBar,
-}: ItemProps & { bar: CalendarBar; x: number; y: number; width: number; onOpenBar?: (id: ID) => void }) {
+  onLongPressBar,
+}: ItemProps & {
+  bar: CalendarBar;
+  x: number;
+  y: number;
+  width: number;
+  onOpenBar?: (id: ID) => void;
+  onLongPressBar?: (id: ID, lift: LiftTarget) => void;
+}) {
   const colors = usePeopleColors(bar.people, byId);
   const open = useCallback(() => onOpenBar?.(bar.id), [onOpenBar, bar.id]);
+  const hold = useLongPressId(bar.id, onLongPressBar);
   return (
     <AllDayBar
       x={x}
@@ -125,6 +148,7 @@ const DayBar = memo(function DayBar({
       meta={barMeta(bar, namesOf(peopleOf(bar.people, byId)))}
       colors={colors}
       onPress={onOpenBar ? open : undefined}
+      onLongPress={hold}
     />
   );
 });
@@ -144,6 +168,8 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
     onToday,
     onOpenEvent,
     onOpenBar,
+    onLongPressEvent,
+    onLongPressBar,
     insets = NO_INSETS,
     ...chrome
   } = props;
@@ -189,7 +215,16 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
       {barRows.bars.map((pb) => {
         const bar = barById.get(pb.id);
         return bar ? (
-          <DayBar key={pb.id} bar={bar} x={gx} y={top + D.barsTop + pb.row * D.barPitch} width={gw} byId={byId} onOpenBar={onOpenBar} />
+          <DayBar
+            key={pb.id}
+            bar={bar}
+            x={gx}
+            y={top + D.barsTop + pb.row * D.barPitch}
+            width={gw}
+            byId={byId}
+            onOpenBar={onOpenBar}
+            onLongPressBar={onLongPressBar}
+          />
         ) : null;
       })}
       {hairY !== null ? <View pointerEvents="none" style={[styles.hair, { top: hairY, backgroundColor: c.hair }]} /> : null}
@@ -206,7 +241,18 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
 
       {lanes.map((lane) => {
         const ev = evById.get(lane.id);
-        return ev ? <DayEvent key={lane.id} event={ev} lane={lane} gridX={gx} gridY={gridY} byId={byId} onOpenEvent={onOpenEvent} /> : null;
+        return ev ? (
+          <DayEvent
+            key={lane.id}
+            event={ev}
+            lane={lane}
+            gridX={gx}
+            gridY={gridY}
+            byId={byId}
+            onOpenEvent={onOpenEvent}
+            onLongPressEvent={onLongPressEvent}
+          />
+        ) : null;
       })}
 
       {nowShown !== undefined ? (

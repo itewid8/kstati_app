@@ -14,6 +14,7 @@ import { PullIndicator } from '@/components/PullRefresh';
 import { UndoToast } from '@/components/UndoToast';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
 import { useSignedIn } from '@/containers/common/signedIn';
+import { QuickActionsHost } from '@/containers/quick/QuickActionsHost';
 import { VoiceHost } from '@/containers/voice/VoiceHost';
 import { initAnalytics } from '@/lib/analytics';
 import { registerBackgroundRefresh } from '@/lib/background';
@@ -106,6 +107,8 @@ export default function RootLayout() {
           </View>
           <VoiceRecorder />
           <VoiceHost />
+          {/* Быстрые действия по удержанию записи; карточка, группы и меню, которые они открывают, — выше */}
+          <QuickActionsHost />
           <CardSheet />
           <GroupSheet />
           <ActionMenu />

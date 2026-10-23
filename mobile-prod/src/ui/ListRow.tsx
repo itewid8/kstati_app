@@ -2,6 +2,7 @@ import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Checkbox } from './Checkbox';
 import { Icon } from './Icon';
+import { LONG_PRESS_MS, useLift, type LiftHandler } from './lift';
 import { Marquee } from './Marquee';
 import { size as S, type as T } from './tokens';
 import { useTheme } from './useTheme';
@@ -17,6 +18,8 @@ type Props = {
   checkLabel: string;
   /** Нажатие на строку (открыть карточку) */
   onPress?: () => void;
+  /** Удержание: строка отдаёт своё место в окне и копию (быстрые действия) */
+  onLongPress?: LiftHandler;
   /** Справа: число, время, кнопка-ссылка */
   right?: ReactNode;
   /** Отступ справа (8 по умолчанию; 6, если справа кнопка 32px) */
@@ -24,24 +27,21 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
+/** Копия поднятой строки: без разделителя сверху (вокруг — рамка) */
+const LIFTED: ViewStyle = { borderTopWidth: 0 };
+
 /** Строка списка 44px: полоса, галочка в зоне 32px, название 13/16 и подпись 9/11 */
-export const ListRow = memo(function ListRow({
-  title,
-  meta,
-  strip,
-  checked = false,
-  onToggle,
-  checkLabel,
-  onPress,
-  right,
-  rightInset = 8,
-  style,
-}: Props) {
+export const ListRow = memo(function ListRow(props: Props) {
+  const { title, meta, strip, checked = false, onToggle, checkLabel, onPress, onLongPress, right, rightInset = 8, style } = props;
   const { c } = useTheme();
+  const lift = useLift(onLongPress, 'row', () => <ListRow {...props} onToggle={undefined} onPress={undefined} onLongPress={undefined} style={[style, LIFTED]} />);
   return (
     <Pressable
+      ref={lift.ref}
       onPress={onPress}
-      disabled={!onPress}
+      onLongPress={lift.onLongPress}
+      delayLongPress={LONG_PRESS_MS}
+      disabled={!onPress && !lift.onLongPress}
       style={[styles.row, { paddingRight: rightInset, backgroundColor: c.panel, borderTopColor: c.hair }, style]}
     >
       {typeof strip === 'string' ? <View style={[styles.strip, { backgroundColor: strip }]} /> : null}

@@ -6,7 +6,7 @@
 import { memo, useCallback, useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import type { ID, PersonColor } from '@/lib/types';
-import { BottomNav, ScreenTitle, SectionBox, Tabs, size as S, space, tint, useTheme, type NavTab, type Scheme, type TabItem } from '@/ui';
+import { BottomNav, ScreenTitle, SectionBox, Tabs, size as S, space, tint, useTheme, type LiftTarget, type NavTab, type Scheme, type TabItem } from '@/ui';
 import { CompactGroupBar } from './components/CompactGroupBar';
 import { TaskRow } from './components/TaskRow';
 
@@ -70,6 +70,8 @@ export type TasksListScreenProps = {
   onToggleTask?: (id: ID, done: boolean) => void;
   onOpenTask?: (id: ID) => void;
   onOpenPlan?: (id: ID) => void;
+  /** Удержание дела, плана или шага (быстрые действия): id и нажатая строка */
+  onLongPressTask?: (id: ID, lift: LiftTarget) => void;
   onAdd?: () => void;
   onOpenFeed?: () => void;
   onOpenSettings?: () => void;
@@ -87,9 +89,9 @@ const PLAN_ALPHA: Record<Scheme, number> = { light: 0.14, dark: 0.16 };
 /** Секции начинаются сразу под заголовком (без вкладок) */
 const SECTIONS_TOP = 122;
 
-type RowCallbacks = Pick<TasksListScreenProps, 'onToggleTask' | 'onOpenTask' | 'onOpenPlan'>;
+type RowCallbacks = Pick<TasksListScreenProps, 'onToggleTask' | 'onOpenTask' | 'onOpenPlan' | 'onLongPressTask'>;
 
-const TaskEntry = memo(function TaskEntry({ task, onToggleTask, onOpenTask }: { task: TaskItem } & RowCallbacks) {
+const TaskEntry = memo(function TaskEntry({ task, onToggleTask, onOpenTask, onLongPressTask }: { task: TaskItem } & RowCallbacks) {
   const { person } = useTheme();
   const [a, b] = task.owners;
   return (
@@ -101,11 +103,12 @@ const TaskEntry = memo(function TaskEntry({ task, onToggleTask, onOpenTask }: { 
       done={task.done}
       onToggle={onToggleTask ? () => onToggleTask(task.id, !task.done) : undefined}
       onPress={onOpenTask ? () => onOpenTask(task.id) : undefined}
+      onLongPress={onLongPressTask ? (lift) => onLongPressTask(task.id, lift) : undefined}
     />
   );
 });
 
-const PlanEntry = memo(function PlanEntry({ plan, onToggleTask, onOpenTask, onOpenPlan }: { plan: PlanItem } & RowCallbacks) {
+const PlanEntry = memo(function PlanEntry({ plan, onToggleTask, onOpenTask, onOpenPlan, onLongPressTask }: { plan: PlanItem } & RowCallbacks) {
   const { scheme, person } = useTheme();
   const color = person(plan.color);
   const fill = tint(color, PLAN_ALPHA[scheme]);
@@ -120,6 +123,7 @@ const PlanEntry = memo(function PlanEntry({ plan, onToggleTask, onOpenTask, onOp
         fill={fill}
         done={allDone}
         onPress={onOpenPlan ? () => onOpenPlan(plan.id) : undefined}
+        onLongPress={onLongPressTask ? (lift) => onLongPressTask(plan.id, lift) : undefined}
       />
       {plan.steps.map((s) => (
         <TaskRow
@@ -132,6 +136,7 @@ const PlanEntry = memo(function PlanEntry({ plan, onToggleTask, onOpenTask, onOp
           done={s.done}
           onToggle={onToggleTask ? () => onToggleTask(s.id, !s.done) : undefined}
           onPress={onOpenTask ? () => onOpenTask(s.id) : undefined}
+          onLongPress={onLongPressTask ? (lift) => onLongPressTask(s.id, lift) : undefined}
         />
       ))}
     </>
@@ -150,6 +155,7 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
     onToggleTask,
     onOpenTask,
     onOpenPlan,
+    onLongPressTask,
     onAdd,
     onOpenFeed,
     onOpenSettings,
@@ -164,11 +170,18 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
   const renderEntry = useCallback(
     (e: TaskListEntry) =>
       e.kind === 'plan' ? (
-        <PlanEntry key={e.id} plan={e} onToggleTask={onToggleTask} onOpenTask={onOpenTask} onOpenPlan={onOpenPlan} />
+        <PlanEntry
+          key={e.id}
+          plan={e}
+          onToggleTask={onToggleTask}
+          onOpenTask={onOpenTask}
+          onOpenPlan={onOpenPlan}
+          onLongPressTask={onLongPressTask}
+        />
       ) : (
-        <TaskEntry key={e.id} task={e} onToggleTask={onToggleTask} onOpenTask={onOpenTask} />
+        <TaskEntry key={e.id} task={e} onToggleTask={onToggleTask} onOpenTask={onOpenTask} onLongPressTask={onLongPressTask} />
       ),
-    [onToggleTask, onOpenTask, onOpenPlan],
+    [onToggleTask, onOpenTask, onOpenPlan, onLongPressTask],
   );
 
   return (

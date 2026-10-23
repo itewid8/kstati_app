@@ -8,6 +8,7 @@ import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { TasksListScreen, type TasksView } from '@/screens/lists/TasksListScreen';
 import { NO_ME, nav, signedInOnly, toPlanGrid, useChrome, useClock, useInsets, usePersonColors, type StoreState } from '../common';
+import { holdTask } from '../quick/quickStore';
 
 const changeView = (v: TasksView) => {
   if (v !== 'list') useStore.getState().setTasksView(v);
@@ -52,6 +53,7 @@ export const TasksListContainer = signedInOnly(function TasksList() {
       onToggleTask={toggleTask}
       onOpenTask={openTask}
       onOpenPlan={toPlanGrid}
+      onLongPressTask={holdTask}
       onAdd={addTask}
       onOpenFeed={onOpenFeed}
       onOpenSettings={onOpenSettings}

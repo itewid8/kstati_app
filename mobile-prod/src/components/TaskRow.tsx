@@ -1,30 +1,19 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { toPlanGrid } from '@/containers/common/go';
+import { openQuickActions } from '@/containers/quick/quickStore';
 import { peopleOf, spanLabel, timeOn } from '@/lib/span';
 import { userName, useStore } from '@/lib/store';
 import type { Task } from '@/lib/types';
 import { useDelayedMark } from '@/lib/useMark';
 import { ICON, space, useColors } from '@/theme';
+import { LONG_PRESS_MS, useLift, type LiftTarget } from '@/ui';
 import { openMenu } from './ActionMenu';
 import { ChevronDown, Repeat } from './icons';
 import { SwipeRow } from './SwipeRow';
 import { Checkbox, T } from './ui';
 
-/**
- * Строка дела. Используется в списке и в календаре.
- * whenFormat: 'full' — «сб 3 окт · 19:00», 'time' — только время (в календаре, где день уже известен).
- */
-export function TaskRow({
-  task,
-  past,
-  whenFormat = 'full',
-  markDelay,
-  day,
-  expanded,
-  onToggle,
-  indent = 0,
-}: {
+type TaskRowProps = {
   task: Task;
   /** План в списке: раскрыт ли (подзадачи под ним) и что делать по нажатию — раскрыть/свернуть */
   expanded?: boolean;
@@ -37,7 +26,14 @@ export function TaskRow({
   day?: string;
   /** 0 — отметка сразу, строка остаётся на месте */
   markDelay?: number;
-}) {
+};
+
+/**
+ * Строка дела. Используется в списке и в календаре.
+ * whenFormat: 'full' — «сб 3 окт · 19:00», 'time' — только время (в календаре, где день уже известен).
+ */
+export function TaskRow(props: TaskRowProps) {
+  const { task, past, whenFormat = 'full', markDelay, day, expanded, onToggle, indent = 0 } = props;
   const c = useColors();
   const users = useStore((s) => s.users);
   // План: сколько подзадач и сколько из них сделано (числа, а не новый массив — иначе бесконечная перерисовка)
@@ -45,6 +41,10 @@ export function TaskRow({
   const doneKids = useStore((s) => s.tasks.reduce((n, t) => (t.parentId === task.id && t.doneAt ? n + 1 : n), 0));
   const { toggleTask, setCard } = useStore.getState();
   const { marked: done, toggle } = useDelayedMark(!!task.doneAt, () => toggleTask(task.id, task.occ), markDelay);
+
+  // Удержание — окно быстрых действий над поднятой копией строки
+  const hold = useCallback((lift: LiftTarget) => openQuickActions({ kind: 'task', id: task.id, occ: task.occ }, lift), [task.id, task.occ]);
+  const lift = useLift(hold, 'row', () => <TaskRow {...props} />);
 
   const edit = () => editTask(task.id, setCard);
   const remove = () => deleteTaskAsk(task);
@@ -60,9 +60,10 @@ export function TaskRow({
   return (
     <SwipeRow onSwipeRight={toggle} onSwipeLeft={remove}>
       <Pressable
+        ref={lift.ref}
         onPress={press}
-        onLongPress={() => taskMenu(task)}
-        delayLongPress={350}
+        onLongPress={lift.onLongPress}
+        delayLongPress={LONG_PRESS_MS}
         style={({ pressed }) => [styles.row, { paddingLeft: space.side + indent, backgroundColor: pressed ? c.surface : c.background }]}>
         <Checkbox checked={done} onPress={toggle} />
         <View style={{ flex: 1 }}>
@@ -127,33 +128,6 @@ export function editTask(id: string, setCard = useStore.getState().setCard) {
           parentId: t.parentId ?? null,
         },
       },
-    ],
-  });
-}
-
-/** Можно ли разбить дело на подзадачи: не подзадача и не повтор */
-export const canPlan = (t: Pick<Task, 'parentId' | 'repeat'>) => !t.parentId && !t.repeat;
-
-/**
- * Меню дела по долгому нажатию — одно и то же в списке, календаре и сетке:
- * изменить, разбить на подзадачи / открыть план, удалить (у повтора — варианты).
- */
-export function taskMenu(task: Task) {
-  const s = useStore.getState();
-  const kids = s.tasks.filter((t) => t.parentId === task.id).length;
-  openMenu({
-    title: task.title,
-    actions: [
-      { label: 'Изменить', onPress: () => editTask(task.id) },
-      ...(canPlan(task) ? [{ label: kids ? 'Открыть план' : 'Разбить на подзадачи', onPress: () => openPlan(task.id) }] : []),
-      ...(task.parentId ? [{ label: 'Открыть план', onPress: () => openPlan(task.parentId!) }] : []),
-      ...(task.repeat && task.occ
-        ? [
-            { label: 'Удалить только этот раз', danger: true, onPress: () => s.deleteTask(task.id, task.occ) },
-            { label: 'Завершить повторы после этого раза', onPress: () => s.endSeries(task.id, task.occ!) },
-            { label: 'Удалить всю серию', danger: true, onPress: () => s.deleteTask(task.id) },
-          ]
-        : [{ label: 'Удалить', danger: true, onPress: () => deleteTaskAsk(task) }]),
     ],
   });
 }

@@ -20,6 +20,7 @@ import {
   size as S,
   space,
   useTheme,
+  type LiftTarget,
   type NavTab,
   type TabItem,
   type TopBarAction,
@@ -78,6 +79,8 @@ export type WishesScreenProps = {
   onToggleGift?: (id: ID, gifted: boolean) => void;
   onOpenLink?: (wish: WishRow) => void;
   onOpenWish?: (id: ID) => void;
+  /** Удержание хотелки (быстрые действия): id и нажатая строка */
+  onLongPressWish?: (id: ID, lift: LiftTarget) => void;
   onToggleSection?: (section: WishSection) => void;
   onAdd?: () => void;
   onOpenFeed?: () => void;
@@ -93,9 +96,10 @@ type WishItemProps = {
   onToggleGift?: (id: ID, gifted: boolean) => void;
   onOpenLink?: (wish: WishRow) => void;
   onOpenWish?: (id: ID) => void;
+  onLongPressWish?: (id: ID, lift: LiftTarget) => void;
 };
 
-const WishItem = memo(function WishItem({ wish, onToggleGift, onOpenLink, onOpenWish }: WishItemProps) {
+const WishItem = memo(function WishItem({ wish, onToggleGift, onOpenLink, onOpenWish, onLongPressWish }: WishItemProps) {
   const { person } = useTheme();
   return (
     <ListRow
@@ -105,6 +109,7 @@ const WishItem = memo(function WishItem({ wish, onToggleGift, onOpenLink, onOpen
       checkLabel="Подарено"
       onToggle={onToggleGift ? () => onToggleGift(wish.id, true) : undefined}
       onPress={onOpenWish ? () => onOpenWish(wish.id) : undefined}
+      onLongPress={onLongPressWish ? (lift) => onLongPressWish(wish.id, lift) : undefined}
       rightInset={6}
       right={wish.link ? <RowLinkButton onPress={onOpenLink ? () => onOpenLink(wish) : undefined} /> : null}
     />
@@ -128,6 +133,7 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
     onToggleGift,
     onOpenLink,
     onOpenWish,
+    onLongPressWish,
     onToggleSection,
     onAdd,
     onOpenFeed,
@@ -176,7 +182,14 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
           scrollable
         >
           {wishes.map((w) => (
-            <WishItem key={w.id} wish={w} onToggleGift={onToggleGift} onOpenLink={onOpenLink} onOpenWish={onOpenWish} />
+            <WishItem
+              key={w.id}
+              wish={w}
+              onToggleGift={onToggleGift}
+              onOpenLink={onOpenLink}
+              onOpenWish={onOpenWish}
+              onLongPressWish={onLongPressWish}
+            />
           ))}
         </SectionBox>
         <View style={styles.spacer} />

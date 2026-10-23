@@ -5,6 +5,7 @@ import { toISODate } from '@/lib/dates';
 import { useStore } from '@/lib/store';
 import { MonthScreen } from '@/screens/calendar/MonthScreen';
 import { parts } from '@/screens/calendar/format';
+import { holdTask } from '../quick/quickStore';
 import { useClock, usePersonColors } from '../common';
 import { openTaskKey, useCalendarChrome, useCalendarSnapshot } from './useCalendar';
 
@@ -37,6 +38,7 @@ export const MonthContainer = () => {
       onNext={nextMonth}
       onSelectDate={selectDate}
       onOpenEvent={openTaskKey}
+      onLongPressEvent={holdTask}
       onOpenYear={openYear}
     />
   );

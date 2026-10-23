@@ -4,7 +4,7 @@
  */
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { fonts, useTheme } from '@/ui';
+import { LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { PeopleFill, PeopleTip } from './PeopleColor';
 
 const TIP = 1.5;
@@ -22,15 +22,22 @@ type Props = {
   done?: boolean;
   colors: readonly string[];
   onPress?: () => void;
+  /** Удержание: блок отдаёт своё место в окне и копию (быстрые действия) */
+  onLongPress?: LiftHandler;
 };
 
-export const DayEventBlock = memo(function DayEventBlock({ x, y, width, height, title, time, note, who, done, colors, onPress }: Props) {
+export const DayEventBlock = memo(function DayEventBlock(props: Props) {
+  const { x, y, width, height, title, time, note, who, done, colors, onPress, onLongPress } = props;
   const { c } = useTheme();
+  const lift = useLift(onLongPress, 'block', () => <DayEventBlock {...props} x={0} y={0} onPress={undefined} onLongPress={undefined} />);
   return (
     <Pressable
+      ref={lift.ref}
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${time}`}
       onPress={onPress}
+      onLongPress={lift.onLongPress}
+      delayLongPress={LONG_PRESS_MS}
       style={[styles.block, { left: x, top: y, width, height }]}
     >
       <PeopleFill colors={colors} alpha={c.tintAlpha} />

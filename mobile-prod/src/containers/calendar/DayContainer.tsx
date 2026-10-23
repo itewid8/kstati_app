@@ -5,6 +5,7 @@ import { shiftDay } from '@/adapters/calendar/events';
 import { toISODate } from '@/lib/dates';
 import { useStore } from '@/lib/store';
 import { DayScreen } from '@/screens/calendar/DayScreen';
+import { holdTask } from '../quick/quickStore';
 import { useClock, usePersonColors, type StoreState } from '../common';
 import { openTaskKey, togglePerson, useCalendarChrome, useCalendarSnapshot } from './useCalendar';
 
@@ -35,6 +36,8 @@ export const DayContainer = () => {
       onToday={goToday}
       onOpenEvent={openTaskKey}
       onOpenBar={openTaskKey}
+      onLongPressEvent={holdTask}
+      onLongPressBar={holdTask}
       onTogglePerson={togglePerson}
     />
   );

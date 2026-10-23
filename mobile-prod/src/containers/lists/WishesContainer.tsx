@@ -7,6 +7,7 @@ import { DEMO, useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { WishesScreen, type WishRow, type WishSection } from '@/screens/WishesScreen';
 import { NO_ME, signedInOnly, useChrome, useInsets, usePersonColors, type StoreState } from '../common';
+import { holdWish } from '../quick/quickStore';
 
 /** Подарки чужих хотелок — только с сервером API 2 (старый молча срежет giftedBy) */
 const giftsOn = (api: number | null) => DEMO || (api ?? 0) >= 2;
@@ -39,8 +40,8 @@ function openLink(wish: WishRow) {
   if (url) Linking.openURL(url).catch(() => {});
 }
 
-/** Своя хотелка — старая карточка правки; чужую не меняем */
-function openWish(key: string) {
+/** Своя хотелка — старая карточка правки; чужую не меняем (и из быстрых действий — ИЗМЕНИТЬ) */
+export function openWish(key: string) {
   const ref = parseWishKey(key);
   const st = useStore.getState();
   if (!ref || ref.ownerId !== st.me?.id) return;
@@ -91,6 +92,7 @@ export const WishesContainer = signedInOnly(function Wishes() {
       onToggleGift={other && !gifts ? undefined : toggleGift}
       onOpenLink={openLink}
       onOpenWish={other ? undefined : openWish}
+      onLongPressWish={holdWish}
       onToggleSection={toggleSection}
       onAdd={onAdd}
       onOpenFeed={onOpenFeed}

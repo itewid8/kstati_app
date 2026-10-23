@@ -11,6 +11,7 @@ import { useStore } from '@/lib/store';
 import { emptyFilters, type ID } from '@/lib/types';
 import { WatchScreen, type WatchFilter, type WatchSection } from '@/screens/lists/WatchScreen';
 import { NO_ME, signedInOnly, useChrome, useClock, useInsets, usePersonColors, type StoreState } from '../common';
+import { holdWatch } from '../quick/quickStore';
 
 const FILTER_KEYS: readonly FilterKey[] = ['kind', 'genre', 'origin', 'fresh'];
 /** Меню закрывается анимацией — следующее окно открываем после неё */
@@ -27,7 +28,8 @@ const toggleWatched = (id: ID, watched: boolean) => {
   if (item && !!item.watchedAt !== watched) st.toggleWatched(id);
 };
 
-const openItem = (id: ID) => {
+/** Правка в старой карточке (и из быстрых действий — ИЗМЕНИТЬ) */
+export const openItem = (id: ID) => {
   const st = useStore.getState();
   const w = st.watch.find((x) => x.id === id);
   if (!w) return;
@@ -90,6 +92,7 @@ export const WatchContainer = signedInOnly(function Watch() {
         onOpenFilters={onOpenFilters}
         onToggleWatched={toggleWatched}
         onOpenItem={openItem}
+        onLongPressItem={holdWatch}
         onToggleSection={toggleSection}
         onAdd={addItem}
         onOpenFeed={onOpenFeed}

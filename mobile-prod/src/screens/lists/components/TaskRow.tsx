@@ -8,7 +8,7 @@
  */
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Marquee, fonts, size as S, useTheme } from '@/ui';
+import { LONG_PRESS_MS, Marquee, fonts, size as S, useLift, useTheme, type LiftHandler } from '@/ui';
 
 export type TaskRowKind = 'task' | 'plan' | 'step';
 
@@ -24,19 +24,28 @@ type Props = {
   done: boolean;
   onToggle?: () => void;
   onPress?: () => void;
+  /** Удержание: строка отдаёт своё место в окне и копию (быстрые действия) */
+  onLongPress?: LiftHandler;
   style?: StyleProp<ViewStyle>;
 };
 
 const STEP_HEIGHT = 36;
+/** Копия поднятой строки: без разделителя сверху (вокруг — рамка) */
+const LIFTED: ViewStyle = { borderTopWidth: 0 };
 
-export const TaskRow = memo(function TaskRow({ kind, title, time, strip, fill, done, onToggle, onPress, style }: Props) {
+export const TaskRow = memo(function TaskRow(props: Props) {
+  const { kind, title, time, strip, fill, done, onToggle, onPress, onLongPress, style } = props;
   const { c } = useTheme();
   const step = kind === 'step';
   const ink = done ? c.muted : c.text;
+  const lift = useLift(onLongPress, 'row', () => <TaskRow {...props} onToggle={undefined} onPress={undefined} onLongPress={undefined} style={[style, LIFTED]} />);
   return (
     <Pressable
+      ref={lift.ref}
       onPress={onPress}
-      disabled={!onPress}
+      onLongPress={lift.onLongPress}
+      delayLongPress={LONG_PRESS_MS}
+      disabled={!onPress && !lift.onLongPress}
       style={[
         styles.row,
         step ? styles.stepRow : styles.taskRow,

@@ -11,9 +11,10 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { dayNo, hourRange, layoutDayLanes, type DayMinute, type IsoDate, type LaneBlock } from '@/lib/calendarLayout';
 import type { ID, PersonColor } from '@/lib/types';
-import { BottomNav, IconButton, Marquee, fonts, size as S, space, tint, type as T, useTheme, type NavTab } from '@/ui';
+import { BottomNav, IconButton, LONG_PRESS_MS, Marquee, fonts, size as S, space, tint, type as T, useLift, useTheme, type LiftTarget, type NavTab } from '@/ui';
 import { NO_INSETS, useScreenSize } from './components/CalendarScaffold';
 import { HourLines } from './components/HourLines';
+import { useLongPressId } from './components/longPress';
 import { WEEKDAYS, addDays, pad2, parts, timeRange, weekday } from './format';
 
 export type PlanStepEvent = {
@@ -51,6 +52,8 @@ export type PlanScreenProps = {
   /** Переключатель СЕТКА / СПИСОК: список рисует другой экран */
   onChangeMode?: (mode: PlanMode) => void;
   onOpenStep?: (id: ID) => void;
+  /** Удержание подзадачи (быстрые действия): id и нажатый блок */
+  onLongPressStep?: (id: ID, lift: LiftTarget) => void;
   onNavigate?: (tab: NavTab) => void;
   onRec?: () => void;
 };
@@ -82,18 +85,26 @@ type StepProps = {
   y: number;
   color: string;
   onOpenStep?: (id: ID) => void;
+  onLongPressStep?: (id: ID, lift: LiftTarget) => void;
 };
 
-const PlanStepBlock = memo(function PlanStepBlock({ step, lane, x, y, color, onOpenStep }: StepProps) {
+const PlanStepBlock = memo(function PlanStepBlock(props: StepProps) {
+  const { step, lane, x, y, color, onOpenStep, onLongPressStep } = props;
   const { c } = useTheme();
   const open = useCallback(() => onOpenStep?.(step.id), [onOpenStep, step.id]);
+  const hold = useLongPressId(step.id, onLongPressStep);
+  // Копия — в начале координат рамки
+  const lift = useLift(hold, 'block', () => <PlanStepBlock {...props} x={-lane.x} y={-lane.y} onOpenStep={undefined} onLongPressStep={undefined} />);
   const time = timeRange(step);
   return (
     <Pressable
+      ref={lift.ref}
       accessibilityRole="button"
       accessibilityLabel={`${step.title}, ${time}`}
       accessibilityState={{ checked: !!step.done }}
       onPress={onOpenStep ? open : undefined}
+      onLongPress={lift.onLongPress}
+      delayLongPress={LONG_PRESS_MS}
       style={[
         styles.step,
         {
@@ -129,6 +140,7 @@ export const PlanScreen = memo(function PlanScreen(props: PlanScreenProps) {
     onMore,
     onChangeMode,
     onOpenStep,
+    onLongPressStep,
     onNavigate,
     onRec,
   } = props;
@@ -195,7 +207,16 @@ export const PlanScreen = memo(function PlanScreen(props: PlanScreenProps) {
         blocks.map((lane) => {
           const step = list.find((s) => s.id === lane.id);
           return step ? (
-            <PlanStepBlock key={lane.id} step={step} lane={lane} x={gx + i * col} y={gridY} color={fill} onOpenStep={onOpenStep} />
+            <PlanStepBlock
+              key={lane.id}
+              step={step}
+              lane={lane}
+              x={gx + i * col}
+              y={gridY}
+              color={fill}
+              onOpenStep={onOpenStep}
+              onLongPressStep={onLongPressStep}
+            />
           ) : null;
         }),
       )}

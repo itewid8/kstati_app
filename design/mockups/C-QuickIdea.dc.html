@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Инструмент — удержание: идея</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 820px; height: 844px; display: flex; gap: 40px; font-family: 'Geist', sans-serif">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}">
+<div style="position: absolute; left: 16px; right: 16px; top: 20px; height: 40px; display: flex; gap: 8px">
+<span style="flex: 1; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em">МЫ С КАРИНОЙ</span>
+<span style="width: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}"></span><span style="width: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}"></span><span style="width: 40px; border: 1.5px solid {{t.border}}; background: {{t.s}}"></span>
+</div>
+<div style="position: absolute; left: 16px; top: 70px; font-size: 40px; font-weight: 700; letter-spacing: -0.05em; line-height: 42px">Идеи</div>
+<div style="position: absolute; left: 16px; right: 16px; top: 122px; border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>{{t.secHead}}</span><span>{{t.secCount}}</span></div>
+<sc-for list="{{t.bgRows}}" as="r" hint-placeholder-count="6"><div style="position: relative; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; background: {{t.panel}}; border-top: 1px solid {{t.hair}}"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1.5px; background: {{r.strip}}"></span><span style="width: 18px; height: 18px; box-sizing: border-box; border: 1.5px solid {{t.border}}"></span><span style="flex: 1; font-size: 13px; font-weight: 500">{{r.title}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 600">{{r.time}}</span></div></sc-for>
+</div>
+<div style="position: absolute; inset: 0; background: {{t.scrim}}"></div>
+<div style="position: absolute; left: 12px; right: 12px; top: {{t.liftTop}}px; height: 48px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.25)">
+<span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1.5px; background: {{t.liftStrip}}"></span><span style="width: 18px; height: 18px; box-sizing: border-box; border: 1.5px solid {{t.border}}"></span><span style="flex: 1; font-size: 13px; font-weight: 500">{{t.liftTitle}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 600">{{t.liftTime}}</span></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; border-top: 1.5px solid {{t.border}}; background: {{t.bg}}; padding: 8px 16px 18px; display: flex; flex-direction: column; gap: 10px"><span style="align-self: center; width: 36px; height: 4px; background: {{t.hair}}"></span><div style="position: relative; border: 1.5px solid {{t.border}}; background: {{t.panel}}; padding: 9px 10px 9px 12px; display: flex; flex-direction: column; gap: 3px"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1.5px; background: {{t.cardStrip}}"></span><span style="display: flex; align-items: center; justify-content: space-between; gap: 8px"><span style="font-size: 15px; font-weight: 600">{{t.cardTitle}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.06em; color: {{t.muted}}">{{t.cardTag}}</span></span><span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.02em; color: {{t.muted}}">{{t.cardMeta}}</span></div><div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr))"><button style="height: 60px; margin-left: 0; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 0"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M3 15h3l8.5-8.5-3-3L3 12z"/><path d="M10 5l3 3"/></svg><span style="font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">ИЗМЕНИТЬ</span></button><button style="height: 60px; margin-left: -1.5px; border: 1.5px solid {{t.border}}; background: {{t.text}}; color: {{t.bg}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 0"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><rect x="2.5" y="2.5" width="13" height="13"/><path d="M5.5 9l2.5 2.5 4.5-5"/></svg><span style="font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">В ДЕЛА</span></button><button style="height: 60px; margin-left: -1.5px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 0"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><rect x="5.5" y="5.5" width="10" height="10"/><path d="M2.5 12.5v-10h10"/></svg><span style="font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em">КОПИЯ</span></button></div><div style="display: flex; flex-direction: column; gap: 5px"><span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: 0.08em; color: {{t.muted}}">В ТЕМУ</span><div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr))"><sc-for list="{{t.topics}}" as="g" hint-placeholder-count="3"><button style="height: 32px; margin-left: {{g.ml}}; border: 1.5px solid {{t.border}}; background: {{g.bg}}; color: {{g.color}}; padding: 0 2px; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: {{g.weight}}; letter-spacing: 0.04em">{{g.label}}</button></sc-for></div></div><div style="display: flex; gap: 8px; height: 44px"><button style="flex: 1; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em">ЗАКРЫТЬ</button><button style="flex: 1; border: 1.5px solid {{t.red}}; background: none; color: {{t.red}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em">УДАЛИТЬ</button></div></div>
+
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; };
+    const pal = [
+      { bg: '#E7E6E1', panel: '#F4F3EF', border: '#161616', hair: '#CFCEC8', hairStrong: '#A3A29C', faint: '#A3A29C', text: '#111111', muted: '#5E5E58', red: '#E0281E', warn: '#A15C00', s: '#2F6BDB', k: '#E2407E', sInk: '#FFFFFF', kInk: '#1A1A1A', a: 0.2 },
+      { bg: '#0B0B0B', panel: '#151515', border: '#2E2E2E', hair: '#222222', hairStrong: '#3A3A3A', faint: '#4A4A47', text: '#F2F2F0', muted: '#7C7C78', red: '#FF3B30', warn: '#E5A50A', s: '#5B8DEF', k: '#F06A9B', sInk: '#1A1A1A', kInk: '#1A1A1A', a: 0.24 },
+    ];
+    // Октябрь 2026: 1-е — четверг. sel — выбранные дни, from/to — диапазон (для многодневного дела)
+    const calendar = (p, o) => Array.from({ length: 35 }, (_, i) => {
+      const d = i - 2, inM = d >= 1 && d <= 31;
+      const end = inM && (d === o.sel || d === o.from || d === o.to);
+      const mid = inM && o.from && d > o.from && d < o.to;
+      return {
+        n: inM ? d : d < 1 ? 30 + d : d - 31,
+        bg: end ? p.text : mid ? rgba(o.tint === 's' ? p.s : p.k, p.a) : 'transparent',
+        color: end ? p.bg : !inM ? p.faint : d === 5 ? p.red : p.text,
+        weight: end || d === 5 ? 600 : 400,
+      };
+    });
+    const seg = (p, labels, on) => labels.map((label, i) => ({ label, ml: i ? '-1.5px' : '0', bg: i === on ? p.text : p.panel, color: i === on ? p.bg : p.text, weight: i === on ? 600 : 400 }));
+    // Цвет человека всегда один: квадрат его цвета. В строке «Кто» показаны только выбранные
+    const person = (p, name, c, on) => ({ name, c, show: on ? 'flex' : 'none' });
+    const wheel = (p, rows) => rows.map(([h, m], i) => ({ h, m, size: i === 1 ? 17 : 12, weight: i === 1 ? 600 : 400, color: i === 1 ? p.text : p.muted }));
+    const strip = (p, w) => (w === 'sk' ? 'linear-gradient(' + p.s + ' 50%, ' + p.k + ' 50%)' : w === 's' ? p.s : p.k);
+    const base = (p, pi, o) => ({
+      ...p,
+      scrim: pi === 0 ? 'rgba(17,17,17,0.45)' : 'rgba(0,0,0,0.6)',
+      secHead: o.head, secCount: o.count,
+      bgRows: o.rows.map(([title, time, w]) => ({ title, time, strip: strip(p, w) })),
+      liftTop: 122 + 22 + o.lift * 45 - 2, liftTitle: o.rows[o.lift][0], liftTime: o.rows[o.lift][1], liftStrip: strip(p, o.rows[o.lift][2]),
+    });
+    const themes = pal.map((p, pi) => ({
+      ...base(p, pi, { head: 'РЕМОНТ', count: '04', lift: 1, rows: [['Покрасить стены в спальне', '—', 's'], ['Полки над столом', '—', 'k'], ['Новый смеситель', '—', 's'], ['Шторы блэкаут', '—', 'k'], ['Лампа для чтения', '—', 's'], ['Ковёр в коридор', '—', 'k']] }),
+      cardTitle: 'Полки над столом', cardTag: 'РЕМОНТ', cardMeta: 'КАРИНА · 12 ОКТ', cardStrip: p.k,
+      topics: seg(p, ['ОТПУСК', 'ПОДАРКИ', 'БЕЗ ТЕМЫ'], -1),
+    }));
+    return { themes };
+  }
+}
+</script>
+</body>
+</html>

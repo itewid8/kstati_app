@@ -181,7 +181,9 @@ declare module 'react-native' {
     onDismiss?: () => void;
   };
 
-  export class View extends Component<ViewProps> {}
+  export class View extends Component<ViewProps> {
+    measureInWindow(callback: (x: number, y: number, width: number, height: number) => void): void;
+  }
   export class Text extends Component<TextProps> {}
   export class ScrollView extends Component<ScrollViewProps> {
     scrollTo(options?: { x?: number; y?: number; animated?: boolean }): void;
