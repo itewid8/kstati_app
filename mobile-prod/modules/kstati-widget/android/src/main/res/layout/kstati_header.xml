@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Шапка 2×2 / 4×2 / 4×4: группа, день недели, число в красном квадрате, кружок REC справа (капсула D без подписи); под ней линия 1 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:orientation="vertical">
+  <LinearLayout
+    android:id="@+id/kstati_header"
+    android:layout_width="match_parent"
+    android:layout_height="40dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="12dp">
+    <TextView
+      android:id="@+id/kstati_header_label"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:fontFamily="@font/kstati_geist_mono_semibold"
+      android:includeFontPadding="false"
+      android:letterSpacing="0.08"
+      android:maxLines="1"
+      android:textSize="9sp" />
+    <TextView
+      android:id="@+id/kstati_header_weekday"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="8dp"
+      android:fontFamily="@font/kstati_geist_mono_semibold"
+      android:includeFontPadding="false"
+      android:letterSpacing="0.08"
+      android:maxLines="1"
+      android:textSize="9sp" />
+    <TextView
+      android:id="@+id/kstati_header_day"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="8dp"
+      android:fontFamily="@font/kstati_geist_mono_semibold"
+      android:includeFontPadding="false"
+      android:maxLines="1"
+      android:paddingStart="4dp"
+      android:paddingTop="2dp"
+      android:paddingEnd="4dp"
+      android:paddingBottom="2dp"
+      android:textColor="#FFFFFF"
+      android:textSize="9.5sp" />
+    <!-- Без REC — поле 12 справа. Только FrameLayout: голый View в RemoteViews запрещён, виджет не добавится -->
+    <FrameLayout
+      android:id="@+id/kstati_header_end"
+      android:layout_width="12dp"
+      android:layout_height="1dp" />
+    <!-- REC: кружок без подписи, 4 от числа, 2 до края (макет) -->
+    <FrameLayout
+      android:id="@+id/kstati_header_rec"
+      android:layout_width="wrap_content"
+      android:layout_height="24dp"
+      android:visibility="gone"
+      android:layout_marginStart="12dp"
+      android:layout_marginEnd="10dp">
+      <include layout="@layout/kstati_rec_small" />
+    </FrameLayout>
+  </LinearLayout>
+  <ImageView
+    android:id="@+id/kstati_header_line"
+    android:layout_width="match_parent"
+    android:layout_height="1dp"
+    android:importantForAccessibility="no" />
+</LinearLayout>

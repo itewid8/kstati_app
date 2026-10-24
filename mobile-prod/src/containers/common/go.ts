@@ -7,8 +7,11 @@
  * (такой же экран наверху стека вкладки не повторяется). Из самих вкладок dismissTo ведёт себя как navigate.
  */
 import { router, type Href } from 'expo-router';
+import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
+import { canEditTask } from '@/lib/visibility';
 import type { NavTab } from '@/ui';
+import { openQuickActions } from '../quick/quickStore';
 import { nav } from './nav';
 
 /** Адрес внутри (tabs) — из любого места */
@@ -57,4 +60,15 @@ export function openPlanEditor(state: StackLike | undefined, id: ID) {
   const n = depthTo(state, ROUTE.planEditor, id);
   if (n > 0) router.dismiss(n);
   else router.push(nav.planEditor(id));
+}
+
+/**
+ * Нажали на дело: можно править — окно дела (occ — открытый раз серии); чужое без прав админа — окно быстрых действий
+ * (C-TaskView: отметить, свои напоминания, копия)
+ */
+export function openTaskEditor(id: ID, occ?: string): void {
+  const st = useStore.getState();
+  const task = st.tasks.find((t) => t.id === id);
+  if (task && !canEditTask(task, st.groups, st.me?.id)) return openQuickActions({ kind: 'task', id, ...(occ && { occ }) });
+  router.push(nav.taskEditor(occ ? { id, occ } : { id }));
 }

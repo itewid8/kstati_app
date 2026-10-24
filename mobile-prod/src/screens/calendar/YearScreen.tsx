@@ -3,15 +3,17 @@
  *
  * Раскладка как в макете: легенда (top 152), сетка 3×4 карточек месяцев с 174 (строка 138, зазор 6).
  * В карточке — название и число дел, под ним дни квадратами 12px по неделям (5 или 6 строк).
+ * Декабрь не уходит под навигацию: на низком экране строки карточек и квадраты дней меньше (yearLayout),
+ * а если и так не влезает — сетка прокручивается.
  * День с делами — цвет человека с насыщенностью level (несколько людей — диагональ 135°), без дел — «пустой»,
  * сегодня — красный со свечением. Текущий месяц — рамка 1.5px цветом текста.
  */
-import { memo, useCallback, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { IsoDate } from '@/lib/calendarLayout';
+import { memo, useCallback, useMemo, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { YEAR_GRID, yearLayout, type IsoDate } from '@/lib/calendarLayout';
 import type { ID } from '@/lib/types';
 import { fonts, size as S, space, useTheme, type Scheme } from '@/ui';
-import { CalendarScaffold, NO_INSETS, useScreenSize } from './components/CalendarScaffold';
+import { CalendarScaffold, NO_INSETS, frameOf, useScreenSize } from './components/CalendarScaffold';
 import { DiagonalFill, DiagonalSwatch, usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { PeriodArrows, PeriodNote, PeriodTitle } from './components/PeriodBar';
 import { MONTHS, MONTHS_SHORT, addDays, daysInMonth, isoDate, parts, tasksWord, weekday } from './format';
@@ -39,18 +41,11 @@ export type YearScreenProps = CalendarChromeProps & {
   onNext?: () => void;
   /** month — 1…12 */
   onOpenMonth?: (month: number) => void;
+  /** Прокрутка сетки (только если она не влезла над навигацией) — после жеста */
+  onScrollY?: (y: number) => void;
 };
 
-const Y = {
-  legendTop: 152,
-  gridTop: 174,
-  row: 138,
-  gap: 6,
-  cols: 3,
-  pad: 8,
-  dayH: 12,
-  dayGap: 2,
-} as const;
+const Y = YEAR_GRID;
 
 /**
  * День без дел. В палитре такого цвета нет (alt светлой темы близок, тёмной — нет): светлая #E2E1DB, тёмная #1E1E1E.
@@ -81,18 +76,20 @@ type DayProps = {
   cell: DayCell;
   day?: YearDay;
   today: boolean;
+  height: number;
   byId: ReadonlyMap<ID, CalendarPerson>;
 };
 
-/** Квадрат дня: ширину делит строка недели (flex), высота 12 */
-const YearDaySquare = memo(function YearDaySquare({ cell, day, today, byId }: DayProps) {
+/** Квадрат дня: ширину делит строка недели (flex), высота 12 (на низком экране меньше) */
+const YearDaySquare = memo(function YearDaySquare({ cell, day, today, height, byId }: DayProps) {
   const { c, scheme } = useTheme();
   const colors = usePeopleColors(day?.people ?? NO_IDS, byId);
-  if (!cell.inMonth) return <View style={styles.day} />;
-  if (today) return <View style={[styles.day, { backgroundColor: c.red, boxShadow: `0 0 6px ${c.glow}` }]} />;
-  if (!day || !day.people.length) return <View style={[styles.day, { backgroundColor: EMPTY_DAY[scheme] }]} />;
+  const size = height === Y.dayH ? styles.day : [styles.day, { height }];
+  if (!cell.inMonth) return <View style={size} />;
+  if (today) return <View style={[size, { backgroundColor: c.red, boxShadow: `0 0 6px ${c.glow}` }]} />;
+  if (!day || !day.people.length) return <View style={[size, { backgroundColor: EMPTY_DAY[scheme] }]} />;
   return (
-    <View style={styles.day}>
+    <View style={size}>
       <DiagonalFill colors={colors} alpha={day.level} />
     </View>
   );
@@ -104,13 +101,15 @@ type MonthProps = {
   count: number;
   current: boolean;
   width: number;
+  height: number;
+  dayH: number;
   today?: IsoDate;
   days: Readonly<Record<IsoDate, YearDay>>;
   byId: ReadonlyMap<ID, CalendarPerson>;
   onOpenMonth?: (month: number) => void;
 };
 
-const MonthCard = memo(function MonthCard({ year, month, count, current, width, today, days, byId, onOpenMonth }: MonthProps) {
+const MonthCard = memo(function MonthCard({ year, month, count, current, width, height, dayH, today, days, byId, onOpenMonth }: MonthProps) {
   const { c } = useTheme();
   const weeks = useMemo(() => monthWeeks(year, month), [year, month]);
   const border = current ? S.border : 1;
@@ -120,7 +119,7 @@ const MonthCard = memo(function MonthCard({ year, month, count, current, width, 
       accessibilityRole="button"
       accessibilityLabel={`${MONTHS[month - 1]}, ${count} ${tasksWord(count).toLowerCase()}`}
       onPress={onOpenMonth ? open : undefined}
-      style={[styles.card, { width, borderWidth: border, borderColor: current ? c.text : c.hair, backgroundColor: c.panel }]}
+      style={[styles.card, { width, height, borderWidth: border, borderColor: current ? c.text : c.hair, backgroundColor: c.panel }]}
     >
       <View style={styles.cardHead}>
         <Text style={[styles.cardName, { color: c.text }]}>{MONTHS_SHORT[month - 1]}</Text>
@@ -130,7 +129,7 @@ const MonthCard = memo(function MonthCard({ year, month, count, current, width, 
         {weeks.map((week) => (
           <View key={week[0].date} style={styles.week}>
             {week.map((cell) => (
-              <YearDaySquare key={cell.date} cell={cell} day={days[cell.date]} today={cell.date === today} byId={byId} />
+              <YearDaySquare key={cell.date} cell={cell} day={days[cell.date]} today={cell.date === today} height={dayH} byId={byId} />
             ))}
           </View>
         ))}
@@ -151,8 +150,17 @@ const LegendItem = memo(function LegendItem({ label, ids, byId }: { label: strin
 });
 
 export const YearScreen = memo(function YearScreen(props: YearScreenProps) {
-  const { people, year, today, total, days, monthCounts, onPrev, onNext, onOpenMonth, insets = NO_INSETS, ...chrome } = props;
+  const { people, year, today, total, days, monthCounts, onPrev, onNext, onOpenMonth, onScrollY, insets = NO_INSETS, ...chrome } = props;
   const [screen, onLayout] = useScreenSize();
+  const frame = frameOf(screen, insets);
+  const layout = yearLayout(frame);
+  /** Низ области сетки: над навигацией с зазором 8 */
+  const floor = frame.height - frame.bottom;
+  const scrolls = layout.gridTop + layout.gridH > floor;
+  const reportScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => onScrollY?.(e.nativeEvent.contentOffset.y),
+    [onScrollY],
+  );
   const byId = usePeopleMap(people);
   const top = insets.top;
   const allIds = useMemo(() => people.map((p) => p.id), [people]);
@@ -176,7 +184,7 @@ export const YearScreen = memo(function YearScreen(props: YearScreenProps) {
         {people.length > 1 ? <LegendItem label="ВМЕСТЕ" ids={allIds} byId={byId} /> : null}
       </View>
 
-      <View style={[styles.side, styles.grid, { top: top + Y.gridTop }]}>
+      <YearGridFrame scrolls={scrolls} top={layout.gridTop} bottom={screen.height - floor} onScrollEnd={onScrollY ? reportScroll : undefined}>
         {QUARTERS.map((row) => (
           <View key={row[0]} style={styles.gridRow}>
             {row.map((month) => (
@@ -187,6 +195,8 @@ export const YearScreen = memo(function YearScreen(props: YearScreenProps) {
                 count={monthCounts[month - 1] ?? 0}
                 current={!!t && t.y === year && t.m === month}
                 width={cardW}
+                height={layout.rowH}
+                dayH={layout.dayH}
                 today={today}
                 days={days}
                 byId={byId}
@@ -195,10 +205,35 @@ export const YearScreen = memo(function YearScreen(props: YearScreenProps) {
             ))}
           </View>
         ))}
-      </View>
+      </YearGridFrame>
     </CalendarScaffold>
   );
 });
+
+type GridFrameProps = {
+  scrolls: boolean;
+  top: number;
+  /** Отступ низа области прокрутки от низа экрана: навигация, safe area и зазор */
+  bottom: number;
+  onScrollEnd?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  children: ReactNode;
+};
+
+/** Сетка карточек: влезает — как в макете, иначе — прокрутка до верха навигации */
+const YearGridFrame = ({ scrolls, top, bottom, onScrollEnd, children }: GridFrameProps) => {
+  if (!scrolls) return <View style={[styles.side, styles.grid, { top }]}>{children}</View>;
+  return (
+    <ScrollView
+      style={[styles.scroll, { top, bottom }]}
+      contentContainerStyle={[styles.grid, styles.scrollContent]}
+      showsVerticalScrollIndicator={false}
+      onScrollEndDrag={onScrollEnd}
+      onMomentumScrollEnd={onScrollEnd}
+    >
+      {children}
+    </ScrollView>
+  );
+};
 
 const styles = StyleSheet.create({
   side: { position: 'absolute', left: space.side, right: space.side },
@@ -207,8 +242,10 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendText: { fontFamily: fonts.mono400, fontSize: 9.5, letterSpacing: 0.57 },
   grid: { gap: Y.gap },
+  scroll: { position: 'absolute', left: 0, right: 0 },
+  scrollContent: { paddingHorizontal: space.side },
   gridRow: { flexDirection: 'row', gap: Y.gap },
-  card: { height: Y.row, paddingTop: Y.pad, paddingHorizontal: Y.pad, gap: 6 },
+  card: { paddingTop: Y.pad, paddingHorizontal: Y.pad, gap: Y.headGap },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between' },
   cardName: { fontFamily: fonts.mono600, fontSize: 10, letterSpacing: 0.8 },
   cardCount: { fontFamily: fonts.mono400, fontSize: 10, letterSpacing: 0.8 },

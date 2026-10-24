@@ -3,7 +3,7 @@ import type { PersonColor } from '@/lib/types';
 import type { LiftTarget } from '@/ui';
 
 /** Плитка действия: значок по ключу (ГОТОВО / ПОСМОТРЕЛИ / ПОЛУЧИЛ — галочка, ПОДАРЮ — подарок…) */
-export type QuickTileKey = 'done' | 'watched' | 'received' | 'gift' | 'edit' | 'plan' | 'openPlan' | 'copy' | 'link' | 'toTask';
+export type QuickTileKey = 'done' | 'watched' | 'received' | 'gift' | 'edit' | 'plan' | 'openPlan' | 'copy' | 'link' | 'toTask' | 'remind';
 
 export type QuickTile = {
   key: QuickTileKey;

@@ -1,27 +1,35 @@
 /**
- * Список напоминаний с точным временем срабатывания.
- * Каждая строка: что («Накануне в 20:00») и когда именно придёт («пт 3 окт, 20:00»).
- * Нажатие на строку с временем — поменять время; «×» — убрать; «+ Добавить» — готовые варианты или своё.
+ * Список напоминаний (настройки по умолчанию; блоки C-EditRemind): строки в рамке — правило и когда придёт, «×» — убрать;
+ * нажатие на строку «накануне в 20:00» — время колесом; ниже пресеты плитками (уже добавленные — бледные) и свои правила.
  */
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { eventStart, moment, momentText, parse, presetChip, PRESETS_ALLDAY, PRESETS_TIMED, sortSpecs, specD, specLabel, specM, withTime } from '@/lib/remind';
+import { useCallback, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { remindLabel } from '@/adapters/editors/labels';
+import { timeText } from '@/adapters/editors/panels';
+import { PRESETS_ALLDAY, PRESETS_TIMED, eventStart, moment, momentText, parse, sortSpecs, specD, specLabel, specM, withTime } from '@/lib/remind';
 import type { ReminderSpec } from '@/lib/types';
-import { ICON, useColors } from '@/theme';
-import { X } from './icons';
-import { TimePanel } from './pickers';
-import { Stepper } from './RepeatPanel';
-import { Button, Chip, Divider, T } from './ui';
+import { Stepper } from '@/screens/editors/components/Buttons';
+import { ChipGrid, type ChipItem, type ChipState } from '@/screens/editors/components/ChipGrid';
+import { PanelLabel } from '@/screens/editors/components/FieldTable';
+import { ET } from '@/screens/editors/components/text';
+import { TimeWheel, type TimeValue } from '@/screens/editors/components/TimeWheel';
+import { SheetButtons } from '@/screens/sheets';
+import { Icon, Marquee, size as S, type as T, useTheme } from '@/ui';
 
 const MAX = 5;
+const MAX_DAYS = 60;
+type Custom = 'before' | 'days';
+const CUSTOM_BEFORE = 'custom:before';
+const CUSTOM_DAYS = 'custom:days';
 
-export function ReminderEditor({
-  value,
-  onChange,
-  timed,
-  date,
-  time,
-}: {
+const chipState = (selected: boolean, used: boolean): ChipState => (selected ? 'selected' : used ? 'used' : 'normal');
+
+const valueOf = (hhmm: string): TimeValue => {
+  const [h = 0, m = 0] = hhmm.split(':').map(Number);
+  return { hour: h, minute: m };
+};
+
+type Props = {
   value: ReminderSpec[];
   onChange: (v: ReminderSpec[]) => void;
   /** У дела есть время: доступны «за N минут до начала» */
@@ -29,137 +37,175 @@ export function ReminderEditor({
   /** Для точного времени срабатывания; нет — показываем только правило */
   date?: string | null;
   time?: string | null;
-}) {
-  const c = useColors();
+};
+
+export const ReminderEditor = ({ value, onChange, timed, date, time }: Props) => {
+  const { c } = useTheme();
   const [editing, setEditing] = useState<ReminderSpec | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [custom, setCustom] = useState<'before' | 'days' | null>(null);
-  const list = sortSpecs(value);
-  const presets = (timed ? PRESETS_TIMED : PRESETS_ALLDAY).filter((p) => !list.includes(p));
+  const [custom, setCustom] = useState<Custom | null>(null);
+  const list = useMemo(() => sortSpecs(value), [value]);
+  const full = list.length >= MAX;
 
-  const add = (s: ReminderSpec) => {
-    onChange(sortSpecs([...list, s]).slice(0, MAX));
-    setAdding(false);
-    setCustom(null);
-  };
+  const add = useCallback(
+    (spec: ReminderSpec) => {
+      onChange(sortSpecs([...list.filter((x) => x !== spec), spec]).slice(0, MAX));
+      setCustom(null);
+    },
+    [list, onChange],
+  );
+
+  const chips = useMemo<ChipItem<string>[]>(() => {
+    const presets = (timed ? PRESETS_TIMED : PRESETS_ALLDAY).map(
+      (p): ChipItem<string> => ({ key: p, label: remindLabel(p), state: chipState(false, full || list.includes(p)) }),
+    );
+    const before: ChipItem<string> = { key: CUSTOM_BEFORE, label: 'СВОЁ: ЗА … ДО НАЧАЛА', state: chipState(custom === 'before', full) };
+    const own: ChipItem<string>[] = [
+      ...(timed ? [before] : []),
+      { key: CUSTOM_DAYS, label: 'СВОЁ: ЗА … ДНЕЙ', state: chipState(custom === 'days', full) },
+    ];
+    return [...presets, ...own];
+  }, [timed, list, full, custom]);
+
+  const pressChip = useCallback(
+    (key: string) => {
+      if (key === CUSTOM_BEFORE) return setCustom((v) => (v === 'before' ? null : 'before'));
+      if (key === CUSTOM_DAYS) return setCustom((v) => (v === 'days' ? null : 'days'));
+      add(key);
+    },
+    [add],
+  );
 
   return (
-    <View style={{ gap: 4 }}>
-      {list.length === 0 && (
-        <T variant="caption" muted style={{ paddingVertical: 6 }}>
-          Без напоминаний
-        </T>
-      )}
-      {list.map((s, i) => {
-        const p = parse(s);
-        const when = date ? moment(s, date, time ?? null) : null;
-        const late = when && time && date ? when.getTime() > eventStart(date, time).getTime() : false;
-        const na = p?.kind === 'm' && !timed;
-        return (
-          <View key={s}>
-            {i > 0 && <Divider />}
-            <Pressable
-              disabled={p?.kind === 'm'}
-              onPress={() => setEditing(editing === s ? null : s)}
-              style={({ pressed }) => [styles.row, { opacity: pressed ? 0.6 : 1 }]}
-            >
-              <View style={{ flex: 1 }}>
-                <T variant="caption" muted={na}>
-                  {specLabel(s)}
-                </T>
-                {na ? (
-                  <T variant="label" muted>
-                    сработает, когда у дела будет время
-                  </T>
-                ) : when ? (
-                  <T variant="label" mono muted={!late} danger={late}>
-                    {late ? `${momentText(when)} — позже начала, не придёт` : momentText(when)}
-                  </T>
-                ) : null}
+    <View style={styles.wrap}>
+      <View style={[styles.box, { borderColor: c.border }]}>
+        {list.length === 0 ? (
+          <View style={[styles.row, { backgroundColor: c.panel }]}>
+            <Text style={[T.fieldValue, { color: c.muted }]}>БЕЗ НАПОМИНАНИЙ</Text>
+          </View>
+        ) : null}
+        {list.map((s, i) => {
+          const p = parse(s);
+          const at = date ? moment(s, date, time ?? null) : null;
+          const late = !!(at && time && date) && at.getTime() > eventStart(date, time).getTime();
+          const na = p?.kind === 'm' && !timed;
+          const clock = p && p.kind !== 'm' ? p.at : null;
+          return (
+            <View key={s} style={i > 0 ? [styles.divided, { borderTopColor: c.hair }] : undefined}>
+              <View style={[styles.row, { backgroundColor: c.panel }]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={specLabel(s)}
+                  disabled={!clock}
+                  onPress={() => setEditing(editing === s ? null : s)}
+                  style={styles.text}
+                >
+                  <Marquee style={[ET.reminderRule, { color: na ? c.muted : c.text }]}>{specLabel(s)}</Marquee>
+                  {at ? (
+                    <Marquee style={[ET.reminderWhen, { color: late ? c.red : c.muted }]}>{momentText(at).toLocaleUpperCase('ru-RU')}</Marquee>
+                  ) : null}
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Убрать: ${specLabel(s)}`}
+                  hitSlop={8}
+                  onPress={() => onChange(list.filter((x) => x !== s))}
+                  style={styles.remove}
+                >
+                  <Icon name="close" size={12} color={c.muted} />
+                </Pressable>
               </View>
-              <Pressable onPress={() => onChange(list.filter((x) => x !== s))} hitSlop={10}>
-                <X size={16} strokeWidth={ICON.stroke} color={c.textMuted} />
-              </Pressable>
-            </Pressable>
-            {editing === s && p && p.kind !== 'm' && (
-              <TimePanel
-                value={p.at}
-                onPick={(v, done) => {
-                  const next = withTime(s, v);
-                  onChange(sortSpecs(list.map((x) => (x === s ? next : x))));
-                  setEditing(done ? null : next);
-                }}
-              />
-            )}
-          </View>
-        );
-      })}
-
-      {list.length < MAX &&
-        (!adding ? (
-          <Button kind="text" title="+ Добавить напоминание" onPress={() => setAdding(true)} style={{ alignSelf: 'flex-start', height: 36 }} />
-        ) : (
-          <View style={{ gap: 10, paddingTop: 6 }}>
-            <View style={styles.wrap}>
-              {presets.map((p) => (
-                <Chip key={p} label={presetChip(p)} onPress={() => add(p)} />
-              ))}
-              {timed && <Chip label="Своё: за … до начала" selected={custom === 'before'} onPress={() => setCustom(custom === 'before' ? null : 'before')} />}
-              <Chip label="Своё: за … дней" selected={custom === 'days'} onPress={() => setCustom(custom === 'days' ? null : 'days')} />
+              {editing === s && clock ? (
+                <View style={[styles.panel, { backgroundColor: c.bg, borderTopColor: c.hair }]}>
+                  <TimeWheel
+                    {...valueOf(clock)}
+                    onChange={(v) => {
+                      const next = withTime(s, timeText(v));
+                      onChange(sortSpecs(list.map((x) => (x === s ? next : x))));
+                      setEditing(next);
+                    }}
+                  />
+                </View>
+              ) : null}
             </View>
-            {custom === 'before' && <CustomBefore onAdd={add} />}
-            {custom === 'days' && <CustomDays onAdd={add} />}
-            <Button kind="text" title="Отмена" color={c.textMuted} onPress={() => (setAdding(false), setCustom(null))} style={{ alignSelf: 'flex-start', height: 32 }} />
-          </View>
-        ))}
-    </View>
-  );
-}
-
-/** «За 1 ч 45 мин до начала»: часы и минуты на колёсах (до 23:59), нажатие в центр — добавить */
-function CustomBefore({ onAdd }: { onAdd: (s: ReminderSpec) => void }) {
-  const [v, setV] = useState('01:30');
-  const [h, m] = v.split(':').map(Number);
-  const min = h * 60 + m;
-  return (
-    <View style={{ gap: 8 }}>
-      <T variant="label" muted>
-        Часы : минуты до начала
-      </T>
-      <TimePanel
-        value={v}
-        onPick={(nv, done) => {
-          setV(nv);
-          const [nh, nm] = nv.split(':').map(Number);
-          if (done && nh * 60 + nm > 0) onAdd(specM(nh * 60 + nm));
-        }}
-      />
-      <Button title={min > 0 ? `Добавить: ${specLabel(specM(min)).toLowerCase()}` : 'Выберите время'} disabled={!min} onPress={() => onAdd(specM(min))} />
-    </View>
-  );
-}
-
-/** «За 10 дней в 18:00» */
-function CustomDays({ onAdd }: { onAdd: (s: ReminderSpec) => void }) {
-  const [days, setDays] = useState(5);
-  const [at, setAt] = useState('20:00');
-  return (
-    <View style={{ gap: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <T variant="caption">За</T>
-        <Stepper value={days} min={0} max={60} onChange={setDays} />
-        <T variant="caption">{days === 0 ? 'дней (в день события)' : 'дней'}, в</T>
-        <T variant="caption" mono>
-          {at}
-        </T>
+          );
+        })}
       </View>
-      <TimePanel value={at} onPick={(v) => setAt(v)} />
-      <Button title={`Добавить: ${specLabel(specD(days, at)).toLowerCase()}`} onPress={() => onAdd(specD(days, at))} />
+      <PanelLabel text="ДОБАВИТЬ" />
+      <ChipGrid items={chips} columns={3} weight="medium" onPress={pressChip} />
+      {custom === 'before' ? <CustomBefore onAdd={add} onCancel={() => setCustom(null)} /> : null}
+      {custom === 'days' ? <CustomDays onAdd={add} onCancel={() => setCustom(null)} /> : null}
     </View>
   );
-}
+};
+
+/** Что получится: «ЗА 1 Ч 30 МИН» */
+const Value = ({ text }: { text: string }) => {
+  const { c } = useTheme();
+  return (
+    <View style={[styles.value, { borderColor: c.border, backgroundColor: c.panel }]}>
+      <Marquee style={[T.fieldValue, { color: c.text }]}>{text}</Marquee>
+    </View>
+  );
+};
+
+type CustomProps = { onAdd: (spec: ReminderSpec) => void; onCancel: () => void };
+
+/** «За 1 ч 30 мин до начала»: часы и минуты колесом */
+const CustomBefore = ({ onAdd, onCancel }: CustomProps) => {
+  const [v, setV] = useState<TimeValue>({ hour: 1, minute: 30 });
+  const min = v.hour * 60 + v.minute;
+  return (
+    <View style={styles.custom}>
+      <Value text={remindLabel(specM(min))} />
+      <TimeWheel hour={v.hour} minute={v.minute} onChange={setV} />
+      <SheetButtons
+        buttons={[
+          { key: 'cancel', label: 'ОТМЕНА', onPress: onCancel },
+          { key: 'add', label: 'ДОБАВИТЬ', tone: 'primary', flex: 1.3, disabled: min === 0, onPress: () => onAdd(specM(min)) },
+        ]}
+      />
+    </View>
+  );
+};
+
+/** «За 5 дней в 20:00»: дни и время */
+const CustomDays = ({ onAdd, onCancel }: CustomProps) => {
+  const [days, setDays] = useState(5);
+  const [at, setAt] = useState<TimeValue>({ hour: 20, minute: 0 });
+  const spec = specD(days, timeText(at));
+  return (
+    <View style={styles.custom}>
+      <Value text={remindLabel(spec)} />
+      <View style={styles.days}>
+        <Stepper
+          value={days}
+          onDecrement={days > 0 ? () => setDays(days - 1) : undefined}
+          onIncrement={days < MAX_DAYS ? () => setDays(days + 1) : undefined}
+        />
+        <View style={styles.flex}>
+          <TimeWheel hour={at.hour} minute={at.minute} onChange={setAt} />
+        </View>
+      </View>
+      <SheetButtons
+        buttons={[
+          { key: 'cancel', label: 'ОТМЕНА', onPress: onCancel },
+          { key: 'add', label: 'ДОБАВИТЬ', tone: 'primary', flex: 1.3, onPress: () => onAdd(spec) },
+        ]}
+      />
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  wrap: { gap: 8 },
+  box: { borderWidth: S.border },
+  row: { minHeight: S.row, flexDirection: 'row', alignItems: 'center', paddingLeft: 10 },
+  divided: { borderTopWidth: S.hairline },
+  text: { flex: 1, minWidth: 0, gap: 2, paddingVertical: 6 },
+  remove: { width: 36, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
+  panel: { borderTopWidth: S.hairline, paddingVertical: 10, paddingHorizontal: 8 },
+  custom: { gap: 8 },
+  value: { height: 36, borderWidth: S.border, paddingHorizontal: 10, justifyContent: 'center' },
+  days: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  flex: { flex: 1, minWidth: 0 },
 });

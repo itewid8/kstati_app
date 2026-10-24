@@ -1,9 +1,11 @@
 /**
  * Полоса над сеткой (на весь день, многодневное, план): заливка цветом людей, полоса 2px слева,
  * название и приглушённая моно-подпись в одну строку; не влезает — бегущая строка (Marquee).
+ * Строка рисуется, только если полоса вмещает её по высоте целиком (fitTextLines).
  */
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
+import { fitTextLines } from '@/lib/calendarLayout';
 import { LONG_PRESS_MS, Marquee, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { PeopleFill, PeopleTip } from './PeopleColor';
 
@@ -20,6 +22,8 @@ export const WEEK_BAR: AllDayBarSize = { height: 20, fontSize: 8, letterSpacing:
 export const DAY_BAR: AllDayBarSize = { height: 22, fontSize: 11, paddingLeft: 10 };
 
 const TIP = 2;
+/** Строке нужно хотя бы 1.2 кегля (line-height: normal) */
+const LINE = 1.2;
 
 type Props = {
   x: number;
@@ -40,6 +44,7 @@ export const AllDayBar = memo(function AllDayBar(props: Props) {
   const { c } = useTheme();
   const { height, fontSize, letterSpacing, paddingLeft } = size;
   const lift = useLift(onLongPress, 'block', () => <AllDayBar {...props} x={0} y={0} onPress={undefined} onLongPress={undefined} />);
+  const fits = fitTextLines(height, [{ lineHeight: fontSize * LINE, lines: 1 }]).height > 0;
   return (
     <Pressable
       ref={lift.ref}
@@ -52,10 +57,12 @@ export const AllDayBar = memo(function AllDayBar(props: Props) {
     >
       <PeopleFill colors={colors} alpha={c.tintAlpha} />
       <PeopleTip colors={colors} width={TIP} />
-      <Marquee style={[styles.title, { fontSize, letterSpacing, lineHeight: height, color: c.text }]}>
-        {title}
-        {meta ? <Text style={[styles.meta, { color: c.muted }]}>{meta}</Text> : null}
-      </Marquee>
+      {fits ? (
+        <Marquee style={[styles.title, { fontSize, letterSpacing, lineHeight: height, color: c.text }]}>
+          {title}
+          {meta ? <Text style={[styles.meta, { color: c.muted }]}>{meta}</Text> : null}
+        </Marquee>
+      ) : null}
     </Pressable>
   );
 });

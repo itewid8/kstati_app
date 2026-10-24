@@ -7,7 +7,7 @@ import { API_URL } from './config';
 import { ApiError, exchange, NetError } from './http';
 
 /** Уровень API, который понимает приложение: сервер включает для него новые поля и виды ответа */
-export const API_LEVEL = 2;
+export const API_LEVEL = 3;
 
 const build = String(Constants.expoConfig?.android?.versionCode ?? Constants.expoConfig?.ios?.buildNumber ?? '0');
 /** Версия клиента для журнала сервера: «ru.kstati.app/0.1.0(1)» */

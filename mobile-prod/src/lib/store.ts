@@ -50,6 +50,7 @@ import {
 } from './types';
 
 import { uid } from './ids';
+import { PERSONAL } from './visibility';
 export { uid };
 const code = () => {
   const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -244,6 +245,10 @@ type Actions = {
   joinGroup: (code: string) => Promise<string | null>;
   renameGroup: (id: ID, name: string) => void;
   leaveGroup: (id: ID) => void;
+  /** Мой режим в группе: true — «Только выбранные», false — «Все, кроме скрытых» (lib/visibility.ts) */
+  setShareMode: (groupId: ID, selectOnly: boolean) => void;
+  /** Видимость моих дел: показать или скрыть группе (null — по режиму группы) */
+  setTaskShare: (ids: readonly ID[], groupId: ID, visible: boolean | null) => void;
 
   /**
    * Сохранить карточку. Возвращает id сохранённых записей (новых — новые id, изменённых — прежние) по порядку;
@@ -616,16 +621,45 @@ export const useStore = create<State & Actions>()(
     leaveGroup: (id) => {
       // Если уходит создатель, группа переходит первому админу, иначе первому участнику.
       // Пустая группа удаляется вместе с делами и «Смотреть» — это делает сервер.
-      const { groups: all, tasks, watch } = get();
+      const { groups: all, tasks, watch, me } = get();
       const groups = all.filter((g) => g.id !== id);
-      set({
-        groups,
-        tasks: tasks.filter((t) => t.groupId !== id),
-        watch: watch.filter((w) => w.groupId !== id),
-        // Хотелки личные — при выходе из группы остаются
-        currentGroupId: get().currentGroupId === id ? (groups[0]?.id ?? null) : get().currentGroupId,
-      });
+      // Свои дела остаются в личном календаре; чужие, видные только этой группе, пропадают.
+      // Как с сервера: удалять на сервере ничего не нужно
+      applyRemote(() =>
+        set({
+          groups,
+          tasks: tasks.filter((t) => t.createdBy === me?.id || (t.in ?? [t.groupId]).some((g) => g !== id)),
+          watch: watch.filter((w) => w.groupId !== id),
+          // Хотелки личные — при выходе из группы остаются
+          currentGroupId: get().currentGroupId === id ? (groups[0]?.id ?? PERSONAL) : get().currentGroupId,
+        }),
+      );
       get().queue([{ op: 'group.leave', id }]);
+    },
+    setShareMode: (groupId, selectOnly) => {
+      const me = get().me;
+      if (!me) return;
+      set({
+        groups: get().groups.map((g) => {
+          if (g.id !== groupId) return g;
+          const rest = (g.selectOnly ?? []).filter((m) => m !== me.id);
+          return { ...g, selectOnly: selectOnly ? [...rest, me.id] : rest };
+        }),
+      });
+      get().queue([{ op: 'group.mode', id: groupId, selectOnly }]);
+    },
+    setTaskShare: (ids, groupId, visible) => {
+      const me = get().me;
+      const set_ = new Set(ids);
+      // Подзадачи — вместе с планом
+      for (const t of get().tasks) if (t.parentId && set_.has(t.parentId)) set_.add(t.id);
+      set({
+        tasks: get().tasks.map((t) => {
+          if (!set_.has(t.id) || t.createdBy !== me?.id) return t;
+          const { [groupId]: _, ...rest } = t.share ?? {};
+          return { ...t, share: visible === null ? rest : { ...rest, [groupId]: visible } };
+        }),
+      });
     },
 
     saveItems: (items) => {
@@ -837,7 +871,8 @@ export const useStore = create<State & Actions>()(
               ? { ...x, memberIds: x.memberIds.filter((m) => m !== userId), adminIds: x.adminIds.filter((m) => m !== userId) }
               : x,
           ),
-          tasks: get().tasks.filter((t) => !(t.groupId === groupId && t.createdBy === userId)),
+          // Его дела, видные только этой группе, пропадают (у него они остаются)
+          tasks: get().tasks.filter((t) => !(t.createdBy === userId && (t.in ?? [t.groupId]).every((g) => g === groupId))),
           watch: get().watch.filter((w) => !(w.groupId === groupId && w.addedBy === userId)),
           wishPersonId: get().wishPersonId === userId ? null : get().wishPersonId,
         }),

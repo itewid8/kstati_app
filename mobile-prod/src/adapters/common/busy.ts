@@ -17,7 +17,7 @@ import { isLong, lastDay, peopleOf } from '@/lib/span';
 import type { ID, Task } from '@/lib/types';
 import { hhmm } from '@/screens/calendar/format';
 import type { Snapshot } from '../snapshot';
-import { instancesIn, planIds } from './tasks';
+import { ALL_TASKS, instancesIn, planIds } from './tasks';
 
 /** «Свободно» в ответе ассистента: 09:00–22:00, окна от 1 ч (docs/redesign/DECISIONS.md). FREE_DEFAULTS не трогаем */
 export const FREE_OPTS: Required<FreeWindowOptions> = { dayStart: 9 * 60, dayEnd: 22 * 60, minGap: 60 };
@@ -75,7 +75,7 @@ export function busyFor(s: Pick<Snapshot, 'tasks' | 'groups'>, draft: Timing, pe
   const to = lastDay(draft) ?? draft.date;
   const instances = instancesIn(
     s.tasks.filter((t) => t.id !== exceptId),
-    s.groups.map((g) => g.id),
+    ALL_TASKS,
     from,
     to,
   );

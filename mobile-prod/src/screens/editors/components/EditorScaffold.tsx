@@ -1,18 +1,39 @@
 /**
  * Каркас окна редактирования дела/плана (C-Edit*):
  *  - сверху «‹  ДЕЛО · МЫ С КАРИНОЙ  ⋯» (top 20);
- *  - заголовок 24/28 с полосой цветов участников слева и линией снизу (top 70);
+ *  - заголовок 24/28 с полосой цветов участников слева и линией снизу (top 70). С onChangeTitle это поле ввода того же
+ *    вида: тап ставит курсор, пустое — «—» бледным; длинное название в несколько строк сдвигает поля вниз;
  *  - поля с top 120, прокручиваются (ScrollView из gesture-handler — колесо времени забирает вертикаль у прокрутки);
- *  - снизу плашка 76px над линией и кнопки «УДАЛИТЬ» / «СОХРАНИТЬ» (44px, bottom 16).
+ *    поле в фокусе не прячется под клавиатурой (useEditorKeyboard);
+ *  - снизу плашка 76px над линией и кнопки «УДАЛИТЬ» / «СОХРАНИТЬ» (44px, bottom 16); saveDisabled — «СОХРАНИТЬ» бледная.
+ * Тап мимо полей, по строке или кнопке закрывает клавиатуру.
  */
-import { memo, useMemo, type ReactNode } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import {
+  Keyboard,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type LayoutChangeEvent,
+  type ScrollView as RNScrollView,
+} from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { Marquee, TopBar, size as S, space, type as T, useTheme, type TopBarAction } from '@/ui';
+import { KeyboardTargetContext, useEditorKeyboard } from './keyboard';
+import { TITLE_MAX } from './limits';
+import { titleShift } from './revealMath';
 import { ET } from './text';
+import { useWebAutoHeight } from './webAutoHeight';
 
 /** Верх полей под заголовком */
 const CONTENT_TOP = 120;
+/** Заголовок в одну строку: 28 + отступ 8 + линия */
+const TITLE_ONE_LINE = 28 + 8 + S.border;
+/** Длинное название — до трёх строк, дальше прокрутка внутри поля */
+const TITLE_MAX_HEIGHT = 28 * 3;
 /** Нижняя плашка с кнопками (без линии) */
 const BAR = 76;
 const BUTTON = 44;
@@ -33,39 +54,91 @@ type Props = {
   /** Цвета участников под тему — полоса у заголовка делится поровну сверху вниз */
   colors: readonly string[];
   insets?: EditorInsets;
+  /** «СОХРАНИТЬ» недоступна (нет названия) */
+  saveDisabled?: boolean;
+  /** Поле названия — фокус снаружи (окно просит назвать дело перед «Сделать планом») */
+  titleRef?: RefObject<TextInput | null>;
   onBack?: () => void;
   onMore?: () => void;
-  /** Тап по заголовку — переименовать; без колбэка заголовок не нажимается */
-  onEditTitle?: () => void;
+  /** Название правится прямо в заголовке; без колбэка заголовок только текст */
+  onChangeTitle?: (title: string) => void;
   onDelete?: () => void;
   onSave?: () => void;
   children: ReactNode;
 };
 
+/** Сначала закрыть клавиатуру, потом действие */
+const dismissThen = (fn: (() => void) | undefined) =>
+  fn &&
+  (() => {
+    Keyboard.dismiss();
+    fn();
+  });
+
+const yes = () => true;
+
 export const EditorScaffold = memo(function EditorScaffold(props: Props) {
-  const { caption, title, colors, insets = NO_INSETS, onBack, onMore, onEditTitle, onDelete, onSave, children } = props;
+  const { caption, title, colors, insets = NO_INSETS, saveDisabled = false, titleRef, onChangeTitle, children } = props;
   const { c } = useTheme();
+  const onBack = useMemo(() => dismissThen(props.onBack), [props.onBack]);
+  const onMore = useMemo(() => dismissThen(props.onMore), [props.onMore]);
+  const onDelete = useMemo(() => dismissThen(props.onDelete), [props.onDelete]);
+  const onSave = useMemo(() => dismissThen(props.onSave), [props.onSave]);
   const actions = useMemo<TopBarAction[]>(() => [{ key: 'more', icon: 'dots', accessibilityLabel: 'Ещё', onPress: onMore }], [onMore]);
   const barHeight = insets.bottom + BAR + S.hairline;
 
+  const [titleHeight, setTitleHeight] = useState(TITLE_ONE_LINE);
+  const onTitleLayout = useCallback((e: LayoutChangeEvent) => setTitleHeight(e.nativeEvent.layout.height), []);
+  const contentTop = insets.top + CONTENT_TOP + titleShift(titleHeight, TITLE_ONE_LINE);
+
+  const titleAuto = useWebAutoHeight(ET.editorTitle.lineHeight);
+  const root = useRef<View>(null);
+  const scroll = useRef<RNScrollView>(null);
+  const refs = useMemo(() => ({ root, scroll }), []);
+  const keyboard = useEditorKeyboard(refs, { top: contentTop, bottom: barHeight });
+
   return (
-    <View style={[styles.screen, { backgroundColor: c.bg }]}>
+    <View
+      ref={root}
+      style={[styles.screen, { backgroundColor: c.bg }]}
+      onStartShouldSetResponder={yes}
+      onResponderRelease={Keyboard.dismiss}
+    >
       <TopBar
         lead={{ kind: 'back', label: caption, onBack }}
         actions={actions}
         iconSize={S.iconSmall}
         style={[styles.side, { top: insets.top + S.topBarTop }]}
       />
-      <View style={[styles.side, styles.titleBox, { top: insets.top + S.titleTop, borderBottomColor: c.border }]}>
+      <View
+        onLayout={onTitleLayout}
+        style={[styles.side, styles.titleBox, { top: insets.top + S.titleTop, borderBottomColor: c.border }]}
+      >
         <View style={styles.strip}>
           {colors.map((color, i) => (
             <View key={i} style={[styles.stripPart, { backgroundColor: color }]} />
           ))}
         </View>
-        {onEditTitle ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`Название: ${title}`} onPress={onEditTitle}>
-            <Text style={[ET.editorTitle, { color: c.text }]}>{title}</Text>
-          </Pressable>
+        {onChangeTitle ? (
+          <TextInput
+            ref={titleRef}
+            value={title}
+            onChangeText={onChangeTitle}
+            multiline
+            {...titleAuto.webProps}
+            onContentSizeChange={titleAuto.onContentSizeChange}
+            submitBehavior="blurAndSubmit"
+            returnKeyType="done"
+            maxLength={TITLE_MAX}
+            placeholder="—"
+            placeholderTextColor={c.muted}
+            textAlignVertical="top"
+            underlineColorAndroid="transparent"
+            selectionColor={c.text}
+            cursorColor={c.text}
+            accessibilityLabel="Название"
+            style={[ET.editorTitle, styles.titleInput, titleAuto.style, { color: c.text }]}
+          />
         ) : (
           <Text accessibilityRole="header" style={[ET.editorTitle, { color: c.text }]}>
             {title}
@@ -74,12 +147,17 @@ export const EditorScaffold = memo(function EditorScaffold(props: Props) {
       </View>
 
       <ScrollView
-        style={[styles.scroll, { top: insets.top + CONTENT_TOP, bottom: barHeight }]}
+        ref={scroll}
+        style={[styles.scroll, { top: contentTop, bottom: barHeight }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={16}
+        onScroll={keyboard.onScroll}
+        onContentSizeChange={keyboard.onContentSizeChange}
       >
-        {children}
+        <KeyboardTargetContext.Provider value={keyboard.setTarget}>{children}</KeyboardTargetContext.Provider>
+        {keyboard.space > 0 ? <View style={{ height: keyboard.space }} /> : null}
       </ScrollView>
 
       <View style={[styles.bar, { height: barHeight, backgroundColor: c.bg, borderTopColor: c.hair }]} />
@@ -93,8 +171,10 @@ export const EditorScaffold = memo(function EditorScaffold(props: Props) {
         </Pressable>
         <Pressable
           accessibilityRole="button"
+          accessibilityState={{ disabled: saveDisabled }}
+          disabled={saveDisabled}
           onPress={onSave}
-          style={[styles.button, styles.save, { borderColor: c.border, backgroundColor: c.text }]}
+          style={[styles.button, styles.save, { borderColor: c.border, backgroundColor: c.text, opacity: saveDisabled ? 0.4 : 1 }]}
         >
           <Text style={[T.action, { color: c.bg }]}>СОХРАНИТЬ</Text>
         </Pressable>
@@ -134,6 +214,8 @@ const styles = StyleSheet.create({
   titleBox: { paddingLeft: 12, paddingBottom: 8, borderBottomWidth: S.border },
   strip: { position: 'absolute', left: 0, top: 2, bottom: 10, width: S.strip },
   stripPart: { flex: 1 },
+  /** Поле названия без своих отступов — текст там же, где у заголовка-текста */
+  titleInput: { padding: 0, margin: 0, maxHeight: TITLE_MAX_HEIGHT },
   scroll: { position: 'absolute', left: 0, right: 0, ...WEB_SCROLL },
   content: { paddingHorizontal: space.side, paddingBottom: 16, gap: 8 },
   bar: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopWidth: S.hairline },

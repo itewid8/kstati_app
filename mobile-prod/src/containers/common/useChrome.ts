@@ -1,3 +1,4 @@
+import { PERSONAL, PERSONAL_NAME } from '@/lib/visibility';
 import { router } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -37,7 +38,7 @@ const rec = () => toggleRecording();
 export function useChrome(active: NavTab): Chrome {
   const people = useStore(useShallow((s) => ({ me: s.me ?? NO_ME, users: s.users, groups: s.groups })));
   const hasNews = useStore((s) => (s.activity[0]?.id ?? '') > s.activitySeen);
-  const groupName = useStore((s) => s.groups.find((g) => g.id === s.currentGroupId)?.name ?? '');
+  const groupName = useStore((s) => (s.currentGroupId === PERSONAL ? PERSONAL_NAME : (s.groups.find((g) => g.id === s.currentGroupId)?.name ?? '')));
   const colors = usePersonColors(people);
   const badge = useMemo(() => meBadge(people, colors), [people, colors]);
   // Синхронизация заменяет me и users новыми объектами — кнопка профиля меняется, только если поменялись буква или цвет

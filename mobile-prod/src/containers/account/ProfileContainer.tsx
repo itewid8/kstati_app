@@ -3,32 +3,26 @@ import { useMemo } from 'react';
 import { Alert } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { profileProps } from '@/adapters/account/profile';
-import { openGroupSheet } from '@/components/GroupSheet';
 import { useStore } from '@/lib/store';
 import type { ID, PaletteKey } from '@/lib/types';
 import { ProfileScreen } from '@/screens/account/ProfileScreen';
 import { NO_ME, backOrTab, nav, resetTo, signedInOnly, useInsets, usePersonColors, type ProfileField, type StoreState } from '../common';
+import { accountRoutes } from './routes';
 
 const back = () => backOrTab('tasks');
-const editAvatar = () => router.push(nav.avatar());
+const editAvatar = () => router.push(accountRoutes.avatar());
 const edit = (field: ProfileField) => () => router.push(nav.profileEdit(field));
 const editName = edit('name');
 const editNick = edit('nick');
 const editGender = edit('gender');
 const changePassword = edit('password');
 const openGroup = (id: ID) => router.push(nav.group(id));
-/** «Новая группа» — сразу форма создания, а не список групп (там случайное касание переключает текущую) */
-const createGroup = () => openGroupSheet('create');
+const createGroup = () => router.push(accountRoutes.createGroup());
+const joinGroup = () => router.push(accountRoutes.joinGroup());
 const openAppSettings = () => router.push(nav.appSettings());
 
-const pickColor = (color: PaletteKey) => {
-  void useStore
-    .getState()
-    .setLook({ color })
-    .then((err) => {
-      if (err) useStore.getState().notice(err);
-    });
-};
+/** Цвет в профиле не сохраняется сразу: открывается «Иконка» с ним в черновике (там ОТМЕНА / СОХРАНИТЬ) */
+const pickColor = (color: PaletteKey) => router.push(accountRoutes.avatar(color));
 
 /** Выход стирает данные с телефона (они на сервере и вернутся при входе). Вход — с чистого стека: под ним не остаются вкладки */
 const logout = () =>
@@ -58,7 +52,7 @@ const deleteAccount = () =>
     },
   ]);
 
-/** C-Profile: имя, ник, пол и пароль — в старой форме settings/edit.tsx, цвет и символ — settings/avatar.tsx */
+/** C-Profile: имя, ник, пол и пароль — страницы settings/edit.tsx?field=, цвет и символ — settings/avatar.tsx, группы — group/* */
 const pickProfile = (s: StoreState) => ({ me: s.me ?? NO_ME, users: s.users, groups: s.groups });
 
 export const ProfileContainer = signedInOnly(function Profile() {
@@ -80,6 +74,7 @@ export const ProfileContainer = signedInOnly(function Profile() {
       onPickCustomColor={editAvatar}
       onOpenGroup={openGroup}
       onCreateGroup={createGroup}
+      onJoinGroup={joinGroup}
       onOpenAppSettings={openAppSettings}
       onChangePassword={changePassword}
       onLogout={logout}

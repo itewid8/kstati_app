@@ -11,13 +11,16 @@ import { deleteSheetProps, moveSheetProps } from '@/adapters/voice/change';
 import { createFields } from '@/adapters/voice/create';
 import { sheetHeader } from '@/adapters/voice/header';
 import { problemSheet, type ProblemCard } from '@/adapters/voice/problem';
+import { recButtons, type RecButton, type RecMode } from '@/adapters/voice/recording';
 import type { PlansAnswer } from '@/lib/plans';
 import type { ChangeDraft, DraftItem } from '@/lib/types';
-import { beginRecording, cancelVoice, disarmRecording, stopRecording } from '@/lib/voice';
+import { beginRecording, cancelVoice, disarmRecording, finishRecording } from '@/lib/voice';
+import { recDrag } from '@/ui/BottomNav';
 import {
   AskAgendaSheet,
   AskDeleteSheet,
   AskMoveSheet,
+  RecordingSheet,
   VoiceCreateSheet,
   VoiceSheet,
   type DeleteScope,
@@ -42,38 +45,30 @@ import { ProblemSheet } from './ProblemSheet';
 /** Общее для окон: волна и длительность последней записи, отступ снизу */
 export type SheetBase = { levels: readonly number[]; ms: number; bottomInset: number };
 
-/* ---------- Запись и разбор (C-Voice без полей) ---------- */
+/* ---------- Запись и разбор ---------- */
 
-type RecordingProps = SheetBase & {
-  live: boolean;
-  /** «Изменить» во время записи: закончить и сразу открыть редактор с результатом */
-  onEditAfter: () => void;
+const BUTTON: Record<RecButton, SheetAction> = {
+  cancel: { key: 'cancel', label: 'ОТМЕНА', onPress: cancelVoice },
+  done: { key: 'done', label: 'ГОТОВО', tone: 'primary', flex: 1.3, onPress: finishRecording },
 };
 
+type LiveProps = SheetBase & { live: boolean; mode: RecMode };
+
 /**
- * Идёт запись: «REC 00:04», живая волна. ОТМЕНА (и затемнение) — отменить, СОХРАНИТЬ — закончить и показать распознанное,
- * ИЗМЕНИТЬ — закончить и открыть редактор. Разбор: «…», кнопки ждут ответа, ОТМЕНА — не показывать его
+ * Окно над нижней навигацией (REC видна): пальцем — шапка и «‹ ОТМЕНА» за пальцем, нажатием — ОТМЕНА / ГОТОВО,
+ * разбор — только ОТМЕНА (ответ потом не покажется). ИЗМЕНИТЬ / СОХРАНИТЬ — только в окне ответа
  */
-export const RecordingSheet = memo(function RecordingSheet({ levels, ms, bottomInset, live, onEditAfter }: RecordingProps) {
+export const LiveSheet = memo(function LiveSheet({ levels, ms, bottomInset, live, mode }: LiveProps) {
   const header = useMemo(() => sheetHeader(levels, ms, undefined, live), [levels, ms, live]);
-  const actions = useMemo<SheetAction[]>(
-    () => [
-      { key: 'cancel', label: 'ОТМЕНА', onPress: cancelVoice },
-      {
-        key: 'edit',
-        label: 'ИЗМЕНИТЬ',
-        onPress: live
-          ? () => {
-              onEditAfter();
-              void stopRecording();
-            }
-          : undefined,
-      },
-      { key: 'save', label: 'СОХРАНИТЬ', tone: 'primary', flex: 1.3, onPress: live ? () => void stopRecording() : undefined },
-    ],
-    [live, onEditAfter],
+  const actions = useMemo(
+    () => recButtons({ phase: live ? 'recording' : 'processing', mode }).map((b) => BUTTON[b]),
+    [live, mode],
   );
-  return <VoiceSheet header={header} phrase={live ? '' : '…'} quoted={false} actions={actions} onClose={cancelVoice} bottomInset={bottomInset} />;
+  // Удержание начинается до записи: к первому кадру окна кнопка, которую держат, уже известна
+  const drag = live && mode === 'hold' ? recDrag() : null;
+  return (
+    <RecordingSheet header={header} mode={mode} actions={actions} drag={drag} bottomInset={bottomInset} onClose={cancelVoice} />
+  );
 });
 
 /* ---------- Ссылка kstatiapp://record: запись только по нажатию ---------- */

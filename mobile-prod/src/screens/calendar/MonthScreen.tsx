@@ -3,15 +3,16 @@
  *
  * Раскладка как в макете: строка дней недели (top 152), сетка 7×5 с 168 (черта 1.5px сверху, волосяные линии
  * между ячейками, строка 77px; при 6 неделях строки ниже, сетка не заходит на панель дня), панель выбранного дня
- * с 564 до верха навигации. В ячейке до 5 дел, больше — 4 и «+N» (monthCellItems). Дни планов — заливка
- * цветом плана и полоса 3px сверху; дни соседних месяцев — фон панели и бледное число.
+ * с 564 до верха навигации (на низком экране панель поднимается, строки ниже — monthLayout). В ячейке до 5 дел,
+ * больше — 4 и «+N» (monthCellItems); в низкой ячейке — сколько влезает целыми строками (fitRows).
+ * Дни планов — заливка цветом плана и полоса 3px сверху; дни соседних месяцев — фон панели и бледное число.
  */
 import { memo, useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { dayNo, monthCellItems, type IsoDate } from '@/lib/calendarLayout';
+import { MONTH_GRID, dayNo, fitRows, monthCellItems, monthLayout, type IsoDate } from '@/lib/calendarLayout';
 import type { ID, PersonColor } from '@/lib/types';
 import { LONG_PRESS_MS, Marquee, SectionBox, fonts, size as S, space, tint, useLift, useTheme, type LiftTarget } from '@/ui';
-import { CalendarScaffold, NO_INSETS, useScreenSize } from './components/CalendarScaffold';
+import { CalendarScaffold, NO_INSETS, frameOf, useScreenSize } from './components/CalendarScaffold';
 import { PeopleFill, PeopleTip, usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { useLongPressId } from './components/longPress';
 import { PeriodArrows, PeriodTitle } from './components/PeriodBar';
@@ -78,18 +79,10 @@ export type MonthScreenProps = CalendarChromeProps & {
   onOpenYear?: () => void;
 };
 
-/** Вертикаль месяца (px от верха экрана, без safe area) */
-const M = {
-  weekdaysTop: 152,
-  gridTop: 168,
-  panelTop: 564,
-  /** Зазор между сеткой и панелью дня */
-  gap: 8,
-  gridRule: 1.5,
-  /** Строка 77px при 5 неделях */
-  maxRow: 77,
-  agendaRow: 31,
-} as const;
+/** Вертикаль месяца — MONTH_GRID и monthLayout (общие со щипком) */
+const M = { agendaRow: 31 } as const;
+/** Дела в ячейке: с 20px, строки по 9 через 1, не больше 5; снизу рамка 1 */
+const CELL_ITEMS = { top: 20, row: 9, gap: 1, max: 5, border: 1 } as const;
 /** Заливка дней плана */
 const PLAN_ALPHA = 0.08;
 /** Ширина строки названия в ячейке — заведомо шире ячейки */
@@ -156,7 +149,8 @@ type CellProps = {
 
 const MonthCell = memo(function MonthCell({ cell, height, items, plan, today, selected, byId, onSelectDate, onLongPressEvent }: CellProps) {
   const { c } = useTheme();
-  const { shown, more } = monthCellItems(items);
+  const cap = fitRows(height - CELL_ITEMS.top - CELL_ITEMS.border, CELL_ITEMS.row, CELL_ITEMS.gap, CELL_ITEMS.max);
+  const { shown, more } = cap > 0 ? monthCellItems(items, cap) : { shown: NO_ITEMS, more: 0 };
   const { m } = parts(cell.date);
   const select = useCallback(() => onSelectDate?.(cell.date), [onSelectDate, cell.date]);
   return (
@@ -266,7 +260,8 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
       }),
     );
   }, [year, month]);
-  const rowH = Math.min(M.maxRow, Math.floor((M.panelTop - M.gap - M.gridTop - M.gridRule) / weeks.length));
+  const layout = monthLayout(weeks.length, frameOf(screen, insets));
+  const rowH = layout.rowH;
 
   /** Дата → цвет плана (первый план, который её покрывает) */
   const planColor = useMemo(() => {
@@ -283,7 +278,6 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
 
   const sel = selectedDate ? parts(selectedDate) : null;
   const panelTitle = selectedDate && sel ? `${WEEKDAYS[weekday(selectedDate)]} ${pad2(sel.d)}${selectedDate === today ? ' · СЕГОДНЯ' : ''}` : '';
-  const panelMax = screen.height - insets.bottom - S.contentBottom - (top + M.panelTop);
 
   const period = (
     <>
@@ -297,7 +291,7 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
 
   return (
     <CalendarScaffold view="month" period={period} onLayout={onLayout} insets={insets} {...chrome}>
-      <View style={[styles.side, styles.weekdays, { top: top + M.weekdaysTop }]}>
+      <View style={[styles.side, styles.weekdays, { top: top + MONTH_GRID.weekdaysTop }]}>
         {WEEKDAYS.map((w) => (
           <Text key={w} style={[styles.weekday, { color: c.muted }]}>
             {w}
@@ -305,7 +299,7 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
         ))}
       </View>
 
-      <View style={[styles.side, styles.grid, { top: top + M.gridTop, borderTopColor: c.border, borderLeftColor: c.hair }]}>
+      <View style={[styles.side, styles.grid, { top: layout.gridTop, borderTopColor: c.border, borderLeftColor: c.hair }]}>
         {weeks.map((week) => (
           <View key={week[0].date} style={styles.week}>
             {week.map((cell) => (
@@ -331,7 +325,7 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
           title={panelTitle}
           count={`${agenda.length} ${tasksWord(agenda.length)}`}
           scrollable
-          style={[styles.side, styles.panel, { top: top + M.panelTop, maxHeight: Math.max(0, panelMax) }]}
+          style={[styles.side, styles.panel, { top: layout.panelTop, maxHeight: layout.panelMax }]}
         >
           {agenda.map((r) => (
             <AgendaItem key={r.id} row={r} byId={byId} onOpenEvent={onOpenEvent} onLongPressEvent={onLongPressEvent} />
@@ -354,7 +348,7 @@ const styles = StyleSheet.create({
   },
   weekdays: { flexDirection: 'row' },
   weekday: { flex: 1, paddingLeft: 4, fontFamily: fonts.mono400, fontSize: 9, letterSpacing: 0.72 },
-  grid: { borderTopWidth: 1.5, borderLeftWidth: 1 },
+  grid: { borderTopWidth: MONTH_GRID.rule, borderLeftWidth: 1 },
   week: { flexDirection: 'row' },
   cell: { flex: 1, minWidth: 0, borderRightWidth: 1, borderBottomWidth: 1, overflow: 'hidden' },
   /** Обводка выбранного дня — inset-тень, как в макете: рисуется под содержимым, полпикселя сглажены */
@@ -370,8 +364,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   numberText: { fontFamily: fonts.mono600, fontSize: 9.5, lineHeight: 14 },
-  items: { position: 'absolute', left: 2, right: 2, top: 20, gap: 1 },
-  item: { height: 9, paddingLeft: 3, overflow: 'hidden' },
+  items: { position: 'absolute', left: 2, right: 2, top: CELL_ITEMS.top, gap: CELL_ITEMS.gap },
+  item: { height: CELL_ITEMS.row, paddingLeft: 3, overflow: 'hidden' },
   /** Название обрезается краем ячейки без многоточия (как в макете), не влезает — бегущая строка */
   itemText: { fontFamily: fonts.sans600, fontSize: 6.5, lineHeight: 9, letterSpacing: -0.065 },
   more: { fontFamily: fonts.mono400, fontSize: 6.5, lineHeight: 8 },

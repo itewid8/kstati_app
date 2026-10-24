@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Поля карточки: высокий виджет и только REC / низкий (дела и REC справа) -->
+  <dimen name="kstati_pad">10dp</dimen>
+  <dimen name="kstati_pad_row">8dp</dimen>
+  <!-- Между списком и кнопкой REC -->
+  <dimen name="kstati_gap">6dp</dimen>
+  <!-- Рамки 1.5, полоса человека 1.5, разделитель строк 1 — как в приложении (src/ui/tokens) -->
+  <dimen name="kstati_border">1.5dp</dimen>
+  <dimen name="kstati_strip">1.5dp</dimen>
+  <dimen name="kstati_hair">1dp</dimen>
+  <!-- Шапка списка 22 (SectionBox), строки: в одну линию 30, название над временем 37 -->
+  <dimen name="kstati_header">22dp</dimen>
+  <dimen name="kstati_row">30dp</dimen>
+  <dimen name="kstati_row_stacked">37dp</dimen>
+  <!-- Кнопка REC: справа от списка — ширина, под списком — высота -->
+  <dimen name="kstati_rec_width">48dp</dimen>
+  <dimen name="kstati_rec_bar">40dp</dimen>
+  <!-- Красная точка и её свечение -->
+  <dimen name="kstati_dot">12dp</dimen>
+  <dimen name="kstati_glow">20dp</dimen>
+</resources>

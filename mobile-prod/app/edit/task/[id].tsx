@@ -14,7 +14,7 @@ export default function TaskEditorRoute() {
       date={param(p.date)}
       time={param(p.time)}
       parentId={param(p.parentId)}
-      field={param(p.field) === 'when' ? 'when' : undefined}
+      field={param(p.field) === 'when' ? 'when' : param(p.field) === 'remind' ? 'remind' : undefined}
     />
   );
 }

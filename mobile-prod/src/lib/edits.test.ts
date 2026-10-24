@@ -25,10 +25,10 @@ describe('saveDraftItems', () => {
     assert.equal(t?.groupId, 'g1');
   });
 
-  test('нет текущей группы и нет плана — ничего не сохранено, []', () => {
+  test('нет текущей группы и нет плана — дело в личном календаре, «Смотреть» не сохраняется', () => {
     const r = saveDraftItems(lists(), [newTask('Купить хлеб')], ctx(null));
-    assert.deepEqual([...r.ids], []);
-    assert.equal(r.lists.tasks.length, TASKS.length);
+    assert.equal(r.ids.length, 1);
+    assert.equal(r.lists.tasks.find((x) => x.id === r.ids[0])?.groupId, '@me');
     const w = saveDraftItems(lists(), [{ key: 'm', type: 'watch', data: { title: 'Кино', kind: null, genres: [], origin: null, year: null } }], ctx(null));
     assert.deepEqual([...w.ids], []);
   });

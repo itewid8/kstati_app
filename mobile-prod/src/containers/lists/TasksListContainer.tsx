@@ -7,7 +7,7 @@ import { parseKey } from '@/adapters/common/tasks';
 import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { TasksListScreen, type TasksView } from '@/screens/lists/TasksListScreen';
-import { NO_ME, nav, signedInOnly, toPlanGrid, useChrome, useClock, useInsets, usePersonColors, type StoreState } from '../common';
+import { NO_ME, nav, openTaskEditor, signedInOnly, toPlanGrid, useChrome, useClock, useInsets, usePersonColors, type StoreState } from '../common';
 import { holdTask } from '../quick/quickStore';
 
 const changeView = (v: TasksView) => {
@@ -20,7 +20,10 @@ const toggleTask = (key: ID) => {
   useStore.getState().toggleTask(id, occ);
 };
 
-const openTask = (key: ID) => router.push(nav.taskEditor(parseKey(key)));
+const openTask = (key: ID) => {
+  const { id, occ } = parseKey(key);
+  openTaskEditor(id, occ);
+};
 const addTask = () => router.push(nav.taskEditor({}));
 
 /** Только то, что нужно списку (и цветам людей): хотелки, идеи и «Смотреть» его не перерисовывают */

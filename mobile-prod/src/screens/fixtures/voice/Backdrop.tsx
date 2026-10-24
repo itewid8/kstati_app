@@ -2,11 +2,12 @@
  * Упрощённый экран «Дела» под затемнением — как его рисуют макеты голосовых окон
  * (C-Voice, C-Ask*): пустые кнопки панели, заголовок, секция «Сегодня» из 6 строк.
  * Только для стенда сверки и превью; в приложении под окном лежит настоящий экран.
+ * nav — нижняя навигация (окно записи лежит над ней): 'held' — REC нажата, как при удержании.
  */
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { PersonColor } from '@/lib/types';
-import { SectionBox, fonts, size as S, space, type as T, useTheme } from '@/ui';
+import { BottomNav, SectionBox, fonts, size as S, space, type as T, useTheme } from '@/ui';
 import { PersonStrip } from '../../voice/components/PersonStrip';
 
 type Row = { title: string; time: string; colors: PersonColor[] };
@@ -20,7 +21,7 @@ const ROWS: Row[] = [
   { title: 'Оплатить коммуналку', time: '—', colors: ['blue'] },
 ];
 
-export const VoiceBackdrop = memo(function VoiceBackdrop() {
+export const VoiceBackdrop = memo(function VoiceBackdrop({ nav }: { nav?: 'idle' | 'held' }) {
   const { c, person } = useTheme();
   const box = { borderColor: c.border, backgroundColor: c.panel };
   return (
@@ -50,6 +51,7 @@ export const VoiceBackdrop = memo(function VoiceBackdrop() {
           </View>
         ))}
       </SectionBox>
+      {nav ? <BottomNav active="tasks" recHeld={nav === 'held'} style={styles.nav} /> : null}
     </View>
   );
 });
@@ -83,4 +85,5 @@ const styles = StyleSheet.create({
   check: { width: S.checkbox, height: S.checkbox, borderWidth: S.border },
   rowTitle: { flex: 1, fontFamily: fonts.sans500, fontSize: 13 },
   rowTime: { letterSpacing: 0 },
+  nav: { position: 'absolute', left: space.side, right: space.side, bottom: S.navBottom },
 });

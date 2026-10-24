@@ -14,8 +14,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
 import { apiLevel } from './client.js';
-import { giftrev, grev, irev, PERSON_COLORS, publicUser, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type Wish } from './store/index.js';
+import { giftrev, grev, irev, migrated, PERSON_COLORS, publicUser, trev, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type WatchItem, type Wish } from './store/index.js';
 import { CATEGORIES } from './types.js';
+import { ownerPart, PERSONAL, visibleIn } from './visibility.js';
 
 const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
 const nickKey = (n: string) => `nick#${n.toLowerCase().replace(/ё/g, 'е')}`;
@@ -50,7 +51,13 @@ const Spec = z.string().regex(/^(m\d{1,4}|[dM]\d{1,3}@\d{2}:\d{2})$/);
 
 const TaskIn = z.object({
   id: Id,
+  /** Группа, где создали; «@me» — личный календарь (API 3) */
   groupId: Id,
+  /** Чьё дело (API 3): для чужого — владелец; нет — моё или ищется по группе (старое приложение) */
+  ownerId: Id.optional(),
+  /** «Только я» и отметки по группам — меняет только владелец (API 3) */
+  only: z.boolean().optional(),
+  share: z.record(Id, z.boolean()).refine((r) => Object.keys(r).length <= 100).optional(),
   title: z.string().trim().min(1).max(200),
   date: Date10,
   time: Time5,
@@ -106,7 +113,7 @@ const IdeaIn = z.object({
 const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('task.put'), task: TaskIn }),
   z.object({ op: z.literal('watch.put'), watch: WatchIn }),
-  z.object({ op: z.literal('item.delete'), groupId: Id, id: Id }),
+  z.object({ op: z.literal('item.delete'), groupId: Id, id: Id, ownerId: Id.optional() }),
   z.object({ op: z.literal('wish.put'), wish: WishIn }),
   z.object({ op: z.literal('wish.delete'), id: Id }),
   // S1: отметить чужую хотелку подаренной (или снять свою отметку). Владельцу не видно до его «получил»
@@ -121,6 +128,8 @@ const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('group.leave'), id: Id }),
   z.object({ op: z.literal('group.admin'), id: Id, userId: Id, admin: z.boolean() }),
   z.object({ op: z.literal('group.remove'), id: Id, userId: Id }),
+  // Мой режим в группе (API 3): true — «Только выбранные», false — «Все, кроме скрытых»
+  z.object({ op: z.literal('group.mode'), id: Id, selectOnly: z.boolean() }),
   // Личные напоминания: настройки по умолчанию и напоминания для отдельных дел (null — убрать своё)
   z.object({
     op: z.literal('prefs'),
@@ -178,11 +187,20 @@ export class Data {
 
   /** Запись в ленту активности. Ошибка ленты не должна ломать саму правку */
   private async log(user: User, a: Omit<Activity, 'id' | 'at' | 'actor'>) {
-    try {
-      const at = new Date().toISOString();
-      await this.store.addActivity({ ...a, actor: user.id, at, id: `${at}#${randomInt(1_000_000).toString(36)}` });
-    } catch (e) {
-      console.warn('Лента активности:', (e as Error).message);
+    await this.logTo(user, [a.scope], a);
+  }
+
+  /** Одна запись в несколько лент (дело видно нескольким группам) — с одним id: activity() не покажет её дважды */
+  private async logTo(user: User, scopes: string[], a: Omit<Activity, 'id' | 'at' | 'actor' | 'scope'> & { scope?: string }) {
+    if (!scopes.length) return;
+    const at = new Date().toISOString();
+    const id = `${at}#${randomInt(1_000_000).toString(36)}`;
+    for (const scope of scopes) {
+      try {
+        await this.store.addActivity({ ...a, scope, ...(scope !== a.scope && !scope.startsWith('u:') && { groupId: scope }), actor: user.id, at, id });
+      } catch (e) {
+        console.warn('Лента активности:', (e as Error).message);
+      }
     }
   }
 
@@ -204,9 +222,10 @@ export class Data {
         }),
       ),
     );
+    const seen = new Set<string>();
     const events = lists
       .flat()
-      .filter((a) => a.actor !== user.id)
+      .filter((a) => a.actor !== user.id && !seen.has(a.id) && !!seen.add(a.id))
       .sort((a, b) => b.id.localeCompare(a.id))
       .slice(0, 150);
     if (api >= 2) return { events };
@@ -263,10 +282,8 @@ export class Data {
     if (g.ownerId === userId) g.ownerId = g.adminIds[0] ?? g.memberIds[0];
     g.adminIds = g.adminIds.filter((m) => m !== g.ownerId);
     if (removeTheirItems) {
-      for (const it of await this.store.listItems(g.id)) {
-        const author = it.type === 'task' ? it.createdBy : it.addedBy;
-        if (author === userId) await this.store.deleteItem(g.id, it.id);
-      }
+      // Дела человека лежат в его личном календаре — из группы они пропадают сами (visibility.ts); «Смотреть» — удаляем
+      for (const it of await this.store.listItems(g.id)) if (it.type === 'watch' && it.addedBy === userId) await this.store.deleteItem(g.id, it.id);
     }
     if (rotateInvite) {
       const oldCode = g.inviteCode;
@@ -277,55 +294,214 @@ export class Data {
     await this.store.incr(grev(g.id));
   }
 
-  async apply(user: User, op: OpIn): Promise<unknown> {
+  /* ---------- личный календарь (API 3, visibility.ts) ---------- */
+
+  /** Группы, где человек состоит */
+  private async groupsOf(userId: string): Promise<Group[]> {
+    return (await this.store.getGroups(await this.store.listMemberships(userId))).filter((g) => g.memberIds.includes(userId));
+  }
+
+  /** Дела человека (его раздел) */
+  private async ownerTasks(userId: string): Promise<Task[]> {
+    return (await this.store.listItems(ownerPart(userId))).filter((t): t is Task => t.type === 'task');
+  }
+
+  /**
+   * Старые дела лежали в разделе группы. Один раз на группу переносим их владельцам: видно по-прежнему только
+   * этой группе (в остальных группах владельца — отметка «скрыть», чтобы режим «Все» ничего не открыл)
+   */
+  private async ensureMigrated(groups: Group[]) {
+    if (!groups.length) return;
+    const done = await this.store.getCounters(groups.map((g) => migrated(g.id)));
+    for (const g of groups) {
+      if (done[migrated(g.id)]) continue;
+      const owners = new Set<string>();
+      for (const it of await this.store.listItems(g.id)) {
+        if (it.type !== 'task') continue;
+        const owner = it.createdBy;
+        const theirs = await this.store.listMemberships(owner);
+        const share = Object.fromEntries(theirs.map((gid) => [gid, gid === g.id]));
+        share[g.id] = true;
+        if (!(await this.store.getItem(ownerPart(owner), it.id))) await this.store.putItem({ ...it, groupId: ownerPart(owner), home: g.id, share });
+        await this.store.deleteItem(g.id, it.id);
+        owners.add(owner);
+      }
+      for (const o of owners) await this.store.incr(trev(o));
+      await this.store.incr(migrated(g.id));
+    }
+  }
+
+  /**
+   * Дело по id. ownerId известен (API 3) — сразу в его разделе; иначе (старое приложение) — моё,
+   * а потом дела участников группы groupId
+   */
+  private async findTask(user: User, id: string, ownerId: string | undefined, groupId: string): Promise<Task | null> {
+    const get = async (uid: string) => {
+      const it = await this.store.getItem(ownerPart(uid), id);
+      return it?.type === 'task' ? it : null;
+    };
+    if (ownerId) return get(ownerId);
+    const mine = await get(user.id);
+    if (mine || groupId === PERSONAL) return mine;
+    const g = await this.store.getGroup(groupId);
+    if (!g?.memberIds.includes(user.id)) return null;
+    await this.ensureMigrated([g]);
+    for (const m of g.memberIds) {
+      if (m === user.id) continue;
+      const t = await get(m);
+      if (t) return t;
+    }
+    return null;
+  }
+
+  /** Права на чужое дело: владелец; админ группы, где оно видно; просто участник такой группы (только «сделано») */
+  private async roleFor(user: User, t: Task): Promise<'owner' | 'admin' | 'member' | null> {
+    if (t.createdBy === user.id) return 'owner';
+    const shared = (await this.groupsOf(user.id)).filter((g) => visibleIn(t, g));
+    if (shared.some((g) => canManage(g, user.id))) return 'admin';
+    return shared.length ? 'member' : null;
+  }
+
+  /** Дела владельца поменялись: его ревизия и ревизии всех его групп (их участники заберут новое) */
+  private async bumpOwner(owner: string, groups: Group[]) {
+    await this.store.incr(trev(owner));
+    for (const g of groups) await this.store.incr(grev(g.id));
+  }
+
+  /** Лента: что поменялось в деле */
+  private async logTaskChanges(user: User, old: Task, t: Task, scopes: string[]) {
+    const base = { itemId: t.id, title: t.title, date: t.date, time: t.time };
+    if (!old.doneAt && t.doneAt) await this.logTo(user, scopes, { ...base, kind: 'task.done' });
+    if (old.doneAt && !t.doneAt) await this.logTo(user, scopes, { ...base, kind: 'task.undone' });
+    // Повторы: отметки отдельных раз и удаление одного раза
+    const had = new Set(old.doneDates ?? []);
+    const has = new Set(t.doneDates ?? []);
+    for (const d of has) if (!had.has(d)) await this.logTo(user, scopes, { ...base, date: d, kind: 'task.done' });
+    for (const d of had) if (!has.has(d) && d >= new Date(Date.now() - 86400000 * 7).toISOString().slice(0, 10)) await this.logTo(user, scopes, { ...base, date: d, kind: 'task.undone' });
+    const skipped = (t.skipDates ?? []).filter((d) => !(old.skipDates ?? []).includes(d));
+    for (const d of skipped) await this.logTo(user, scopes, { ...base, date: d, kind: 'task.delete', fields: ['occurrence'] });
+    const fields = taskChanges(old, t);
+    if (fields.length) await this.logTo(user, scopes, { ...base, kind: 'task.edit', fields });
+  }
+
+  /**
+   * Все дела, которые видит человек: свои (все) и чужие, видные хотя бы одной общей группе.
+   * in — в каких из его групп дело видно
+   */
+  private async visibleTasks(user: User, mine: Group[]): Promise<{ task: Task; in: string[] }[]> {
+    const people = [...new Set([user.id, ...mine.flatMap((g) => g.memberIds)])];
+    const lists = await Promise.all(people.map((id) => this.ownerTasks(id)));
+    const out: { task: Task; in: string[] }[] = [];
+    people.forEach((id, i) => {
+      for (const t of lists[i]) {
+        const groups = mine.filter((g) => visibleIn(t, g)).map((g) => g.id);
+        if (id === user.id || groups.length) out.push({ task: t, in: groups });
+      }
+    });
+    return out;
+  }
+
+  /**
+   * Дело глазами человека. API 3: groupId — где создано («@me» — личное), in — его группы, где видно;
+   * чужим — без отметок видимости (кому ещё владелец показал или скрыл — не их дело).
+   * Старое приложение: одна группа (где создано, если видно там) — оно знает только дела групп
+   */
+  private taskView(t: Task, inGroups: string[], viewer: string, api: number): Task | null {
+    const { home, only, share, ...rest } = t;
+    if (api < 3) {
+      const g = home && inGroups.includes(home) ? home : inGroups[0];
+      return g ? { ...rest, groupId: g } : null;
+    }
+    if (t.createdBy === viewer) return { ...rest, groupId: home ?? PERSONAL, ...(only && { only }), ...(share && { share }), in: inGroups } as Task;
+    return { ...rest, groupId: inGroups[0] ?? PERSONAL, in: inGroups } as Task;
+  }
+
+  /** Записи группы для голосового разбора: «Смотреть», дела, видные группе, и все мои */
+  async groupItems(user: User, groupId: string): Promise<Item[]> {
+    const mine = await this.groupsOf(user.id);
+    await this.ensureMigrated(mine);
+    const [watch, tasks] = await Promise.all([this.store.listItems(groupId), this.visibleTasks(user, mine)]);
+    return [
+      ...watch.filter((w) => w.type === 'watch'),
+      ...tasks.filter((x) => x.in.includes(groupId) || x.task.createdBy === user.id).map((x) => ({ ...x.task, groupId })),
+    ];
+  }
+
+  async apply(user: User, op: OpIn, api = 1): Promise<unknown> {
     const now = new Date().toISOString();
     const s = this.store;
     switch (op.op) {
       case 'task.put': {
-        const g = await this.memberGroup(user, op.task.groupId);
-        const old = await s.getItem(op.task.groupId, op.task.id);
-        if (old && old.type !== 'task') throw new HttpError(409, 'conflict');
-        // Кто занят — только участники этой группы
-        const people = op.task.people ? [...new Set(op.task.people)].filter((p) => g.memberIds.includes(p)) : undefined;
-        // Подзадача — только у обычного дела той же группы (один уровень вложенности)
-        let parentId = op.task.parentId ?? null;
+        const inT = op.task;
+        const personal = inT.groupId === PERSONAL;
+        const old = await this.findTask(user, inT.id, inT.ownerId, inT.groupId);
+        if (!old) {
+          // Новое дело — всегда своё; из группы — только если я в ней
+          if (inT.ownerId && inT.ownerId !== user.id) throw new HttpError(403, 'forbidden', 'Дело не найдено');
+          if (!personal) await this.memberGroup(user, inT.groupId);
+        }
+        const role = old ? await this.roleFor(user, old) : 'owner';
+        if (!role) throw new HttpError(403, 'forbidden', 'Нет доступа к делу');
+        const owner = old?.createdBy ?? user.id;
+        const ownerGroups = await this.groupsOf(owner);
+        const visibleBefore = old ? ownerGroups.filter((g) => visibleIn(old, g)).map((g) => g.id) : [];
+        if (role === 'member') {
+          // Участник группы (не админ) может только отметить «сделано»: остальное берём как было
+          const t: Task = { ...old!, doneAt: inT.doneAt, doneDates: inT.doneDates ?? old!.doneDates, updatedAt: now };
+          await s.putItem(t);
+          await this.bumpOwner(owner, ownerGroups);
+          await this.logTaskChanges(user, old!, t, visibleBefore);
+          return {};
+        }
+        const home = old ? (old.home ?? null) : personal ? null : inT.groupId;
+        // Видимость меняет только владелец; старое приложение о ней не знает — его новое дело видно только своей группе
+        let only = old?.only ?? false;
+        let share = old?.share;
+        if (role === 'owner') {
+          if (api >= 3) {
+            if (inT.only !== undefined) only = inT.only;
+            if (inT.share !== undefined) {
+              const ids = new Set(ownerGroups.map((g) => g.id));
+              share = Object.fromEntries(Object.entries(inT.share).filter(([gid]) => ids.has(gid)));
+            }
+          } else if (!old) share = Object.fromEntries(ownerGroups.map((g) => [g.id, g.id === home]));
+        }
+        // Создали в группе — группа его видит, даже если там режим «Только выбранные»
+        if (!old && home && share?.[home] === undefined) share = { ...share, [home]: true };
+        // Кто занят — только люди из групп владельца
+        const circle = new Set([owner, ...ownerGroups.flatMap((g) => g.memberIds)]);
+        const people = inT.people ? [...new Set(inT.people)].filter((p) => circle.has(p)) : undefined;
+        // Подзадача — только у обычного дела того же владельца (один уровень вложенности)
+        let parentId = inT.parentId ?? null;
         if (parentId) {
-          const parent = parentId === op.task.id ? null : await s.getItem(op.task.groupId, parentId);
+          const parent = parentId === inT.id ? null : await s.getItem(ownerPart(owner), parentId);
           if (parent?.type !== 'task' || parent.parentId) parentId = null;
         }
         // Конец раньше начала не бывает
-        const endDate = op.task.endDate && op.task.date && op.task.endDate > op.task.date ? op.task.endDate : null;
-        const endTime = op.task.endTime && (endDate || (op.task.time && op.task.endTime > op.task.time)) ? op.task.endTime : null;
-        const task: Item = {
+        const endDate = inT.endDate && inT.date && inT.endDate > inT.date ? inT.endDate : null;
+        const endTime = inT.endTime && (endDate || (inT.time && inT.endTime > inT.time)) ? inT.endTime : null;
+        const { ownerId: _o, only: _on, share: _sh, groupId: _g, ...fields } = inT;
+        const task: Task = {
           type: 'task',
-          ...op.task,
+          ...fields,
+          groupId: ownerPart(owner),
           endDate,
           endTime,
           ...(people && { people }),
           parentId,
-          note: op.task.note ?? '',
-          createdBy: old?.type === 'task' ? old.createdBy : user.id,
+          note: inT.note ?? '',
+          home,
+          ...(only && { only }),
+          ...(share && Object.keys(share).length && { share }),
+          createdBy: owner,
           createdAt: old?.createdAt ?? now,
           updatedAt: now,
         };
         await s.putItem(task);
-        await s.incr(grev(op.task.groupId));
-        const base = { scope: task.groupId, groupId: task.groupId, itemId: task.id, title: task.title, date: task.date, time: task.time };
-        if (!old || old.type !== 'task') await this.log(user, { ...base, kind: 'task.add' });
-        else {
-          const t = task as Task;
-          if (!old.doneAt && t.doneAt) await this.log(user, { ...base, kind: 'task.done' });
-          if (old.doneAt && !t.doneAt) await this.log(user, { ...base, kind: 'task.undone' });
-          // Повторы: отметки отдельных раз и удаление одного раза
-          const had = new Set(old.doneDates ?? []);
-          const has = new Set(t.doneDates ?? []);
-          for (const d of has) if (!had.has(d)) await this.log(user, { ...base, date: d, kind: 'task.done' });
-          for (const d of had) if (!has.has(d) && d >= new Date(Date.now() - 86400000 * 7).toISOString().slice(0, 10)) await this.log(user, { ...base, date: d, kind: 'task.undone' });
-          const skipped = (t.skipDates ?? []).filter((d) => !(old.skipDates ?? []).includes(d));
-          for (const d of skipped) await this.log(user, { ...base, date: d, kind: 'task.delete', fields: ['occurrence'] });
-          const fields = taskChanges(old, t);
-          if (fields.length) await this.log(user, { ...base, kind: 'task.edit', fields });
-        }
+        await this.bumpOwner(owner, ownerGroups);
+        const visibleNow = ownerGroups.filter((g) => visibleIn(task, g)).map((g) => g.id);
+        if (!old) await this.logTo(user, visibleNow, { kind: 'task.add', itemId: task.id, title: task.title, date: task.date, time: task.time });
+        else await this.logTaskChanges(user, old, task, [...new Set([...visibleBefore, ...visibleNow])]);
         return {};
       }
       case 'watch.put': {
@@ -347,19 +523,24 @@ export class Data {
         return {};
       }
       case 'item.delete': {
-        await this.memberGroup(user, op.groupId);
-        const old = await s.getItem(op.groupId, op.id);
-        await s.deleteItem(op.groupId, op.id);
-        await s.incr(grev(op.groupId));
-        if (old)
-          await this.log(user, {
-            scope: op.groupId,
-            groupId: op.groupId,
-            itemId: op.id,
-            title: old.title,
-            kind: old.type === 'task' ? 'task.delete' : 'watch.delete',
-            ...(old.type === 'task' && { date: old.date, time: old.time }),
-          });
+        // «Смотреть» лежит в разделе группы
+        const watch = op.groupId !== PERSONAL ? await s.getItem(op.groupId, op.id) : null;
+        if (watch?.type === 'watch') {
+          await this.memberGroup(user, op.groupId);
+          await s.deleteItem(op.groupId, op.id);
+          await s.incr(grev(op.groupId));
+          await this.log(user, { scope: op.groupId, groupId: op.groupId, itemId: op.id, title: watch.title, kind: 'watch.delete' });
+          return {};
+        }
+        const old = await this.findTask(user, op.id, op.ownerId, op.groupId);
+        if (!old) return {};
+        const role = await this.roleFor(user, old);
+        if (role !== 'owner' && role !== 'admin') throw new HttpError(403, 'forbidden', 'Удалить дело могут владелец и админы группы');
+        const ownerGroups = await this.groupsOf(old.createdBy);
+        await s.deleteItem(ownerPart(old.createdBy), old.id);
+        await this.bumpOwner(old.createdBy, ownerGroups);
+        const scopes = ownerGroups.filter((g) => visibleIn(old, g)).map((g) => g.id);
+        await this.logTo(user, scopes, { kind: 'task.delete', itemId: old.id, title: old.title, date: old.date, time: old.time });
         return {};
       }
       case 'wish.put': {
@@ -550,6 +731,14 @@ export class Data {
         await this.log(user, { scope: g.id, groupId: g.id, kind: 'member.remove', target: op.userId });
         return {};
       }
+      case 'group.mode': {
+        const g = await this.memberGroup(user, op.id);
+        const rest = (g.selectOnly ?? []).filter((m) => m !== user.id);
+        g.selectOnly = op.selectOnly ? [...rest, user.id] : rest;
+        await s.putGroup(g);
+        await s.incr(grev(g.id));
+        return {};
+      }
       case 'prefs': {
         const cur = (await s.getPrefs(user.id)) ?? { reminders: null, overrides: {}, updatedAt: now };
         if (op.reminders) cur.reminders = op.reminders;
@@ -603,10 +792,11 @@ export class Data {
     const s = this.store;
     const groups = await s.getGroups(await s.listMemberships(user.id));
     const mine = groups.filter((g) => g.memberIds.includes(user.id));
+    await this.ensureMigrated(mine);
     const peopleIds = [...new Set([user.id, ...mine.flatMap((g) => g.memberIds)])];
     const [users, counters] = await Promise.all([
       s.getUsers(peopleIds),
-      s.getCounters([...mine.map((g) => grev(g.id)), ...peopleIds.map(urev), ...peopleIds.map(irev), ...peopleIds.map(giftrev)]),
+      s.getCounters([...mine.map((g) => grev(g.id)), ...peopleIds.map(urev), ...peopleIds.map(irev), ...peopleIds.map(giftrev), trev(user.id)]),
     ]);
     // Ревизия идей: счётчик человека и общие с ним группы (вышли из группы — чужие темы надо убрать)
     const commonWith = (id: string) => new Set(mine.filter((g) => g.memberIds.includes(id)).map((g) => g.id));
@@ -617,15 +807,20 @@ export class Data {
     const knownIdeas = known.ideas ?? {};
     const changedIdeaOwners = known.ideas ? peopleIds.filter((id) => knownIdeas[id] !== ideaRevs[id]) : [];
     const revs = {
-      groups: Object.fromEntries(mine.map((g) => [g.id, counters[grev(g.id)] ?? 0])),
+      // API 3: «@me» — ревизия моего личного календаря (дела без групп меняют только её)
+      groups: { ...Object.fromEntries(mine.map((g) => [g.id, counters[grev(g.id)] ?? 0])), ...(api >= 3 && { [PERSONAL]: counters[trev(user.id)] ?? 0 }) } as Record<string, number>,
       // Чужим хотелкам — ещё и подарки (giftrev); своя ревизия подарков не включает: сюрприз (S1, REVIEW-v2 V2-2).
       // Сумма двух растущих счётчиков тоже только растёт — телефон по-прежнему сравнивает одно число
       owners: Object.fromEntries(peopleIds.map((id) => [id, (counters[urev(id)] ?? 0) + (id === user.id ? 0 : (counters[giftrev(id)] ?? 0))])),
     };
     const changedGroups = mine.filter((g) => known.groups[g.id] !== revs.groups[g.id]);
     const changedOwners = peopleIds.filter((id) => known.owners[id] !== revs.owners[id]);
-    const [itemLists, wishLists, prefs, noteLists] = await Promise.all([
-      Promise.all(changedGroups.map((g) => s.listItems(g.id))),
+    // Дела: API 3 — одним списком всех видимых, если поменялась хоть одна группа или личный календарь;
+    // старое приложение — по группам, каждое дело в одной группе
+    const tasksChanged = changedGroups.length > 0 || (api >= 3 && known.groups[PERSONAL] !== revs.groups[PERSONAL]);
+    const [itemLists, visible, wishLists, prefs, noteLists] = await Promise.all([
+      Promise.all(changedGroups.map((g) => s.listItems(g.id).then((xs) => xs.filter((x): x is WatchItem => x.type === 'watch')))),
+      tasksChanged ? this.visibleTasks(user, mine) : Promise.resolve([]),
       Promise.all(changedOwners.map((id) => s.listWishes(id))),
       s.getPrefs(user.id),
       // Идеи не должны ломать остальную синхронизацию (например, пока таблица создаётся после обновления)
@@ -640,7 +835,18 @@ export class Data {
       groups: mine.map((g) => groupView(g, user.id)),
       users: users.map(publicUser),
       revs,
-      items: Object.fromEntries(changedGroups.map((g, i) => [g.id, itemLists[i]])),
+      items: Object.fromEntries(
+        changedGroups.map((g, i) => [
+          g.id,
+          api >= 3
+            ? itemLists[i]
+            : [...itemLists[i], ...visible.flatMap((x) => {
+                const v = this.taskView(x.task, x.in, user.id, api);
+                return v && v.groupId === g.id ? [v] : [];
+              })],
+        ]),
+      ),
+      ...(api >= 3 && tasksChanged && { tasks: visible.flatMap((x) => this.taskView(x.task, x.in, user.id, api) ?? []) }),
       wishes: Object.fromEntries(changedOwners.map((id, i) => [id, wishLists[i].map((w) => wishView(w, user.id, api))])),
       // Личные напоминания — всегда целиком (их немного); null — телефон ещё ни разу не присылал
       prefs,
@@ -659,6 +865,7 @@ export class Data {
       else await s.removeMembership(user.id, gid);
     }
     for (const w of await s.listWishes(user.id)) await s.deleteWish(user.id, w.id);
+    for (const t of await s.listItems(ownerPart(user.id))) await s.deleteItem(ownerPart(user.id), t.id);
     for (const n of await s.listNotes(user.id)) await s.deleteNote(user.id, n.id);
     await s.deletePrefs(user.id);
     if (user.email) await s.deleteKey(`email#${user.email}`);
@@ -711,7 +918,7 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
       try {
         // Профиль мог поменяться предыдущей операцией
         const fresh = (await store.getUser(user.id)) ?? user;
-        results.push({ ok: true, ...((await data.apply(fresh, parsed.data)) as object) });
+        results.push({ ok: true, ...((await data.apply(fresh, parsed.data, apiLevel(req))) as object) });
       } catch (e) {
         if (e instanceof HttpError) {
           req.log.warn({ op: parsed.data.op, code: e.code }, `Операция отклонена: ${e.message}`);

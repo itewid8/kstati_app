@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Свечение точки REC — кольцо 5 вокруг точки 12 (макет: box-shadow 0 0 0 5px); цвет — setColorFilter, сила — setImageAlpha -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+  <solid android:color="#FFFFFFFF" />
+</shape>

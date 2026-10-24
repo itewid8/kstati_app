@@ -60,6 +60,8 @@ export type Group = {
   ownerId: ID;
   /** Админы: те же права, что у создателя (приглашать, переименовывать), кроме назначения админов */
   adminIds: ID[];
+  /** Участники с режимом «Только выбранные» (lib/visibility.ts); нет — у всех «Все, кроме скрытых» */
+  selectOnly?: ID[];
 };
 
 export const canManageGroup = (g: Group, userId: ID) => g.ownerId === userId || g.adminIds.includes(userId);
@@ -105,6 +107,10 @@ export type Repeat = {
 
 export type Task = {
   id: ID;
+  /**
+   * Своё дело — группа, где его создали, или «@me» (личный календарь, lib/visibility.ts).
+   * Чужое — одна из моих групп, где оно видно
+   */
   groupId: ID;
   title: string;
   date: string | null; // YYYY-MM-DD
@@ -129,6 +135,12 @@ export type Task = {
   people?: ID[];
   /** Подзадача: id большого дела (плана) в той же группе */
   parentId?: ID | null;
+  /** «Только я»: не видно ни одной группе (только у своих дел) */
+  only?: boolean;
+  /** Отметки по группам: true — показать, false — скрыть; нет — по режиму группы (только у своих дел) */
+  share?: Record<ID, boolean>;
+  /** Чужое дело: в каких моих группах видно (присылает сервер) */
+  in?: ID[];
   /** Только в приложении: дата конкретного повтора, если это «развёрнутый» повтор серии */
   occ?: string;
 };
@@ -300,6 +312,9 @@ export type TaskDraft = {
   endTime?: string | null;
   people?: ID[];
   parentId?: ID | null;
+  /** Видимость (окно дела, строка «ВИДНО»): нет — как было / по месту создания */
+  only?: boolean;
+  share?: Record<ID, boolean>;
 };
 export type WishDraft = { title: string; note: string; link: string };
 export type WatchDraft = {

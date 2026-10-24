@@ -8,6 +8,7 @@ import type {
   AskAgendaSheetProps,
   AskDeleteSheetProps,
   AskMoveSheetProps,
+  RecordingSheetProps,
   VoiceCreateSheetProps,
   VoicePerson,
   VoiceSheetHeader,
@@ -125,4 +126,30 @@ export const askWeekendFixture: AskAgendaSheetProps = {
     ],
     ['ВС 11', '', [['11:00', 'Бранч у Ани', 'sk']]],
   ]),
+};
+
+/* ---------- Окно записи (без макетов: X-RecordHold, X-RecordTap, X-RecordWait) ---------- */
+
+/** Палец на REC 3 секунды: шапка без кнопок, «‹ ОТМЕНА» на месте разделов */
+export const recordHoldFixture: RecordingSheetProps = {
+  header: { duration: '00:03', levels: voiceLevels.slice(0, 26), live: true },
+  mode: 'hold',
+  actions: [],
+};
+
+/** Запись нажатием: ОТМЕНА и ГОТОВО */
+export const recordTapFixture: RecordingSheetProps = {
+  header: { duration: '00:04', levels: voiceLevels.slice(0, 34), live: true },
+  mode: 'tap',
+  actions: [
+    { key: 'cancel', label: 'ОТМЕНА' },
+    { key: 'done', label: 'ГОТОВО', tone: 'primary', flex: 1.3 },
+  ],
+};
+
+/** Разбор: записанная волна, только ОТМЕНА */
+export const recordWaitFixture: RecordingSheetProps = {
+  header: { duration: '00:04', levels: voiceLevels.slice(0, 34) },
+  mode: 'tap',
+  actions: [{ key: 'cancel', label: 'ОТМЕНА' }],
 };

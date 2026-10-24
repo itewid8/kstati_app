@@ -10,11 +10,13 @@ import { useStore, type MenuAction } from '@/lib/store';
 import { canManageGroup, canRemoveMember, hisHer, type GroupCategory, type ID } from '@/lib/types';
 import { GroupScreen, type SharedListKey } from '@/screens/account/GroupScreen';
 import { InputSheet } from '@/ui';
-import { NO_ME, nav, signedInOnly, toTab, useClock, useInsets, usePersonColors, type StoreState } from '../common';
+import { NO_ME, signedInOnly, toTab, useClock, useInsets, usePersonColors, type StoreState } from '../common';
+import { backToProfile } from './back';
+import { accountRoutes } from './routes';
 
 export type GroupContainerProps = { id: ID };
 
-const back = () => (router.canGoBack() ? router.back() : router.navigate(nav.profile()));
+const back = backToProfile;
 
 /** Создатель назначает и снимает админов; исключают создатель и админы (canRemoveMember) */
 function memberMenu(groupId: ID, userId: ID) {
@@ -79,12 +81,16 @@ const pickGroup = (s: StoreState): GroupSnapshot => ({
   ideas: s.ideas,
 });
 
-/** C-Group: настройки группы id; переименование — в окне ввода. Группы не стало (исключили, удалили) — назад */
+/**
+ * C-Group: настройки группы id. Название (окно ввода) и категория — черновик: снизу появляется ОТМЕНА / СОХРАНИТЬ.
+ * Код, участники, списки и выход действуют сразу. Группы не стало (исключили, удалили) — назад
+ */
 export const GroupContainer = signedInOnly(function GroupSettings({ id }: GroupContainerProps) {
   const s = useStore(useShallow(pickGroup));
   const { today } = useClock();
   const insets = useInsets();
   const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState<{ name?: string; category?: GroupCategory }>({});
   const colors = usePersonColors(s);
   const data = useMemo(() => groupProps(s, colors, id, { today }), [s, colors, id, today]);
   const group = s.groups.find((g) => g.id === id);
@@ -93,15 +99,21 @@ export const GroupContainer = signedInOnly(function GroupSettings({ id }: GroupC
 
   const onRename = useCallback(() => setRenaming(true), []);
   const onCloseRename = useCallback(() => setRenaming(false), []);
-  const onSubmitRename = useCallback(
-    (name: string) => {
-      setRenaming(false);
-      const g = useStore.getState().groups.find((x) => x.id === id);
-      if (g && name && name !== g.name) useStore.getState().renameGroup(id, name);
-    },
-    [id],
-  );
-  const onChangeCategory = useCallback((category: GroupCategory) => useStore.getState().setGroupCategory(id, category), [id]);
+  const onSubmitRename = useCallback((name: string) => {
+    setRenaming(false);
+    if (name) setDraft((d) => ({ ...d, name }));
+  }, []);
+  const onChangeCategory = useCallback((category: GroupCategory) => setDraft((d) => ({ ...d, category })), []);
+  const draftName = draft.name ?? group?.name ?? '';
+  const draftCategory = draft.category ?? group?.category ?? 'other';
+  const dirty = !!group && (draftName !== group.name || draftCategory !== group.category);
+  const onSave = useCallback(() => {
+    const g = useStore.getState().groups.find((x) => x.id === id);
+    if (!g) return;
+    if (draftName && draftName !== g.name) useStore.getState().renameGroup(id, draftName);
+    if (draftCategory !== g.category) useStore.getState().setGroupCategory(id, draftCategory);
+    setDraft({});
+  }, [id, draftName, draftCategory]);
   const onCopyCode = useCallback(async () => {
     await Clipboard.setStringAsync(code).catch(() => {});
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -120,6 +132,7 @@ export const GroupContainer = signedInOnly(function GroupSettings({ id }: GroupC
     [id],
   );
   const onLeave = useCallback(() => leave(id), [id]);
+  const onOpenShare = useCallback(() => router.push(accountRoutes.share(id)), [id]);
 
   // Как PlanContainer: экран без группы пуст и без шапки — уходим
   const missing = data === null;
@@ -133,6 +146,8 @@ export const GroupContainer = signedInOnly(function GroupSettings({ id }: GroupC
     <View style={styles.screen}>
       <GroupScreen
         {...data}
+        name={draftName}
+        category={draftCategory}
         insets={insets}
         onBack={back}
         onRename={manage ? onRename : undefined}
@@ -142,9 +157,13 @@ export const GroupContainer = signedInOnly(function GroupSettings({ id }: GroupC
         onShareCode={code ? onShareCode : undefined}
         onOpenMember={onOpenMember}
         onOpenList={onOpenList}
+        onOpenShare={onOpenShare}
         onLeave={onLeave}
+        dirty={dirty}
+        onCancel={back}
+        onSave={onSave}
       />
-      <InputSheet visible={renaming} value={groupName} maxLength={40} bottomInset={insets.bottom} onSubmit={onSubmitRename} onClose={onCloseRename} />
+      <InputSheet visible={renaming} value={draftName} maxLength={40} bottomInset={insets.bottom} onSubmit={onSubmitRename} onClose={onCloseRename} />
     </View>
   );
 });

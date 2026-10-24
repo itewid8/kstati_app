@@ -1,13 +1,21 @@
 /**
  * Дело в дне (C-Day): прямоугольник дорожки из layoutDayLanes, заливка цветом людей, полоса 1.5px слева.
- * Строки: название + время справа, описание, кто (заглавными).
+ * Строки: название + время справа, описание, кто (заглавными). Рисуются только строки, которые влезают
+ * в блок целиком (fitTextLines): у короткого дела нет обрезанного по высоте текста.
  */
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { fitTextLines } from '@/lib/calendarLayout';
 import { LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { PeopleFill, PeopleTip } from './PeopleColor';
+import { useTextLines } from './useTextLines';
 
 const TIP = 1.5;
+const PAD_TOP = 4;
+const GAP = 2;
+/** Высоты строк: шапка (название и время), описание, кто */
+const LINE = { head: 14, note: 13, who: 11 } as const;
+const LINE_HEIGHTS = [LINE.head, LINE.note, LINE.who] as const;
 
 type Props = {
   x: number;
@@ -30,6 +38,12 @@ export const DayEventBlock = memo(function DayEventBlock(props: Props) {
   const { x, y, width, height, title, time, note, who, done, colors, onPress, onLongPress } = props;
   const { c } = useTheme();
   const lift = useLift(onLongPress, 'block', () => <DayEventBlock {...props} x={0} y={0} onPress={undefined} onLongPress={undefined} />);
+  const [lines, measure] = useTextLines(LINE_HEIGHTS);
+  const fit = fitTextLines(height - PAD_TOP, [
+    { lineHeight: LINE.head, lines: lines[0] },
+    { lineHeight: LINE.note, lines: note ? lines[1] : 0, gapBefore: GAP },
+    { lineHeight: LINE.who, lines: who ? lines[2] : 0, gapBefore: GAP },
+  ]);
   return (
     <Pressable
       ref={lift.ref}
@@ -42,24 +56,38 @@ export const DayEventBlock = memo(function DayEventBlock(props: Props) {
     >
       <PeopleFill colors={colors} alpha={c.tintAlpha} />
       <PeopleTip colors={colors} width={TIP} />
-      <View style={styles.head}>
-        <Text style={[styles.title, { color: c.text }, done && styles.done]}>{title}</Text>
-        <Text numberOfLines={1} style={[styles.time, { color: c.text }]}>
-          {time}
-        </Text>
-      </View>
-      {note ? <Text style={[styles.note, { color: c.muted }]}>{note}</Text> : null}
-      <Text style={[styles.who, { color: c.muted }]}>{who}</Text>
+      {fit.height > 0 ? (
+        <View style={[styles.text, { height: fit.height }]}>
+          <View onLayout={measure[0]} style={styles.head}>
+            <Text style={[styles.title, { color: c.text }, done && styles.done]}>{title}</Text>
+            <Text numberOfLines={1} style={[styles.time, { color: c.text }]}>
+              {time}
+            </Text>
+          </View>
+          {fit.lines[1] ? (
+            <Text onLayout={measure[1]} style={[styles.note, { color: c.muted }]}>
+              {note}
+            </Text>
+          ) : null}
+          {fit.lines[2] ? (
+            <Text onLayout={measure[2]} style={[styles.who, { color: c.muted }]}>
+              {who}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
     </Pressable>
   );
 });
 
 const styles = StyleSheet.create({
-  block: { position: 'absolute', overflow: 'hidden', paddingTop: 4, paddingRight: 6, paddingLeft: 10, gap: 2 },
-  head: { flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
-  title: { flexShrink: 1, fontFamily: fonts.sans600, fontSize: 12, lineHeight: 14 },
+  block: { position: 'absolute', overflow: 'hidden', paddingTop: PAD_TOP, paddingRight: 6, paddingLeft: 10 },
+  /** Окно текста высотой в целые строки: что ниже — не видно */
+  text: { overflow: 'hidden', gap: GAP },
+  head: { flexShrink: 0, flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
+  title: { flexShrink: 1, fontFamily: fonts.sans600, fontSize: 12, lineHeight: LINE.head },
   done: { textDecorationLine: 'line-through' },
-  time: { flexShrink: 0, fontFamily: fonts.mono400, fontSize: 9.5, lineHeight: 14 },
-  note: { fontFamily: fonts.sans400, fontSize: 10.5, lineHeight: 13 },
-  who: { fontFamily: fonts.mono400, fontSize: 9, lineHeight: 11, letterSpacing: 0.36 },
+  time: { flexShrink: 0, fontFamily: fonts.mono400, fontSize: 9.5, lineHeight: LINE.head },
+  note: { flexShrink: 0, fontFamily: fonts.sans400, fontSize: 10.5, lineHeight: LINE.note },
+  who: { flexShrink: 0, fontFamily: fonts.mono400, fontSize: 9, lineHeight: LINE.who, letterSpacing: 0.36 },
 });

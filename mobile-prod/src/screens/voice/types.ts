@@ -26,6 +26,9 @@ export type VoiceSheetHeader = {
   badge?: string;
 };
 
+/** Как идёт запись: hold — пока палец на REC, tap — от нажатия до ГОТОВО */
+export type RecordingMode = 'hold' | 'tap';
+
 export type SheetActionTone = 'default' | 'primary' | 'danger';
 
 /** Кнопка нижнего ряда окна */

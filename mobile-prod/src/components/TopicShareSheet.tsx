@@ -1,54 +1,59 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { colorOf } from '@/adapters/common/people';
+import { upper } from '@/adapters/common/ru';
+import { usePersonColors } from '@/containers/common/usePersonColors';
+import { NO_ME } from '@/containers/common/useSnapshot';
+import { plural } from '@/lib/plans';
 import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
-import { space } from '@/theme';
+import { TopicShareView, type ShareGroup } from '@/screens/sheets';
 import { Sheet } from './Sheet';
-import { Divider, T, Toggle } from './ui';
+
+const sharedMeta = (n: number) => (n ? `ОТКРЫТА ${n} ${plural(n, 'ГРУППЕ', 'ГРУППАМ', 'ГРУППАМ')}` : 'ТОЛЬКО ВЫ');
 
 /** Каким группам открыта тема идей: участники видят её, но менять не могут */
-export function TopicShareSheet({ topicId, onClose }: { topicId: ID | null; onClose: () => void }) {
-  const topic = useStore((s) => s.topics.find((t) => t.id === topicId) ?? null);
+export const TopicShareSheet = ({ topicId, onClose }: { topicId: ID | null; onClose: () => void }) => {
+  const live = useStore((s) => s.topics.find((t) => t.id === topicId) ?? null);
+  const me = useStore((s) => s.me ?? NO_ME);
+  const users = useStore((s) => s.users);
   const groups = useStore((s) => s.groups);
   const updateTopic = useStore((s) => s.updateTopic);
+  const colors = usePersonColors({ me, users, groups });
+  // Держим последнюю тему, чтобы окно не «пустело» во время закрытия
+  const [topic, setTopic] = useState(live);
+  useEffect(() => {
+    if (live) setTopic(live);
+  }, [live]);
+
+  const list = useMemo<ShareGroup[]>(
+    () =>
+      groups.map((g) => {
+        const n = g.memberIds.length;
+        return { id: g.id, name: g.name, meta: `${n} ${upper(plural(n, 'участник', 'участника', 'участников'))}`, shared: !!topic?.groupIds.includes(g.id) };
+      }),
+    [groups, topic],
+  );
+  const toggle = useCallback(
+    (groupId: string) => {
+      if (!topic) return;
+      const on = topic.groupIds.includes(groupId);
+      updateTopic(topic.id, { groupIds: on ? topic.groupIds.filter((x) => x !== groupId) : [...topic.groupIds, groupId] });
+    },
+    [topic, updateTopic],
+  );
 
   return (
-    <Sheet visible={!!topic} onClose={onClose}>
-      {topic && (
-        <View>
-          <T variant="caption" muted numberOfLines={2} style={styles.title}>
-            {topic.title}
-          </T>
-          <Divider />
-          {groups.length === 0 && (
-            <T muted style={styles.row}>
-              Групп пока нет
-            </T>
-          )}
-          {groups.map((g, i) => {
-            const on = topic.groupIds.includes(g.id);
-            return (
-              <View key={g.id}>
-                {i > 0 && <Divider inset={space.side} />}
-                <View style={styles.row}>
-                  <T style={{ flex: 1 }} numberOfLines={1}>
-                    {g.name}
-                  </T>
-                  <Toggle
-                    value={on}
-                    onValueChange={(v) => updateTopic(topic.id, { groupIds: v ? [...topic.groupIds, g.id] : topic.groupIds.filter((x) => x !== g.id) })}
-                  />
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      )}
+    <Sheet visible={!!live && !!topicId} onClose={onClose} inset>
+      {topic ? (
+        <TopicShareView
+          title={topic.title}
+          meta={sharedMeta(topic.groupIds.length)}
+          color={colorOf(colors, topic.ownerId)}
+          groups={list}
+          onToggle={toggle}
+          onClose={onClose}
+        />
+      ) : null}
     </Sheet>
   );
-}
-
-const styles = StyleSheet.create({
-  title: { paddingHorizontal: space.side, paddingTop: 4, paddingBottom: 12 },
-  row: { minHeight: 56, paddingHorizontal: space.side, flexDirection: 'row', alignItems: 'center', gap: 12 },
-});
+};

@@ -1,6 +1,7 @@
 /**
  * Настройки приложения (C-Settings): тема, режим кнопки REC, язык распознавания, напоминания,
- * счётчик голосовых запросов за день, состояние соединения, «О приложении».
+ * лимит голосовых команд на сегодня, состояние соединения, «О приложении».
+ * Выбор не применяется сразу: снизу ОТМЕНА / СОХРАНИТЬ (СОХРАНИТЬ активна, когда что-то изменили).
  * Презентационный экран: данные — пропсами, действия — колбэками.
  */
 import { memo } from 'react';
@@ -10,6 +11,7 @@ import { ScreenTitle, SectionBox, fonts, pad2, size as S, space, useTheme } from
 import { AccountHeader } from './components/AccountHeader';
 import { AccountRow } from './components/AccountRow';
 import { OptionGrid, type Option } from './components/OptionGrid';
+import { SaveBar } from './components/SaveBar';
 import { Toggle } from './components/Toggle';
 import { accountText, useAccountPalette } from './components/accountTheme';
 
@@ -35,6 +37,8 @@ export type SettingsScreenProps = {
   insets?: { top: number; bottom: number };
   /** Строки поддержки и политики; выключены, пока у приложения нет адресов */
   showAboutLinks?: boolean;
+  /** Выбор отличается от сохранённого */
+  canSave?: boolean;
 
   onBack?: () => void;
   onChangeTheme?: (theme: ThemePref) => void;
@@ -45,6 +49,10 @@ export type SettingsScreenProps = {
   onEditAllDayReminders?: () => void;
   onContactSupport?: () => void;
   onOpenPrivacy?: () => void;
+  /** Настройки виджета на рабочем столе; нет — раздела нет (iOS без платного аккаунта) */
+  onOpenWidget?: () => void;
+  onCancel?: () => void;
+  onSave?: () => void;
 };
 
 const NO_INSETS = { top: 0, bottom: 0 };
@@ -66,7 +74,7 @@ const LANG_OPTIONS: Option<RecognitionLang>[] = [
   { key: 'auto', label: 'АВТО' },
 ];
 
-/** Деления «ГОЛОС СЕГОДНЯ»: по одному на запрос из дневного лимита */
+/** Деления «ЛИМИТ ГОЛОСОВЫХ КОМАНД НА СЕГОДНЯ»: по одному на запрос из дневного лимита */
 const VoiceMeter = memo(function VoiceMeter({ used, limit }: { used: number; limit: number }) {
   const { c } = useTheme();
   const pal = useAccountPalette();
@@ -120,6 +128,7 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
     version,
     insets = NO_INSETS,
     showAboutLinks = true,
+    canSave = false,
     onBack,
     onChangeTheme,
     onChangeMicMode,
@@ -129,67 +138,81 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
     onEditAllDayReminders,
     onContactSupport,
     onOpenPrivacy,
+    onOpenWidget,
+    onCancel,
+    onSave,
   } = props;
   const { c } = useTheme();
 
   return (
-    <ScrollView
-      style={{ backgroundColor: c.bg }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + S.topBarTop, paddingBottom: insets.bottom + 24 }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <AccountHeader caption="НАСТРОЙКИ" onBack={onBack} />
-      <ScreenTitle title="Приложение" style={styles.title} />
+    <View style={[styles.screen, { backgroundColor: c.bg }]}>
+      <ScrollView
+        // Непрозрачный фон: на web прозрачный слой прокрутки выключает субпиксельное сглаживание текста
+        style={[styles.screen, { backgroundColor: c.bg }]}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + S.topBarTop }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <AccountHeader caption="НАСТРОЙКИ" onBack={onBack} />
+        <ScreenTitle title="Приложение" style={styles.title} />
 
-      <View style={styles.sections}>
-        <SectionBox title="ТЕМА">
-          <OptionGrid options={THEME_OPTIONS} value={theme} onChange={onChangeTheme} />
-        </SectionBox>
+        <View style={styles.sections}>
+          <SectionBox title="ТЕМА">
+            <OptionGrid options={THEME_OPTIONS} value={theme} onChange={onChangeTheme} />
+          </SectionBox>
 
-        <SectionBox title="КНОПКА REC">
-          <OptionGrid options={MIC_OPTIONS} value={micMode} onChange={onChangeMicMode} />
-        </SectionBox>
+          <SectionBox title="КНОПКА REC">
+            <OptionGrid options={MIC_OPTIONS} value={micMode} onChange={onChangeMicMode} />
+          </SectionBox>
 
-        <SectionBox title="ЯЗЫК РАСПОЗНАВАНИЯ">
-          <OptionGrid options={LANG_OPTIONS} value={language} onChange={onChangeLanguage} />
-        </SectionBox>
+          <SectionBox title="ЯЗЫК РАСПОЗНАВАНИЯ">
+            <OptionGrid options={LANG_OPTIONS} value={language} onChange={onChangeLanguage} />
+          </SectionBox>
 
-        <SectionBox title="НАПОМИНАНИЯ">
-          <View style={[styles.switchRow, { backgroundColor: c.panel }]}>
-            <Text style={[accountText.rowLabel, { color: c.text }]}>Напоминать о делах</Text>
-            <Toggle value={remindersOn} onChange={onToggleReminders} accessibilityLabel="Напоминать о делах" />
-          </View>
-          {remindersOn ? (
-            <>
-              <AccountRow label="Дела со временем" meta={timedReminders} onPress={onEditTimedReminders} />
-              <AccountRow label="Дела на весь день" meta={allDayReminders} onPress={onEditAllDayReminders} />
-            </>
+          <SectionBox title="НАПОМИНАНИЯ">
+            <View style={[styles.switchRow, { backgroundColor: c.panel }]}>
+              <Text style={[accountText.rowLabel, { color: c.text }]}>Напоминать о делах</Text>
+              <Toggle value={remindersOn} onChange={onToggleReminders} accessibilityLabel="Напоминать о делах" />
+            </View>
+            {remindersOn ? (
+              <>
+                <AccountRow label="Дела со временем" meta={timedReminders} onPress={onEditTimedReminders} />
+                <AccountRow label="Дела на весь день" meta={allDayReminders} onPress={onEditAllDayReminders} />
+              </>
+            ) : null}
+          </SectionBox>
+
+          {onOpenWidget ? (
+            <SectionBox title="ВИДЖЕТ">
+              <AccountRow label="Виджет на рабочем столе" onPress={onOpenWidget} />
+            </SectionBox>
           ) : null}
-        </SectionBox>
 
-        <SectionBox title="ГОЛОС СЕГОДНЯ" count={`${pad2(voiceUsed)} / ${pad2(voiceLimit)}`}>
-          <VoiceMeter used={voiceUsed} limit={voiceLimit} />
-        </SectionBox>
+          <SectionBox title="ЛИМИТ ГОЛОСОВЫХ КОМАНД НА СЕГОДНЯ" count={`${pad2(voiceUsed)} / ${pad2(voiceLimit)}`}>
+            <VoiceMeter used={voiceUsed} limit={voiceLimit} />
+          </SectionBox>
 
-        <SectionBox title="СОЕДИНЕНИЕ">
-          <View style={[styles.statusGrid, { backgroundColor: c.panel }]}>
-            <StatusCell label="СЕРВЕР" on={serverOnline} />
-            <StatusCell label={vpnOn ? 'VPN ВКЛ' : 'VPN ВЫКЛ'} on={vpnOn} divider />
-          </View>
-        </SectionBox>
+          <SectionBox title="СОЕДИНЕНИЕ">
+            <View style={[styles.statusGrid, { backgroundColor: c.panel }]}>
+              <StatusCell label="СЕРВЕР" on={serverOnline} />
+              <StatusCell label={vpnOn ? 'VPN ВКЛ' : 'VPN ВЫКЛ'} on={vpnOn} divider />
+            </View>
+          </SectionBox>
 
-        <SectionBox title="О ПРИЛОЖЕНИИ">
-          <AccountRow label="Версия" value={version} smallValue chevron={false} />
-          {showAboutLinks ? <AccountRow label="Написать в поддержку" onPress={onContactSupport} /> : null}
-          {showAboutLinks ? <AccountRow label="Политика конфиденциальности" onPress={onOpenPrivacy} /> : null}
-        </SectionBox>
-      </View>
-    </ScrollView>
+          <SectionBox title="О ПРИЛОЖЕНИИ">
+            <AccountRow label="Версия" value={version} smallValue chevron={false} />
+            {showAboutLinks ? <AccountRow label="Написать в поддержку" onPress={onContactSupport} /> : null}
+            {showAboutLinks ? <AccountRow label="Политика конфиденциальности" onPress={onOpenPrivacy} /> : null}
+          </SectionBox>
+        </View>
+      </ScrollView>
+      <SaveBar canSave={canSave} bottomInset={insets.bottom} onCancel={onCancel} onSave={onSave} />
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: space.side },
+  screen: { flex: 1 },
+  content: { paddingHorizontal: space.side, paddingBottom: 24 },
   title: { marginTop: 14 },
   sections: { marginTop: 12, gap: 8 },
   switchRow: {

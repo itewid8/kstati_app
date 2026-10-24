@@ -16,8 +16,8 @@ const shift = (n: number) => () => {
   const s = useStore.getState();
   s.setCalendarDate(shiftDay(s.calendarDate, n));
 };
-const prevWeek = shift(-7);
-const nextWeek = shift(7);
+export const prevWeek = shift(-7);
+export const nextWeek = shift(7);
 const goToday = () => useStore.getState().setCalendarDate(toISODate(new Date()));
 const openDay = (date: IsoDate) => {
   const s = useStore.getState();

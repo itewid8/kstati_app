@@ -29,7 +29,7 @@ export function duplicateOf(item: DraftItem, ctx: Ctx): string | null {
   if (item.type === 'task') {
     const d = item.data.date ?? null;
     const hit = ctx.tasks.find(
-      (x) => x.id !== item.id && x.groupId === ctx.groupId && !x.doneAt && normTitle(x.title) === t && (x.date ?? null) === d,
+      (x) => x.id !== item.id && (x.groupId === ctx.groupId || !!x.in?.includes(ctx.groupId ?? '')) && !x.doneAt && normTitle(x.title) === t && (x.date ?? null) === d,
     );
     return hit ? `Уже есть в делах: «${hit.title}»` : null;
   }

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Кнопка REC (макет C-WidgetRec, вариант D): капсула «● REC» 30 — в 1×1 и 2×1 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/kstati_rec"
+  android:layout_width="wrap_content"
+  android:layout_height="30dp"
+  android:contentDescription="@string/kstati_widget_record">
+  <ImageView
+    android:id="@+id/kstati_rec_fill"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no"
+    android:scaleType="fitXY"
+    android:src="@drawable/kstati_capsule_fill"
+    android:tint="#F4F3EF" />
+  <ImageView
+    android:id="@+id/kstati_rec_stroke"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no"
+    android:scaleType="fitXY"
+    android:src="@drawable/kstati_capsule_stroke"
+    android:tint="#CFCEC8" />
+  <LinearLayout
+    android:id="@+id/kstati_rec_content"
+    android:layout_width="wrap_content"
+    android:layout_height="match_parent"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="10dp"
+    android:paddingEnd="11dp">
+    <!-- Свечение 15 вокруг точки 9: поля −3, место занимает только точка -->
+    <FrameLayout
+      android:layout_width="15dp"
+      android:layout_height="15dp"
+      android:layout_marginStart="-3dp"
+      android:layout_marginEnd="-3dp">
+      <ImageView
+        android:id="@+id/kstati_rec_glow"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:src="@drawable/kstati_glow"
+        android:tint="#E0281E" />
+      <ImageView
+        android:id="@+id/kstati_rec_dot"
+        android:layout_width="9dp"
+        android:layout_height="9dp"
+        android:layout_gravity="center"
+        android:importantForAccessibility="no"
+        android:src="@drawable/kstati_dot"
+        android:tint="#E0281E" />
+    </FrameLayout>
+    <TextView
+      android:id="@+id/kstati_rec_label"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="7dp"
+      android:fontFamily="@font/kstati_geist_mono_semibold"
+      android:importantForAccessibility="no"
+      android:includeFontPadding="false"
+      android:letterSpacing="0.12"
+      android:maxLines="1"
+      android:text="@string/kstati_widget_rec"
+      android:textColor="#111111"
+      android:textSize="8.5sp" />
+  </LinearLayout>
+</FrameLayout>

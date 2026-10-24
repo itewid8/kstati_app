@@ -4,7 +4,7 @@ import { weekFixture } from '@/screens/fixtures/calendar/week';
 import type { TimedEvent } from '@/screens/calendar/types';
 import { colorMap } from '../common/people';
 import { parseKey } from '../common/tasks';
-import { CLOCK } from '../common/fixture';
+import { CLOCK, FRIENDS, US } from '../common/fixture';
 import { WEEK_TASKS, calendarSnapshot } from './mockup';
 import { weekProps } from './week';
 
@@ -70,12 +70,23 @@ describe('weekProps (C-Week)', () => {
   });
 
   test('чужая группа и дела без даты не попадают', () => {
-    const w = weekProps(calendarSnapshot(WEEK_TASKS, { currentGroupId: 'g2' }), CLOCK, colors, { date: '2026-10-05', hidden: [] });
+    // В «Друзьях» мой режим — «Только выбранные»: мои дела из «Мы с Кариной» им не видны, чужие — тем более
+    const groups = [US, { ...FRIENDS, selectOnly: ['s'] }];
+    const w = weekProps(calendarSnapshot(WEEK_TASKS, { currentGroupId: 'g2', groups }), CLOCK, colors, { date: '2026-10-05', hidden: [] });
     assert.deepEqual(w.bars, []);
     assert.deepEqual(w.events, {});
     assert.deepEqual(
       w.people.map((p) => p.tabLabel),
       ['Я', 'ДИМА', 'ЛЕНА'],
     );
+  });
+
+  test('режим «Все, кроме скрытых»: мои дела видны и другой группе, скрытые — нет', () => {
+    const tasks = WEEK_TASKS.map((t) => (t.id === 'gift' ? { ...t, share: { g2: false } } : t));
+    const w = weekProps(calendarSnapshot(tasks, { currentGroupId: 'g2' }), CLOCK, colors, { date: '2026-10-05', hidden: [] });
+    const ids = [...w.bars.map((b) => b.id), ...Object.values(w.events).flatMap((d) => d.map((e) => e.id))];
+    assert.ok(ids.includes('mom'), 'моё дело из другой группы');
+    assert.ok(!ids.includes('gift'), 'скрытое от «Друзей»');
+    assert.ok(!ids.some((id) => id.startsWith('yoga')), 'дело Карины «Друзьям» не видно');
   });
 });

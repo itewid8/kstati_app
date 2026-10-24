@@ -55,6 +55,15 @@ body{margin:0}
 </div>
 
 <div style="margin-top: 10px; border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>МОИ ДЕЛА В ГРУППЕ</span><span>40</span></div>
+<button style="width: 100%; height: 44px; border: 0; border-top: 1px solid {{t.hair}}; background: {{t.panel}}; padding: 0 8px; display: flex; align-items: center; gap: 8px; font-family: inherit; color: {{t.text}}; text-align: left">
+<span style="flex: 1; font-size: 13px; font-weight: 500">Все, кроме скрытых</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.04em; color: {{t.muted}}">02 СКРЫТО</span>
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{t.muted}}" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg>
+</button>
+</div>
+
+<div style="margin-top: 10px; border: 1.5px solid {{t.border}}">
 <div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>ОБЩИЕ СПИСКИ</span><span>{{t.listCount}}</span></div>
 <sc-for list="{{t.lists}}" as="l" hint-placeholder-count="4">
 <button style="width: 100%; height: 44px; border: 0; border-top: 1px solid {{t.hair}}; background: {{t.panel}}; padding: 0 8px; display: flex; align-items: center; gap: 8px; font-family: inherit; color: {{t.text}}; text-align: left">

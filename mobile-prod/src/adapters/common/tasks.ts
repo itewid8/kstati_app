@@ -10,14 +10,17 @@ export const touches = (t: Pick<Task, 'date' | 'time' | 'endDate' | 'endTime'>, 
   !!t.date && t.date <= to && (lastDay(t) ?? t.date) >= from;
 
 /**
- * Дела групп groupIds, которые задевают период [from, to]: разы повторов — отдельными делами (taskKey — «id@дата»),
- * обычные — как есть. Дела без даты не попадают. Порядок — по началу (дата, время).
+ * Дела вида (inScope — lib/visibility.ts, scopeFilter), которые задевают период [from, to]: разы повторов — отдельными
+ * делами (taskKey — «id@дата»), обычные — как есть. Дела без даты не попадают. Порядок — по началу (дата, время).
  */
-export function instancesIn(tasks: readonly Task[], groupIds: readonly ID[], from: IsoDate, to: IsoDate): Task[] {
-  const groups = new Set(groupIds);
+export const ALL_TASKS = () => true;
+
+export function instancesIn(tasks: readonly Task[], scope: ((t: Task) => boolean) | readonly ID[], from: IsoDate, to: IsoDate): Task[] {
+  // Список id — дела с такой группой (groupId)
+  const inScope = typeof scope === 'function' ? scope : (t: Task) => scope.includes(t.groupId);
   const out: Task[] = [];
   for (const t of tasks) {
-    if (!groups.has(t.groupId) || !t.date) continue;
+    if (!t.date || !inScope(t)) continue;
     if (!t.repeat) {
       if (touches(t, from, to)) out.push(t);
       continue;

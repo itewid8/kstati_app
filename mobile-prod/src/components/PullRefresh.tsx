@@ -16,7 +16,7 @@ import Animated, { interpolate, makeMutable, useAnimatedStyle, useSharedValue, w
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 import { fetchActivity, syncNow } from '@/lib/sync';
-import { useColors } from '@/theme';
+import { size as S, useTheme } from '@/ui';
 
 /** Дольше крутилку не держим: синхронизация доделается в фоне, а экран не выглядит зависшим */
 const MAX_MS = 8_000;
@@ -158,7 +158,7 @@ export const PullScrollView = forwardRef<ScrollView, ScrollViewProps>(function P
 
 /** Крутилка сверху поверх всего экрана: идёт за пальцем и крутится, пока идёт обновление */
 export function PullIndicator() {
-  const c = useColors();
+  const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const refreshing = useBusy();
   const shown = useShown(refreshing);
@@ -168,12 +168,16 @@ export function PullIndicator() {
     const p = Math.max(Math.min(pull.get(), 1), shown.get());
     return {
       opacity: Math.min(1, p * 1.5),
-      transform: [{ translateY: interpolate(p, [0, 1], [-56, top]) }, { rotate: `${Math.min(pull.get(), 1.5) * 270}deg` }],
+      transform: [{ translateY: interpolate(p, [0, 1], [-56, top]) }],
     };
   });
+  // Квадрат стоит ровно, крутится только колёсико внутри
+  const spin = useAnimatedStyle(() => ({ transform: [{ rotate: `${Math.min(pull.get(), 1.5) * 270}deg` }] }));
   return (
-    <Animated.View pointerEvents="none" style={[styles.indicator, { backgroundColor: c.surface, borderColor: c.border }, style]}>
-      <ActivityIndicator size="small" color={c.text} animating={refreshing} hidesWhenStopped={false} />
+    <Animated.View pointerEvents="none" style={[styles.indicator, { backgroundColor: c.panel, borderColor: c.border }, style]}>
+      <Animated.View style={spin}>
+        <ActivityIndicator size="small" color={c.text} animating={refreshing} hidesWhenStopped={false} />
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -192,16 +196,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     alignSelf: 'center',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
+    width: S.iconButton,
+    height: S.iconButton,
+    borderWidth: S.border,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
   },
 });

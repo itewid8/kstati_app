@@ -1,5 +1,5 @@
 /**
- * Группа (C-Group): название, категория, код приглашения, участники, общие списки, «Покинуть группу».
+ * Группа (C-Group): название, категория, код приглашения, участники, мои дела в группе, общие списки, «Покинуть группу».
  * Презентационный экран: данные — пропсами, действия — колбэками.
  */
 import { memo } from 'react';
@@ -11,7 +11,9 @@ import { AccountHeader } from './components/AccountHeader';
 import { CopyIcon, ShareIcon } from './components/AccountIcons';
 import { AccountRow } from './components/AccountRow';
 import { MemberRow } from './components/MemberRow';
+import { SaveBar } from './components/SaveBar';
 import { accountText, gridColumn, useAccountPalette } from './components/accountTheme';
+import { CATEGORY_SHORT } from './components/categories';
 
 export type GroupRole = 'owner' | 'admin' | 'member';
 
@@ -44,6 +46,8 @@ export type GroupScreenProps = {
   myRole: GroupRole;
   members: GroupMember[];
   lists: SharedListSummary[];
+  /** «МОИ ДЕЛА В ГРУППЕ»: мой режим, сколько моих дел видно группе и сколько скрыто */
+  share?: { selectOnly: boolean; visible: number; hidden: number };
   insets?: { top: number; bottom: number };
 
   onBack?: () => void;
@@ -54,19 +58,18 @@ export type GroupScreenProps = {
   onShareCode?: () => void;
   onOpenMember?: (id: ID) => void;
   onOpenList?: (key: SharedListKey) => void;
+  onOpenShare?: () => void;
   onLeave?: () => void;
+  /**
+   * Название или категория изменены и не сохранены: снизу появляется ОТМЕНА / СОХРАНИТЬ.
+   * Без изменений плашки нет (копирование кода, участники, списки и выход действуют сразу)
+   */
+  dirty?: boolean;
+  onCancel?: () => void;
+  onSave?: () => void;
 };
 
 const NO_INSETS = { top: 0, bottom: 0 };
-
-/** Подписи категорий в сетке из пяти — короче, чем CATEGORY_LABEL */
-const CATEGORY_SHORT: Record<GroupCategory, string> = {
-  couple: 'ПАРА',
-  family: 'СЕМЬЯ',
-  parents: 'РОДИТ.',
-  friends: 'ДРУЗЬЯ',
-  other: 'ДРУГОЕ',
-};
 
 const ROLE_LABEL: Record<GroupRole, string> = { owner: 'СОЗДАТЕЛЬ', admin: 'АДМИН', member: 'УЧАСТНИК' };
 
@@ -178,6 +181,7 @@ export const GroupScreen = memo(function GroupScreen(props: GroupScreenProps) {
     myRole,
     members,
     lists,
+    share,
     insets = NO_INSETS,
     onBack,
     onRename,
@@ -186,74 +190,93 @@ export const GroupScreen = memo(function GroupScreen(props: GroupScreenProps) {
     onShareCode,
     onOpenMember,
     onOpenList,
+    onOpenShare,
     onLeave,
+    dirty = false,
+    onCancel,
+    onSave,
   } = props;
   const { c } = useTheme();
   const pal = useAccountPalette();
 
   return (
-    <ScrollView
-      style={{ backgroundColor: c.bg }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + S.topBarTop, paddingBottom: insets.bottom + 24 }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <AccountHeader caption={`ГРУППА · ВЫ ${ROLE_LABEL[myRole]}`} onBack={onBack} />
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Название группы: ${name}`}
-        accessibilityState={{ disabled: !onRename }}
-        disabled={!onRename}
-        onPress={onRename}
-        style={styles.title}
+    <View style={[styles.screen, { backgroundColor: c.bg }]}>
+      <ScrollView
+        // Непрозрачный фон: на web прозрачный слой прокрутки выключает субпиксельное сглаживание текста
+        style={[styles.screen, { backgroundColor: c.bg }]}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + S.topBarTop, paddingBottom: dirty ? 24 : insets.bottom + 24 }]}
+        showsVerticalScrollIndicator={false}
       >
-        <ScreenTitle title={name} />
-      </Pressable>
-
-      <CategoryPicker value={category} onChange={onChangeCategory} />
-
-      <View style={styles.sections}>
-        <InviteCode code={inviteCode} onCopy={onCopyCode} onShare={onShareCode} />
-
-        <SectionBox title="УЧАСТНИКИ" count={pad2(members.length)}>
-          {members.map((m) => (
-            <MemberRow
-              key={m.id}
-              name={m.isMe ? `${m.name} (вы)` : m.name}
-              nick={m.nick ? `@${upper(m.nick)}` : undefined}
-              color={m.color}
-              symbol={m.avatar || upper(m.name.slice(0, 1))}
-              role={m.role === 'member' ? undefined : ROLE_LABEL[m.role]}
-              onPress={onOpenMember ? () => onOpenMember(m.id) : undefined}
-            />
-          ))}
-        </SectionBox>
-
-        <SectionBox title="ОБЩИЕ СПИСКИ" count={pad2(lists.length)}>
-          {lists.map((l) => (
-            <AccountRow
-              key={l.key}
-              label={LIST_LABEL[l.key]}
-              value={listSummary(l)}
-              onPress={onOpenList ? () => onOpenList(l.key) : undefined}
-            />
-          ))}
-        </SectionBox>
+        <AccountHeader caption={`ГРУППА · ВЫ ${ROLE_LABEL[myRole]}`} onBack={onBack} />
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Покинуть группу"
-          onPress={onLeave}
-          style={[styles.leave, { borderColor: pal.danger }]}
+          accessibilityLabel={`Название группы: ${name}`}
+          accessibilityState={{ disabled: !onRename }}
+          disabled={!onRename}
+          onPress={onRename}
+          style={styles.title}
         >
-          <Text style={[accountText.wideAction, { color: pal.danger }]}>ПОКИНУТЬ ГРУППУ</Text>
+          <ScreenTitle title={name} />
         </Pressable>
-      </View>
-    </ScrollView>
+
+        <CategoryPicker value={category} onChange={onChangeCategory} />
+
+        <View style={styles.sections}>
+          <InviteCode code={inviteCode} onCopy={onCopyCode} onShare={onShareCode} />
+
+          <SectionBox title="УЧАСТНИКИ" count={pad2(members.length)}>
+            {members.map((m) => (
+              <MemberRow
+                key={m.id}
+                name={m.isMe ? `${m.name} (вы)` : m.name}
+                nick={m.nick ? `@${upper(m.nick)}` : undefined}
+                color={m.color}
+                symbol={m.avatar || upper(m.name.slice(0, 1))}
+                role={m.role === 'member' ? undefined : ROLE_LABEL[m.role]}
+                onPress={onOpenMember ? () => onOpenMember(m.id) : undefined}
+              />
+            ))}
+          </SectionBox>
+
+          {share ? (
+            <SectionBox title="МОИ ДЕЛА В ГРУППЕ" count={pad2(share.visible)}>
+              <AccountRow
+                label={share.selectOnly ? 'Только выбранные' : 'Все, кроме скрытых'}
+                value={`${pad2(share.hidden)} СКРЫТО`}
+                onPress={onOpenShare}
+              />
+            </SectionBox>
+          ) : null}
+
+          <SectionBox title="ОБЩИЕ СПИСКИ" count={pad2(lists.length)}>
+            {lists.map((l) => (
+              <AccountRow
+                key={l.key}
+                label={LIST_LABEL[l.key]}
+                value={listSummary(l)}
+                onPress={onOpenList ? () => onOpenList(l.key) : undefined}
+              />
+            ))}
+          </SectionBox>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Покинуть группу"
+            onPress={onLeave}
+            style={[styles.leave, { borderColor: pal.danger }]}
+          >
+            <Text style={[accountText.wideAction, { color: pal.danger }]}>ПОКИНУТЬ ГРУППУ</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+      {dirty ? <SaveBar canSave bottomInset={insets.bottom} onCancel={onCancel} onSave={onSave} /> : null}
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
   content: { paddingHorizontal: space.side },
   title: { marginTop: 14 },
 

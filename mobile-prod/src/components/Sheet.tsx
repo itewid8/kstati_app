@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -13,62 +13,59 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { motion, useColors } from '@/theme';
+import { size as S, space, useTheme } from '@/ui';
 
-/**
- * Своя вертикальная прокрутка внутри шторки (барабан времени): касание в ней не тянет шторку вниз.
- * Вызвать в onTouchStart такой области
- */
-const DragBlock = createContext<() => void>(() => {});
-export const useSheetDragBlock = () => useContext(DragBlock);
+const OPEN_MS = 220;
+const CLOSE_MS = 150;
+/** Дальше — закрыть */
+const DRAG_CLOSE_PX = 100;
 
-/**
- * Bottom sheet: фон surface, скругление 16 сверху, «ручка».
- * Короткая анимация 200 мс без пружин.
- * Смахнуть вниз из любого места шторки — закрыть (если её содержимое не прокручено вниз
- * и палец не на барабане времени). Обновление экранов здесь не срабатывает: шторка — отдельное окно.
- */
-export function Sheet({
-  visible,
-  onClose,
-  children,
-  footer,
-}: {
+type Props = {
   visible: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  /** Ниже прокрутки, всегда на месте (кнопки окна) */
   footer?: React.ReactNode;
-}) {
-  const c = useColors();
+  /**
+   * Новые окна: поля 16 по бокам и 10 между блоками (как BottomSheet из src/ui).
+   * Без него содержимое во всю ширину — строки со своими отступами (окно групп)
+   */
+  inset?: boolean;
+  /** Поверх открыто другое окно (полное окно дела): смахивание не закрывает это */
+  locked?: boolean;
+};
+
+/**
+ * Нижнее окно в стиле «Инструмент» (как BottomSheet из src/ui): квадратное, рамка сверху 1.5px, «ручка» 36×4, затемнение.
+ * Своё окно (Modal) — клавиатура поднимает его целиком; содержимое прокручивается, footer стоит снизу.
+ * Смахнуть вниз из любого места — закрыть (если содержимое не прокручено вниз). Выезжает за 220 мс без пружин.
+ */
+export function Sheet({ visible, onClose, children, footer, inset = false, locked = false }: Props) {
+  const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const y = useRef(new Animated.Value(1)).current;
-  // Смахивание вниз: шторка едет за пальцем, дальше 100 px или быстро — закрывается
+  // Смахивание вниз: окно едет за пальцем, дальше 100 px или быстро — закрывается
   const drag = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(0);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  /** Касание началось на барабане времени — шторку не тянем */
-  const blocked = useRef(false);
-  const block = useMemo(() => () => (blocked.current = true), []);
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
   const pan = useMemo(() => {
     // Тянуть вниз можно из любого места, когда содержимое не прокручено (иначе палец прокручивает его вверх)
-    const grab = (dy: number, dx: number) => !blocked.current && dy > 10 && Math.abs(dy) > Math.abs(dx) * 1.5 && scrollY.current <= 0;
+    const grab = (dy: number, dx: number) => !lockedRef.current && dy > 10 && Math.abs(dy) > Math.abs(dx) * 1.5 && scrollY.current <= 0;
+    const back = () => Animated.timing(drag, { toValue: 0, duration: CLOSE_MS, useNativeDriver: true }).start();
     return PanResponder.create({
-      // Новое касание: снова можно тянуть (барабан, если палец на нём, тут же запретит)
-      onStartShouldSetPanResponderCapture: () => {
-        blocked.current = false;
-        return false;
-      },
       onMoveShouldSetPanResponderCapture: (_, g) => grab(g.dy, g.dx),
       onMoveShouldSetPanResponder: (_, g) => grab(g.dy, g.dx),
       onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
       onPanResponderRelease: (_, g) => {
-        if (g.dy > 100 || g.vy > 0.8) closeRef.current();
-        else Animated.timing(drag, { toValue: 0, duration: motion.fast, useNativeDriver: true }).start();
+        if (g.dy > DRAG_CLOSE_PX || g.vy > 0.8) closeRef.current();
+        else back();
       },
-      onPanResponderTerminate: () => Animated.timing(drag, { toValue: 0, duration: motion.fast, useNativeDriver: true }).start(),
+      onPanResponderTerminate: back,
     });
   }, [drag]);
 
@@ -76,12 +73,13 @@ export function Sheet({
     if (visible) {
       drag.setValue(0);
       setMounted(true);
-      Animated.timing(y, { toValue: 0, duration: motion.base, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      Animated.timing(y, { toValue: 0, duration: OPEN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     } else if (mounted) {
-      Animated.timing(y, { toValue: 1, duration: motion.fast, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(
-        () => setMounted(false),
+      Animated.timing(y, { toValue: 1, duration: CLOSE_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() =>
+        setMounted(false),
       );
     }
+    // Только по visible: mounted меняется внутри
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
@@ -89,32 +87,41 @@ export function Sheet({
 
   const translateY = Animated.add(y.interpolate({ inputRange: [0, 1], outputRange: [0, height * 0.6] }), drag);
   const opacity = y.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const bottom = 18 + insets.bottom;
 
   return (
-    <Modal transparent visible statusBarTranslucent animationType="none" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <Modal transparent visible statusBarTranslucent navigationBarTranslucent animationType="none" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim, opacity }]}>
-          <Pressable style={{ flex: 1 }} onPress={onClose} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Закрыть" style={styles.fill} onPress={onClose} />
         </Animated.View>
-        <View style={{ flex: 1 }} pointerEvents="box-none" />
+        <View style={styles.fill} pointerEvents="box-none" />
         <Animated.View
           {...pan.panHandlers}
+          accessibilityViewIsModal
           style={[
             styles.sheet,
-            { backgroundColor: c.surface, maxHeight: height * 0.88, paddingBottom: Math.max(insets.bottom, 12), transform: [{ translateY }] },
+            {
+              borderTopColor: c.border,
+              backgroundColor: c.bg,
+              maxHeight: height * 0.9,
+              paddingBottom: footer ? bottom : 0,
+              transform: [{ translateY }],
+            },
           ]}
         >
-          <View style={[styles.handle, { backgroundColor: c.border }]} />
+          <View style={[styles.grabber, { backgroundColor: c.hair }]} />
           <ScrollView
             bounces={false}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 8 }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[inset && styles.inset, { paddingBottom: footer ? 10 : bottom }]}
             scrollEventThrottle={32}
             onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)}
           >
-            <DragBlock.Provider value={block}>{children}</DragBlock.Provider>
+            {children}
           </ScrollView>
-          {footer}
+          {footer ? <View style={inset ? styles.footerInset : undefined}>{footer}</View> : null}
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -122,16 +129,9 @@ export function Sheet({
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingTop: 8,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    marginBottom: 8,
-  },
+  fill: { flex: 1 },
+  sheet: { borderTopWidth: S.border, paddingTop: 8 },
+  grabber: { alignSelf: 'center', width: S.grabberWidth, height: S.grabberHeight, marginBottom: 10 },
+  inset: { paddingHorizontal: space.side, gap: 10 },
+  footerInset: { paddingHorizontal: space.side },
 });

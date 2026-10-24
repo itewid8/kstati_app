@@ -1,6 +1,8 @@
 /**
  * Вкладки людей у правого края сетки (неделя, день): 26×84, рамка без правой стороны, подпись снизу вверх.
  * Видимый человек — заливка его цветом, скрытый — панель (дела скрытых отфильтровывает владелец данных).
+ * Место вкладок закреплено (PERSON_TAB.top): не зависит от вида, числа полос на весь день и дел — не прыгают
+ * при переключении дня, недели и вида.
  */
 import { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -13,13 +15,13 @@ export const PERSON_TAB = {
   height: 84,
   /** Шаг вкладок: 84 + 4 */
   pitch: 88,
-  /** Первая вкладка — на 20px ниже верха сетки часов */
-  offset: 20,
+  /** Верх первой вкладки, px от верха экрана без safe area — в дне и неделе одинаково (на 10px ниже черты шапки недели) */
+  top: 212,
 } as const;
 
 type Props = PersonFilterProps & {
-  /** Верх первой вкладки, px экрана */
-  top: number;
+  /** safe area сверху */
+  insetTop: number;
 };
 
 /** Внутренняя область кнопки (без рамки слева, сверху и снизу) — повёрнутая подпись центрируется в ней */
@@ -28,7 +30,7 @@ const INNER_H = PERSON_TAB.height - 2 * S.border;
 /** В макете подпись — writing-mode: vertical-rl + rotate(180°); её строка встаёт на 1px ниже повёрнутого текста */
 const VERTICAL_RL_SHIFT = 1;
 
-export const PersonTabs = memo(function PersonTabs({ people, hiddenPeople, onTogglePerson, top }: Props) {
+export const PersonTabs = memo(function PersonTabs({ people, hiddenPeople, onTogglePerson, insetTop }: Props) {
   const { c, person, personInk } = useTheme();
   const hidden = new Set<ID>(hiddenPeople ?? []);
   return (
@@ -44,7 +46,7 @@ export const PersonTabs = memo(function PersonTabs({ people, hiddenPeople, onTog
             onPress={onTogglePerson ? () => onTogglePerson(p.id) : undefined}
             style={[
               styles.tab,
-              { top: top + i * PERSON_TAB.pitch, borderColor: c.border, backgroundColor: on ? person(p.color) : c.panel },
+              { top: insetTop + PERSON_TAB.top + i * PERSON_TAB.pitch, borderColor: c.border, backgroundColor: on ? person(p.color) : c.panel },
             ]}
           >
             <View style={styles.rotated}>

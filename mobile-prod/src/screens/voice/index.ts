@@ -5,3 +5,4 @@ export { AskMoveSheet, type AskMoveSheetProps, type MoveChange, type MoveConflic
 export { AskAgendaSheet, type AskAgendaSheetProps } from './AskAgendaSheet';
 export { VoiceSheet, type VoiceSheetProps } from './components/VoiceSheet';
 export { type AgendaDay, type AgendaItem } from './components/AgendaList';
+export { RecordingSheet, type RecordingSheetProps } from './RecordingSheet';

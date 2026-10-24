@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Дел нет: 120 по высоте, текст 13 приглушённый -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/kstati_empty"
+  android:layout_width="match_parent"
+  android:layout_height="120dp"
+  android:fontFamily="@font/kstati_geist_medium"
+  android:gravity="center_vertical"
+  android:includeFontPadding="false"
+  android:maxLines="1"
+  android:paddingStart="2dp"
+  android:text="@string/kstati_widget_empty"
+  android:textSize="13sp" />

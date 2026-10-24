@@ -2,11 +2,13 @@
  * Окно дела (C-EditDate / -Repeat / -Remind / -Who). Правки — в черновике (useEditorState), в хранилище — по «СОХРАНИТЬ»;
  * «назад» ничего не меняет. Новое дело: из «+», из календаря (date, time), подзадача плана (parentId),
  * из голоса (s.editorSeed — забираем при открытии). Открытый раз серии (occ) правит всю серию.
+ * Новое дело открывается чистым шаблоном, без окон поверх: название и описание правятся прямо в окне,
+ * «СОХРАНИТЬ» недоступна, пока нет названия.
  */
 import { router, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { draftFromSeed, draftFromTask, emptyDraft, initialUi, type EditorState } from '@/adapters/editors/draft';
+import { Keyboard, StyleSheet, View, type TextInput } from 'react-native';
+import { canSaveDraft, draftFromSeed, draftFromTask, emptyDraft, initialUi, type EditorState } from '@/adapters/editors/draft';
 import { endLabel } from '@/adapters/editors/labels';
 import { taskEditorProps } from '@/adapters/editors/taskEditor';
 import { colorOf } from '@/adapters/common/people';
@@ -16,9 +18,9 @@ import { shortDate } from '@/lib/dates';
 import { nextOpen } from '@/lib/recur';
 import { useStore, type MenuAction } from '@/lib/store';
 import type { ID, Task } from '@/lib/types';
+import { canEditTask } from '@/lib/visibility';
 import type { CustomReminder } from '@/screens/editors/panels/RemindPanel';
 import { TaskEditorScreen, type TaskEditorScreenProps, type TaskField } from '@/screens/editors/TaskEditorScreen';
-import { InputSheet } from '@/ui';
 import { openPlanEditor } from '../common/go';
 import { nav, type TaskEditorField } from '../common/nav';
 import { signedInOnly } from '../common/signedIn';
@@ -41,10 +43,8 @@ import {
 /** field — строка, раскрытая при открытии (ДАТА… из быстрых действий) */
 export type TaskEditorContainerProps = { id: ID | null; occ?: string; date?: string; time?: string; parentId?: ID; field?: TaskEditorField };
 
-type Sheet = 'title' | 'note' | 'end' | 'until';
-
-const TITLE_MAX = 200;
-const NOTE_MAX = 2000;
+/** Нижние окна, для которых нет места в строках: конец дела, дата окончания повтора */
+type Sheet = 'end' | 'until';
 
 /** Черновик при открытии: голос (seed) → существующее дело → новое. null — дела уже нет */
 function initial(props: TaskEditorContainerProps, today: string): EditorState | null {
@@ -110,7 +110,9 @@ function TaskEditor({ start }: { start: EditorState }) {
   const colors = usePersonColors(s);
   const { state, dispatch, latest } = useEditorState(() => start);
   const { draft } = state;
-  const [sheet, setSheet] = useState<Sheet | null>(() => (start.draft.title.trim() ? null : 'title'));
+  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const titleRef = useRef<TextInput>(null);
+  const noteRef = useRef<TextInput>(null);
   const [custom, setCustom] = useState<CustomReminder | null>(null);
   const closeSheet = useCallback(() => setSheet(null), []);
   const closeCustom = useCallback(() => setCustom(null), []);
@@ -134,7 +136,9 @@ function TaskEditor({ start }: { start: EditorState }) {
   /** Сохранить и сделать планом: окно плана, поверх — новая подзадача. Не сохранилось (нет группы) — окно остаётся */
   const makePlan = useCallback(() => {
     const d = latest.current.draft;
-    if (!d.title.trim()) return setSheet('title');
+    // Без названия — сначала назвать: курсор в заголовок
+    if (!canSaveDraft(d)) return titleRef.current?.focus();
+    Keyboard.dismiss();
     const id = saveDraft(d);
     if (!id) return notSaved(d);
     router.replace(nav.planEditor(id));
@@ -142,14 +146,20 @@ function TaskEditor({ start }: { start: EditorState }) {
   }, [latest]);
 
   /** Окно плана: уже открытое ниже (подзадачу открыли из него) — назад к нему, иначе новое */
-  const openPlan = useCallback((planId: ID) => openPlanEditor(navigation.getState(), planId), [navigation]);
+  const openPlan = useCallback(
+    (planId: ID) => {
+      Keyboard.dismiss();
+      openPlanEditor(navigation.getState(), planId);
+    },
+    [navigation],
+  );
 
   const onField = useCallback(
     (field: TaskField) => {
       const d = latest.current.draft;
       switch (field) {
         case 'note':
-          return setSheet('note');
+          return noteRef.current?.focus();
         case 'end':
           // Без даты конца нет — сначала «КОГДА»
           if (!d.date) return dispatch({ type: 'toggle', field: 'when', today: ctx.current.today });
@@ -168,7 +178,8 @@ function TaskEditor({ start }: { start: EditorState }) {
 
   const onSave = useCallback(() => {
     const d = latest.current.draft;
-    if (!d.title.trim()) return setSheet('title');
+    // Кнопка без названия недоступна; на всякий случай — курсор в заголовок
+    if (!canSaveDraft(d)) return titleRef.current?.focus();
     // Новое дело без группы не сохраняется — не закрываем окно молча
     if (!saveDraft(d)) return notSaved(d);
     leaveEditor();
@@ -198,42 +209,48 @@ function TaskEditor({ start }: { start: EditorState }) {
     if (actions.length) st.setMenu({ title: d.title.trim() || 'Дело', actions });
   }, [dispatch, latest, makePlan, openPlan]);
 
-  const onEditTitle = useCallback(() => setSheet('title'), []);
   const onClearEnd = useCallback(() => dispatch({ type: 'clearEnd' }), [dispatch]);
-  const onTitle = useCallback(
-    (title: string) => {
-      dispatch({ type: 'title', title });
-      setSheet(null);
-    },
-    [dispatch],
-  );
-  const onNote = useCallback(
-    (note: string) => {
-      dispatch({ type: 'note', note });
-      setSheet(null);
-    },
-    [dispatch],
-  );
+  const onChangeTitle = useCallback((title: string) => dispatch({ type: 'title', title }), [dispatch]);
+  const onChangeNote = useCallback((note: string) => dispatch({ type: 'note', note }), [dispatch]);
   const onUntil = useCallback((until: string) => dispatch({ type: 'repeatEdit', edit: { kind: 'until', until } }), [dispatch]);
 
   const data = useMemo(() => taskEditorProps(state.draft, state.ui, s, clock), [state, s, clock]);
+  // Чужое дело без прав админа: править можно только свои напоминания (сервер всё равно примет лишь «сделано»)
+  const editable = useMemo(() => {
+    const task = state.draft.id ? s.tasks.find((t) => t.id === state.draft.id) : undefined;
+    return !task || canEditTask(task, s.groups, s.me.id);
+  }, [state.draft.id, s]);
+  const remindOnly = useCallback((field: TaskField) => (field === 'remind' ? onField(field) : undefined), [onField]);
   const screen = useMemo<TaskEditorScreenProps>(
     () => ({
       ...data,
+
       whenPanel: data.whenPanel && { ...data.whenPanel, ...handlers.when },
       repeatPanel: data.repeatPanel && { ...data.repeatPanel, ...handlers.repeat },
       remindPanel: data.remindPanel && { ...data.remindPanel, ...handlers.remind },
       whoPanel: data.whoPanel && { ...data.whoPanel, ...handlers.who },
+      visiblePanel: data.visiblePanel && { ...data.visiblePanel, ...handlers.visible },
       insets,
+      titleRef,
+      noteRef,
       onBack: leaveEditor,
       onMore,
-      onEditTitle,
+      onChangeTitle,
+      onChangeNote,
       onField,
       onClearEnd,
       onDelete,
       onSave,
+      ...(!editable && {
+        onChangeTitle: undefined,
+        onChangeNote: undefined,
+        onField: remindOnly,
+        onMore: undefined,
+        onDelete: undefined,
+        onClearEnd: undefined,
+      }),
     }),
-    [data, handlers, insets, onMore, onEditTitle, onField, onClearEnd, onDelete, onSave],
+    [data, handlers, insets, onMore, onChangeTitle, onChangeNote, onField, onClearEnd, onDelete, onSave, editable, remindOnly],
   );
 
   const color = colorOf(colors, draft.people[0] ?? draft.createdBy);
@@ -261,23 +278,6 @@ function TaskEditor({ start }: { start: EditorState }) {
         onClose={closeSheet}
       />
       <CustomRemindSheet kind={custom} bottomInset={insets.bottom} onAdd={handlers.addReminder} onClose={closeCustom} />
-      <InputSheet
-        visible={sheet === 'title'}
-        value={draft.title}
-        maxLength={TITLE_MAX}
-        bottomInset={insets.bottom}
-        onSubmit={onTitle}
-        onClose={closeSheet}
-      />
-      <InputSheet
-        visible={sheet === 'note'}
-        value={draft.note}
-        multiline
-        maxLength={NOTE_MAX}
-        bottomInset={insets.bottom}
-        onSubmit={onNote}
-        onClose={closeSheet}
-      />
     </View>
   );
 }

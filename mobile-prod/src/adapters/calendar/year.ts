@@ -3,6 +3,7 @@
  * у месяца и за год — по дню начала; у дня — все дела, которые его задевают.
  * Кто занят — объединение peopleOf по порядку группы (не больше двух цветов), насыщенность 0.35 + 0.5·min(1, n/4)
  */
+import { scopeFilter } from '@/lib/visibility';
 import { dayNo, isoOf, type IsoDate } from '@/lib/calendarLayout';
 import { occurrences } from '@/lib/recur';
 import { lastDay, peopleOf } from '@/lib/span';
@@ -32,6 +33,7 @@ export function yearProps(s: CalendarSnapshot, clock: Pick<Clock, 'today'>, colo
   const rank = new Map(people.map((p, i) => [p.id, i]));
   const rankOf = (id: ID) => rank.get(id) ?? people.length;
   const plans = planIds(s.tasks);
+  const inView = scopeFilter({ viewId: s.currentGroupId, groups: s.groups, meId: s.me.id });
 
   // Разы дел за год без промежуточных объектов (instancesIn с сортировкой здесь не нужен): день — номер от 1970 года
   const count = new Map<number, number>();
@@ -39,7 +41,7 @@ export function yearProps(s: CalendarSnapshot, clock: Pick<Clock, 'today'>, colo
   const monthCounts = Array.from({ length: 12 }, () => 0);
   let total = 0;
   for (const t of s.tasks) {
-    if (t.groupId !== s.currentGroupId || !t.date || plans.has(t.id)) continue;
+    if (!t.date || plans.has(t.id) || !inView(t)) continue;
     const span = Math.min(MAX_SPAN, dayNo(lastDay(t) ?? t.date) - dayNo(t.date));
     const ids = peopleOf(t);
     const starts = t.repeat ? occurrences(t, isoOf(fromNo - span), to) : touches(t, from, to) ? [t.date] : [];

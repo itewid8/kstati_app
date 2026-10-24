@@ -16,8 +16,8 @@ const shift = (n: number) => () => {
   const next = shiftMonth(y, m, n);
   s.setCalendarDate(monthAnchor(next.y, next.m, toISODate(new Date())));
 };
-const prevMonth = shift(-1);
-const nextMonth = shift(1);
+export const prevMonth = shift(-1);
+export const nextMonth = shift(1);
 const selectDate = (date: string) => useStore.getState().setCalendarDate(date);
 const openYear = () => useStore.getState().setTasksView('year');
 

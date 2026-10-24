@@ -4,6 +4,7 @@ import { DayContainer } from './DayContainer';
 import { MonthContainer } from './MonthContainer';
 import { WeekContainer } from './WeekContainer';
 import { YearContainer } from './YearContainer';
+import { CalendarZoom } from './CalendarZoom';
 
 /**
  * Вкладка «Дела» в виде календаря: вид — s.tasksView (список рисует TasksListContainer) (INTEGRATION.md 1.1, 5.1).
@@ -11,6 +12,11 @@ import { YearContainer } from './YearContainer';
  */
 export const CalendarContainer = signedInOnly(function Calendar() {
   const view = useStore((s) => s.tasksView);
+  const zoomView = view === 'list' ? 'week' : view;
+  return <CalendarZoom view={zoomView}>{viewOf(zoomView)}</CalendarZoom>;
+});
+
+const viewOf = (view: 'day' | 'week' | 'month' | 'year') => {
   switch (view) {
     case 'day':
       return <DayContainer />;
@@ -21,4 +27,4 @@ export const CalendarContainer = signedInOnly(function Calendar() {
     default:
       return <WeekContainer />;
   }
-});
+};

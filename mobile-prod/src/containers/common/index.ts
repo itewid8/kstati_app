@@ -1,4 +1,4 @@
-export { backOrTab, depthTo, openPlanEditor, resetTo, toPlanGrid, toTab, toTabRoute, toTopic } from './go';
+export { backOrTab, depthTo, openPlanEditor, openTaskEditor, resetTo, toPlanGrid, toTab, toTabRoute, toTopic } from './go';
 export { useBottomSpace } from './layout';
 export { NEW_TASK, nav, param, type PlanEditorField, type ProfileField, type TaskEditorField, type TaskEditorParams } from './nav';
 export { isSignedIn, signedInOnly, useSignedIn } from './signedIn';

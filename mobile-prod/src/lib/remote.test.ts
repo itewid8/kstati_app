@@ -153,3 +153,37 @@ describe('мапперы', () => {
     assert.equal(r.ideaRevs, undefined);
   });
 });
+
+describe('mergePull — личный календарь (API 3)', () => {
+  const v3 = (s: LocalData, extra: Record<string, unknown> = {}) => {
+    const q = quiet(s) as Record<string, any>;
+    return { ...q, revs: { ...q.revs, groups: { ...q.revs.groups, '@me': 7 } }, ...extra };
+  };
+  test('все дела приходят одним списком и заменяют свои; видимость и in разбираются', () => {
+    const s = local({ revs: { groups: { g1: 5, g2: 2, '@me': 6 }, owners: { s: 1, k: 1 } } });
+    const mine = { type: 'task', id: 'p1', groupId: '@me', title: 'Психолог', date: null, time: null, createdBy: 's', doneAt: null, createdAt: 'x', only: true, in: [] };
+    const theirs = { type: 'task', id: 'k1', groupId: 'g1', title: 'Йога', date: null, time: null, createdBy: 'k', doneAt: null, createdAt: 'x', in: ['g1'] };
+    const { patch } = mergePull(s, parseSync(v3(s, { tasks: [mine, theirs] })));
+    assert.deepEqual(patch.tasks?.map((t) => t.id), ['p1', 'k1']);
+    assert.equal(patch.tasks?.[0]?.only, true);
+    assert.deepEqual(patch.tasks?.[1]?.in, ['g1']);
+    assert.equal(patch.revs?.groups['@me'], 7);
+  });
+  test('дела не прислали — свои остаются (и личные тоже)', () => {
+    const personal: Task = { ...TASKS[0]!, id: 'p1', groupId: '@me' };
+    const s = local({ tasks: [...TASKS, personal], revs: { groups: { g1: 5, g2: 2, '@me': 7 }, owners: { s: 1, k: 1 } } });
+    const { patch } = mergePull(s, parseSync(v3(s)));
+    assert.equal(patch.tasks, undefined);
+  });
+  test('есть неотправленные правки дел — список с сервера не берём, «@me» сбрасываем', () => {
+    const s = local({ outbox: [{ op: 'task.put', task: { id: 't1', groupId: 'g1', title: 'x', date: null, time: null, doneAt: null, repeat: null, doneDates: [], skipDates: [], reminders: null, endDate: null, endTime: null, people: [], parentId: null } }] });
+    const { patch } = mergePull(s, parseSync(v3(s, { tasks: [] })));
+    assert.equal(patch.tasks, undefined);
+    assert.equal(patch.revs?.groups['@me'], -1);
+  });
+  test('личный календарь как текущий вид сохраняется', () => {
+    const s = local({ currentGroupId: '@me' });
+    const { patch } = mergePull(s, parseSync(v3(s)));
+    assert.equal(patch.currentGroupId, undefined);
+  });
+});

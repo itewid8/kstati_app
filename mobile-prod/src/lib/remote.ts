@@ -32,6 +32,7 @@ import {
   type WatchItem,
   type Wish,
 } from './types';
+import { PERSONAL } from './visibility';
 
 /** Какие ревизии групп и людей уже скачаны */
 export type Revs = { groups: Record<ID, number>; owners: Record<ID, number> };
@@ -101,6 +102,9 @@ export function toTask(v: unknown, groupId: ID): Task | null {
     endTime: strOrNull(r.endTime),
     people: strs(r.people),
     parentId: strOrNull(r.parentId),
+    ...(r.only === true && { only: true }),
+    ...(r.share !== undefined && r.share !== null && { share: record(r.share, (x) => (typeof x === 'boolean' ? x : null)) }),
+    ...(Array.isArray(r.in) && { in: strs(r.in) }),
   };
 }
 
@@ -184,6 +188,7 @@ export function toGroup(v: unknown): Group | null {
     memberIds: strs(r.memberIds),
     ownerId: str(r.ownerId),
     adminIds: strs(r.adminIds),
+    ...(Array.isArray(r.selectOnly) && { selectOnly: strs(r.selectOnly) }),
   };
 }
 
@@ -241,6 +246,8 @@ export type SyncResponse = {
   revs: Revs;
   /** Дела и «Смотреть» групп, где ревизия поменялась */
   items: Record<ID, { tasks: Task[]; watch: WatchItem[] }>;
+  /** API 3: все видимые мне дела одним списком (только если что-то поменялось); нет — дела не менялись или старый сервер */
+  tasks?: Task[];
   wishes: Record<ID, Wish[]>;
   /** Личные напоминания; null — сервер их ещё не знает */
   prefs: { reminders: ReminderSettings | null; overrides: Record<ID, TaskReminderOverride> } | null;
@@ -276,6 +283,7 @@ export function parseSync(v: unknown): SyncResponse {
     users: mapList(r.users, '', toUser),
     revs: { groups: record(revs.groups, revNum), owners: record(revs.owners, revNum) },
     items,
+    ...(Array.isArray(r.tasks) && { tasks: mapList(r.tasks, PERSONAL, toTask) }),
     wishes,
     prefs: p && { reminders: toReminderSettings(p.reminders), overrides: record(p.overrides, (x) => (Array.isArray(x) ? strs(x) : null)) },
     ...(r.ideaRevs !== undefined && r.ideaRevs !== null && { ideaRevs: record(r.ideaRevs, strOrNull) }),
@@ -344,13 +352,21 @@ export function mergePull(s: LocalData, res: SyncResponse): { patch: PullPatch; 
   const groups = [...res.groups, ...localOnly];
   // Записи живых групп (включая только что созданные на телефоне) остаются
   const alive = new Set(groups.map((g) => g.id));
-  const currentGroupId = alive.has(s.currentGroupId ?? '') ? s.currentGroupId : (groups[0]?.id ?? null);
+  const currentGroupId = alive.has(s.currentGroupId ?? '') || s.currentGroupId === PERSONAL ? s.currentGroupId : (groups[0]?.id ?? PERSONAL);
 
   const fromServer = Object.entries(res.items).filter(([gid]) => !pending.groups.has(gid));
   const replaced = new Set(fromServer.map(([gid]) => gid));
   const keep = <T extends { groupId: ID }>(local: T[]) => local.filter((x) => alive.has(x.groupId) && !replaced.has(x.groupId));
-  const tasks = [...keep(s.tasks), ...fromServer.flatMap(([, x]) => x.tasks)];
   const watch = [...keep(s.watch), ...fromServer.flatMap(([, x]) => x.watch)];
+  // Дела. Сервер API 3 (есть ревизия «@me») шлёт все видимые дела одним списком, когда что-то поменялось.
+  // Есть неотправленные правки дел — свой список не трогаем, а ревизию личного календаря сбрасываем: заберём заново
+  const v3 = PERSONAL in res.revs.groups;
+  const pendingTasks = v3 && s.outbox.some((o) => o.op === 'task.put' || (o.op === 'item.delete' && !s.watch.some((w) => w.id === o.id)));
+  const tasks = !v3
+    ? [...keep(s.tasks), ...fromServer.flatMap(([, x]) => x.tasks)]
+    : res.tasks && !pendingTasks
+      ? res.tasks
+      : s.tasks;
 
   const wishFromServer = Object.entries(res.wishes).filter(([owner]) => !pending.owners.has(owner));
   const replacedOwners = new Set(wishFromServer.map(([o]) => o));
@@ -361,7 +377,9 @@ export function mergePull(s: LocalData, res: SyncResponse): { patch: PullPatch; 
 
   // Ревизии: для групп с неотправленными правками оставляем старые — заберём их заново
   const revs: Revs = {
-    groups: Object.fromEntries(Object.entries(res.revs.groups).map(([g, r]) => [g, pending.groups.has(g) ? (s.revs.groups[g] ?? -1) : r])),
+    groups: Object.fromEntries(
+      Object.entries(res.revs.groups).map(([g, r]) => [g, pending.groups.has(g) || (g === PERSONAL && pendingTasks) ? (g === PERSONAL ? -1 : (s.revs.groups[g] ?? -1)) : r]),
+    ),
     owners: Object.fromEntries(Object.entries(res.revs.owners).map(([o, r]) => [o, pending.owners.has(o) ? (s.revs.owners[o] ?? -1) : r])),
   };
 

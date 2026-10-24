@@ -4,6 +4,7 @@
  * (сам план в сетке не рисуется); сетка — minutesOn(task, day); parentTitle — название плана у подзадачи.
  * Скрытые люди (calendarHidden): дело скрывается, если скрыты все его люди.
  */
+import { scopeFilter } from '@/lib/visibility';
 import { dayNo, isoOf, type DayMinute, type IsoDate } from '@/lib/calendarLayout';
 import { taskKey } from '@/lib/recur';
 import { isLong, isMulti, lastDay, minutesOn, peopleOf } from '@/lib/span';
@@ -47,9 +48,9 @@ export function visibleFor(hidden: readonly ID[]): (t: Pick<Task, 'people' | 'cr
 }
 
 /** Разы дел текущей группы в периоде (по началу); hidden — скрытые люди */
-export function groupInstances(s: Pick<CalendarSnapshot, 'tasks' | 'currentGroupId'>, from: IsoDate, to: IsoDate, hidden: readonly ID[] = NO_IDS): Task[] {
+export function groupInstances(s: Pick<CalendarSnapshot, 'tasks' | 'currentGroupId' | 'groups' | 'me'>, from: IsoDate, to: IsoDate, hidden: readonly ID[] = NO_IDS): Task[] {
   if (!s.currentGroupId) return [];
-  return instancesIn(s.tasks, [s.currentGroupId], from, to).filter(visibleFor(hidden));
+  return instancesIn(s.tasks, scopeFilter({ viewId: s.currentGroupId, groups: s.groups, meId: s.me.id }), from, to).filter(visibleFor(hidden));
 }
 
 /** Что нужно знать о планах, чтобы разложить дела: id планов и их названия (для подписи подзадач) */

@@ -15,8 +15,8 @@ const shift = (n: number) => () => {
   const s = useStore.getState();
   s.setCalendarDate(shiftDay(s.calendarDate, n));
 };
-const prevDay = shift(-1);
-const nextDay = shift(1);
+export const prevDay = shift(-1);
+export const nextDay = shift(1);
 const goToday = () => useStore.getState().setCalendarDate(toISODate(new Date()));
 
 /** C-Day: дела дня s.calendarDate; вкладки людей — s.calendarHidden (INTEGRATION.md 1.1) */

@@ -274,6 +274,34 @@
       "w": 820,
       "x": 2700,
       "y": 10400
+    },
+    "C-WidgetHome.dc.html": {
+      "h": 844,
+      "title": "Инструмент · Виджет: размеры",
+      "w": 820,
+      "x": 0,
+      "y": 11700
+    },
+    "C-WidgetLarge.dc.html": {
+      "h": 844,
+      "title": "Инструмент · Виджет: большой и пустой",
+      "w": 820,
+      "x": 900,
+      "y": 11700
+    },
+    "C-WidgetSettings.dc.html": {
+      "h": 844,
+      "title": "Инструмент · Виджет: настройки",
+      "w": 820,
+      "x": 1800,
+      "y": 11700
+    },
+    "C-WidgetRec.dc.html": {
+      "h": 844,
+      "title": "Инструмент · Виджет: варианты кнопки REC",
+      "w": 820,
+      "x": 2700,
+      "y": 11700
     }
   },
   "createdOnFiles": {
@@ -356,6 +384,14 @@
       "w": 240,
       "x": 0,
       "y": 10140
+    },
+    "rowJ": {
+      "kind": "title1",
+      "maxW": 2620,
+      "text": "3 · Инструмент — виджет на рабочем столе",
+      "w": 240,
+      "x": 0,
+      "y": 11440
     }
   },
   "order": [
@@ -397,7 +433,11 @@
     "C-QuickTask.dc.html",
     "C-QuickWish.dc.html",
     "C-QuickWatch.dc.html",
-    "C-QuickIdea.dc.html"
+    "C-QuickIdea.dc.html",
+    "C-WidgetHome.dc.html",
+    "C-WidgetLarge.dc.html",
+    "C-WidgetSettings.dc.html",
+    "C-WidgetRec.dc.html"
   ],
   "pages": [],
   "title": "Кстати — три направления"

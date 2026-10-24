@@ -76,6 +76,11 @@ describe('taskEditorProps — правила', () => {
     assert.equal(p.remind, 'НАКАНУНЕ В 20:00');
     assert.equal(p.subtasks, null);
     assert.equal(p.notice, null);
+    // Чистый шаблон: название пустое, «СОХРАНИТЬ» недоступна, пока его нет
+    assert.equal(p.title, '');
+    assert.equal(p.saveDisabled, true);
+    const named = reduceEditor({ draft: d, ui: initialUi(d, CLOCK.today) }, { type: 'title', title: 'Купить хлеб' });
+    assert.equal(taskEditorProps(named.draft, named.ui, s, CLOCK).saveDisabled, false);
   });
 
   test('подзадача плана: группа плана, строки подзадач нет', () => {

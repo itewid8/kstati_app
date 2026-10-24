@@ -11,7 +11,7 @@ import { isPlan, parseKey } from '@/adapters/common/tasks';
 import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import type { CalendarChromeProps, CalendarView } from '@/screens/calendar/types';
-import { NO_ME, nav, toPlanGrid, useChrome, useInsets, type StoreState } from '../common';
+import { NO_ME, nav, openTaskEditor, toPlanGrid, useChrome, useInsets, type StoreState } from '../common';
 
 const pickCalendar = (s: StoreState): CalendarSnapshot => ({
   me: s.me ?? NO_ME,
@@ -31,7 +31,7 @@ export function openTaskKey(key: string): void {
   const task = tasks.find((t) => t.id === id);
   if (!task) return;
   if (isPlan(task, tasks)) toPlanGrid(id);
-  else router.push(nav.taskEditor(occ ? { id, occ } : { id }));
+  else openTaskEditor(id, occ);
 }
 
 const openList = () => useStore.getState().setTasksView('list');

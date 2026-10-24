@@ -27,7 +27,7 @@ import { useLongPressId } from './components/longPress';
 import { NowMarker } from './components/NowMarker';
 import { usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { PeriodArrows, PeriodNote, PeriodTitle, PeriodWeekday, TodayButton } from './components/PeriodBar';
-import { PERSON_TAB, PersonTabs } from './components/PersonTabs';
+import { PersonTabs } from './components/PersonTabs';
 import { MONTHS_SHORT, WEEKDAYS, hhmm, namesOf, pad2, parts, peopleOf, timeRange, weekday } from './format';
 import type { CalendarBar, CalendarChromeProps, CalendarPerson, PersonFilterProps, TimedEvent } from './types';
 
@@ -210,7 +210,14 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
   );
 
   return (
-    <CalendarScaffold view="day" period={period} onLayout={onLayout} insets={insets} {...chrome}>
+    <CalendarScaffold
+      view="day"
+      period={period}
+      overlay={<PersonTabs people={people} hiddenPeople={hiddenPeople} onTogglePerson={onTogglePerson} insetTop={top} />}
+      onLayout={onLayout}
+      insets={insets}
+      {...chrome}
+    >
       <View pointerEvents="none" style={[styles.rule, { top: top + D.rule, backgroundColor: c.border }]} />
       {barRows.bars.map((pb) => {
         const bar = barById.get(pb.id);
@@ -259,7 +266,6 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
         <NowMarker y={gridY + minuteToY(nowShown, { hourPx, h0: range.h0 })} left={gx} width={gw} label={hhmm(nowShown)} />
       ) : null}
 
-      <PersonTabs people={people} hiddenPeople={hiddenPeople} onTogglePerson={onTogglePerson} top={gridY + PERSON_TAB.offset} />
     </CalendarScaffold>
   );
 });

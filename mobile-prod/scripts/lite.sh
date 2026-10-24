@@ -1,7 +1,10 @@
 # Общие настройки scripts/test.sh и scripts/typecheck-lite.sh (подключается через `.`):
 # tsc из офлайн-набора, шимы нативных модулей, пути @/* → src/*, react → @types/react из набора.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-KIT="${KIT_NODE_MODULES:-/home/claude/webkit/node_modules}"
+# Офлайн-набор в облачном контейнере; на Mac после npm install — node_modules самого приложения
+if [ -n "${KIT_NODE_MODULES:-}" ]; then KIT="$KIT_NODE_MODULES"
+elif [ -d /home/claude/webkit/node_modules ]; then KIT=/home/claude/webkit/node_modules
+else KIT="$ROOT/node_modules"; fi
 TSC="${TSC:-$KIT/typescript/bin/tsc}"
 SHIMS="$ROOT/scripts/shims"
 [ -f "$TSC" ] || { echo "Нет tsc: $TSC (задайте TSC=… или KIT_NODE_MODULES=…)" >&2; exit 2; }

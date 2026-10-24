@@ -25,7 +25,7 @@ import { HourLines } from './components/HourLines';
 import { NowMarker } from './components/NowMarker';
 import { usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { PeriodArrows, PeriodNote, PeriodTitle, TodayButton } from './components/PeriodBar';
-import { PERSON_TAB, PersonTabs } from './components/PersonTabs';
+import { PersonTabs } from './components/PersonTabs';
 import { useLongPressId } from './components/longPress';
 import { WeekEventBlock } from './components/WeekEventBlock';
 import { MONTHS_SHORT, WEEKDAYS, addDays, namesOf, pad2, parts, peopleOf, timeRange } from './format';
@@ -205,7 +205,14 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
   );
 
   return (
-    <CalendarScaffold view="week" period={period} onLayout={onLayout} insets={insets} {...chrome}>
+    <CalendarScaffold
+      view="week"
+      period={period}
+      overlay={<PersonTabs people={people} hiddenPeople={hiddenPeople} onTogglePerson={onTogglePerson} insetTop={top} />}
+      onLayout={onLayout}
+      insets={insets}
+      {...chrome}
+    >
       {days.map((d, i) => {
         const isToday = i === todayIdx;
         return (
@@ -287,7 +294,6 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
         <NowMarker y={gridY + minuteToY(nowShown, { hourPx, h0: range.h0 })} left={gx + todayIdx * col} width={col} />
       ) : null}
 
-      <PersonTabs people={people} hiddenPeople={hiddenPeople} onTogglePerson={onTogglePerson} top={gridY + PERSON_TAB.offset} />
     </CalendarScaffold>
   );
 });
