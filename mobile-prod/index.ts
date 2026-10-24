@@ -10,3 +10,4 @@ import { WidgetConfigRoot } from './src/widget/WidgetConfigRoot';
 if (Platform.OS === 'android') AppRegistry.registerComponent('KstatiWidgetConfig', () => WidgetConfigRoot);
 
 import 'expo-router/entry';
+
