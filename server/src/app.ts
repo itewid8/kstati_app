@@ -92,7 +92,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     if (!group) throw new HttpError(403, 'not_member', 'Нет доступа к группе');
     const nameOf = (id: string) => (id === user.id ? user.name : (people.find((p) => p.id === id)?.name ?? ''));
     const [items, wishes, notes] = await Promise.all([
-      store.listItems(meta.groupId),
+      data.groupItems(user, meta.groupId),
       store.listWishes(user.id),
       store.listNotes(user.id).catch(() => []),
     ]);

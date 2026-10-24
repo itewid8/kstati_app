@@ -8,7 +8,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Marquee, fonts, size as S, useTheme } from '@/ui';
 import type { QuickSection, QuickSegment, QuickTile, QuickTileKey } from '../types';
 
-type Glyph = 'check' | 'edit' | 'plan' | 'copy' | 'gift' | 'link' | 'toTask';
+type Glyph = 'check' | 'edit' | 'plan' | 'copy' | 'gift' | 'link' | 'toTask' | 'bell';
 
 /** Значки 18×18 из макетов C-Quick* (прямоугольники — замкнутыми путями) */
 const GLYPHS: Record<Glyph, readonly string[]> = {
@@ -19,6 +19,7 @@ const GLYPHS: Record<Glyph, readonly string[]> = {
   gift: ['M2.5 7h13v8.5h-13z', 'M2.5 7h13M9 7v8.5M9 7C7 3 4 4 5.5 7M9 7c2-4 5-3 3.5 0'],
   link: ['M7 4H3.5v10.5H14V11', 'M10 3h5v5M15 3l-7 7'],
   toTask: ['M2.5 2.5h13v13h-13z', 'M5.5 9l2.5 2.5 4.5-5'],
+  bell: ['M4.5 12.5V8a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z', 'M7.5 16h3'],
 };
 
 const GLYPH_OF: Record<QuickTileKey, Glyph> = {
@@ -32,6 +33,7 @@ const GLYPH_OF: Record<QuickTileKey, Glyph> = {
   copy: 'copy',
   link: 'link',
   toTask: 'toTask',
+  remind: 'bell',
 };
 
 const TileGlyph = memo(function TileGlyph({ glyph, color }: { glyph: Glyph; color: string }) {

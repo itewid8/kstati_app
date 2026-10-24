@@ -32,5 +32,33 @@ export {
   type FreeWindowOptions,
 } from './busy';
 export { monthCellItems, type MonthCell } from './monthCell';
+export { fitRows, fitTextLines, linesOf, textRoom, type TextFit, type TextSegment } from './textFit';
+export {
+  GRID,
+  MONTH_GRID,
+  YEAR_GRID,
+  monthCellAt,
+  monthLayout,
+  weekColumnAt,
+  yearLayout,
+  yearMonthAt,
+  type MonthLayout,
+  type ViewFrame,
+  type YearLayout,
+} from './viewGeometry';
+export {
+  ZOOM,
+  ZOOM_VIEWS,
+  zoomCommits,
+  zoomDir,
+  zoomEnterScale,
+  zoomExitScale,
+  zoomFollow,
+  zoomNext,
+  zoomProgress,
+  zoomShift,
+  type ZoomDir,
+  type ZoomView,
+} from './zoom';
 export { dayNo, isoOf } from './days';
 export { MIN_DURATION, type AbsMinute, type BusyEvent, type ColumnEvent, type DayBar, type DayMinute, type IsoDate } from './types';

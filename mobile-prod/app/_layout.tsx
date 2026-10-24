@@ -21,6 +21,7 @@ import { registerBackgroundRefresh } from '@/lib/background';
 import { watchReminders } from '@/lib/notify';
 import { useStore } from '@/lib/store';
 import { startSync } from '@/lib/sync';
+import { watchWidget } from '@/widget/sync';
 import type { ThemePref } from '@/lib/types';
 import { holdEnd, holdStart } from '@/lib/voice';
 import { RecButtonContext, useTheme, type RecButtonHandlers } from '@/ui';
@@ -53,6 +54,7 @@ export default function RootLayout() {
   }, []);
   // Обмен с сервером: очередь изменений и новое от других участников
   useEffect(() => startSync(), []);
+  useEffect(() => watchWidget(), []);
   // Шрифты вшиты в приложение (npm-пакеты с .ttf), сеть не нужна. Старые экраны используют часть этих начертаний
   const [loaded] = useFonts(uiFonts);
 
@@ -84,6 +86,7 @@ export default function RootLayout() {
               <Stack.Screen name="index" />
               <Stack.Screen name="login" />
               <Stack.Screen name="record" />
+              <Stack.Screen name="widget/open" />
               {/*
                * Экраны после входа. Выход или 401 (authLost) убирает их из стека разом — под входом не остаются вкладки
                * прошлого аккаунта с подписками и таймерами (QA-1 С5, М5)
@@ -100,6 +103,10 @@ export default function RootLayout() {
                 <Stack.Screen name="settings/edit" />
                 <Stack.Screen name="settings/avatar" />
                 <Stack.Screen name="settings/reminders" />
+                <Stack.Screen name="settings/widget" />
+                <Stack.Screen name="group/join" />
+                <Stack.Screen name="group/new" />
+                <Stack.Screen name="group/share" />
               </Stack.Protected>
             </Stack>
             <UndoToast />

@@ -11,6 +11,7 @@ export function groupFixture(): GroupScreenProps {
       { id: 'u-sasha', name: 'Саня', nick: 'sasha', color: 'blue', role: 'owner', isMe: true },
       { id: 'u-karina', name: 'Карина', nick: 'karina', color: 'pink', role: 'admin' },
     ],
+    share: { selectOnly: false, visible: 40, hidden: 2 },
     lists: [
       { key: 'tasks', count: 12 },
       { key: 'wishes', count: 4 },

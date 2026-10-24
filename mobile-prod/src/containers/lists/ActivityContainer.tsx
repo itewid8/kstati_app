@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store';
 import { fetchActivity } from '@/lib/sync';
 import type { ID } from '@/lib/types';
 import { ActivityScreen } from '@/screens/lists/ActivityScreen';
-import { backOrTab, nav, signedInOnly, toTab, toTopic, useClock, useInsets, usePersonColors, useSnapshot } from '../common';
+import { backOrTab, nav, openTaskEditor, signedInOnly, toTab, toTopic, useClock, useInsets, usePersonColors, useSnapshot } from '../common';
 
 const back = () => backOrTab('tasks');
 
@@ -30,7 +30,7 @@ function openEvent(id: ID) {
   if (e.kind.startsWith('watch.')) return toTab('watch');
   if (e.kind.startsWith('task.')) {
     const task = e.kind !== 'task.delete' && e.itemId ? st.tasks.find((t) => t.id === e.itemId) : undefined;
-    if (task) return router.push(nav.taskEditor({ id: task.id }));
+    if (task) return openTaskEditor(task.id);
     if (e.date) st.setCalendarDate(e.date);
     return toTab('tasks');
   }

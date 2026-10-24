@@ -24,6 +24,7 @@ import { isEmptyPatch, mergePull, parseSync } from './remote';
 import { flushStorage } from './storage';
 import { applyRemote, DEMO, isApplyingRemote, syncHooks, useStore } from './store';
 import type { Activity, ID, Idea, ReminderSettings, Task, TaskReminderOverride, Topic, WatchItem, Wish } from './types';
+import { PERSONAL } from './visibility';
 
 /** Изменения личных напоминаний → операция prefs (только то, что поменялось) */
 function prefsOp(
@@ -48,6 +49,9 @@ const taskOp = (t: Task): Op => ({
   task: {
     id: t.id,
     groupId: t.groupId,
+    ...(t.createdBy && { ownerId: t.createdBy }),
+    // Видимость шлём только своих дел: сервер чужую всё равно не примет
+    ...(t.createdBy === useStore.getState().me?.id && { only: !!t.only, share: t.share ?? {} }),
     title: t.title,
     date: t.date,
     time: t.time,
@@ -92,7 +96,7 @@ useStore.subscribe((s, p) => {
   if (isApplyingRemote() || DEMO || !s.session || s.session !== p.session) return;
   const meId = s.me?.id;
   const ops = [
-    ...diff(p.tasks, s.tasks, taskOp, (t) => ({ op: 'item.delete', groupId: t.groupId, id: t.id })),
+    ...diff(p.tasks, s.tasks, taskOp, (t) => ({ op: 'item.delete', groupId: t.groupId, id: t.id, ...(t.createdBy && { ownerId: t.createdBy }) })),
     ...diff(p.watch, s.watch, watchOp, (w) => ({ op: 'item.delete', groupId: w.groupId, id: w.id })),
     ...diff(
       p.wishes.filter((w) => w.ownerId === meId),
@@ -117,8 +121,9 @@ useStore.subscribe((s, p) => {
   const prefs = prefsOp(p, s);
   if (prefs) ops.push(prefs);
   // Записи групп, из которых ушли (выход, исключение) — удалять на сервере не нужно, это делает сервер
-  const alive = new Set(s.groups.map((g) => g.id));
-  const filtered = ops.filter((o) => o.op !== 'item.delete' || alive.has(o.groupId));
+  // (дела живут в личном календаре владельца — их удаление отправляем всегда, кроме чужих из ушедших групп)
+  const alive = new Set([...s.groups.map((g) => g.id), PERSONAL]);
+  const filtered = ops.filter((o) => o.op !== 'item.delete' || alive.has(o.groupId) || o.ownerId === meId);
   if (filtered.length) s.queue(filtered);
 });
 

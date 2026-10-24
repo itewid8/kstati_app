@@ -1,4 +1,5 @@
 /** C-Group: группа — роли участников и счётчики общих списков */
+import { scopeFilter, selectsOnly, visibleCount } from '@/lib/visibility';
 import { nextOpen } from '@/lib/recur';
 import type { Group, ID, Task } from '@/lib/types';
 import type { GroupMember, GroupRole, GroupScreenProps, SharedListSummary } from '@/screens/account/GroupScreen';
@@ -24,7 +25,7 @@ export type GroupSnapshot = Pick<Snapshot, 'me' | 'users' | 'groups' | 'tasks' |
 
 /** Счётчики «ОБЩИХ СПИСКОВ»: открытые дела, хотелки участников без отметки, фильмы в очереди, идеи открытых группе тем */
 export function sharedLists(s: GroupSnapshot, group: Group, clock: Pick<Clock, 'today'>): SharedListSummary[] {
-  const tasks = s.tasks.filter((t) => t.groupId === group.id);
+  const tasks = s.tasks.filter(scopeFilter({ viewId: group.id, groups: s.groups, meId: s.me.id }));
   const plans = planIds(tasks);
   const members = new Set(group.memberIds);
   const topics = new Set(s.topics.filter((t) => t.groupIds.includes(group.id)).map((t) => t.id));
@@ -34,6 +35,12 @@ export function sharedLists(s: GroupSnapshot, group: Group, clock: Pick<Clock, '
     { key: 'watch', count: s.watch.filter((w) => w.groupId === group.id && !w.watchedAt).length },
     { key: 'ideas', count: s.ideas.filter((i) => !!i.topicId && topics.has(i.topicId)).length },
   ];
+}
+
+/** «МОИ ДЕЛА В ГРУППЕ»: режим и сколько моих дел группе видно / скрыто (lib/visibility.ts) */
+export function shareSummary(s: Pick<GroupSnapshot, 'me' | 'tasks'>, group: Group): { selectOnly: boolean; visible: number; hidden: number } {
+  const { visible, total } = visibleCount(s.tasks, group, s.me.id);
+  return { selectOnly: selectsOnly(group, s.me.id), visible, hidden: total - visible };
 }
 
 /** null — группы нет (вышли из неё или её удалили) */
@@ -65,5 +72,6 @@ export function groupProps(s: GroupSnapshot, colors: ColorMap, groupId: ID, cloc
     myRole: roleOf(group, s.me.id),
     members,
     lists: sharedLists(s, group, clock),
+    share: shareSummary(s, group),
   };
 }

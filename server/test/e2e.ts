@@ -301,7 +301,7 @@ async function scenario(name: string, store: Store) {
   const OLD_WISH_KEYS = ['createdAt', 'id', 'link', 'note', 'ownerId', 'receivedAt', 'title', 'updatedAt'];
 
   /* ---------- S5: версия сервера ---------- */
-  assert.equal((await ok('GET', '/health')).api, 2, '/health отдаёт уровень API');
+  assert.equal((await ok('GET', '/health')).api, 3, '/health отдаёт уровень API');
 
   /* ---------- S1: подарок чужой хотелки — сюрприз для владельца ---------- */
   const w1Before = await wishOf(T1, SA, 'w1');

@@ -18,10 +18,12 @@ const dinner: TaskEditorScreenProps = {
   end: null,
   repeat: null,
   people: [sanya, karina],
+  visible: 'МЫ С КАРИНОЙ',
   remind: 'ЗА 2 Ч · НАКАНУНЕ В 20:00',
   note: 'Взять торт из «Север-Метрополь»',
   subtasks: null,
   notice: { label: 'КАРИНА ЗАНЯТА', text: 'Йога · 19:00–20:00', tone: 'red' },
+  saveDisabled: false,
   expanded: null,
 };
 
@@ -50,6 +52,7 @@ export function editRepeatFixture(): TaskEditorScreenProps {
     end: '11:30',
     repeat: 'КАЖДУЮ НЕДЕЛЮ: СБ · ДО 31 ДЕК',
     people: [karina],
+    visible: 'МЫ С КАРИНОЙ',
     remind: 'ЗА 1 Ч',
     note: 'Коврик и вода',
     expanded: 'repeat',
@@ -97,6 +100,34 @@ export function editWhoFixture(): TaskEditorScreenProps {
       members: [
         { id: 'sanya', letter: 'С', name: 'Саня (вы)', meta: 'СВОБОДЕН', color: 'blue', selected: true },
         { id: 'karina', letter: 'К', name: 'Карина', meta: 'ЗАНЯТА 19:00–20:00 · ЙОГА', busy: true, color: 'pink', selected: true },
+      ],
+    },
+  };
+}
+
+/** C-EditVisible: «Подарок Карине» — личное дело Сани, видно только «Друзьям» */
+export function editVisibleFixture(): TaskEditorScreenProps {
+  return {
+    caption: 'ДЕЛО · САНЯ',
+    title: 'Подарок Карине',
+    colors: ['blue'],
+    when: 'СБ 31 ОКТ',
+    end: null,
+    repeat: null,
+    people: [sanya],
+    visible: 'ДРУЗЬЯ',
+    remind: 'ЗА 2 ДНЯ В 18:00',
+    note: 'Серьги, которые смотрела в «Ле Монти»',
+    subtasks: null,
+    saveDisabled: false,
+    expanded: 'visible',
+    visiblePanel: {
+      onlyMe: false,
+      groups: [
+        { id: 'g1', name: 'Мы с Кариной', mode: 'ВСЕ, КРОМЕ СКРЫТЫХ', visible: false, manual: true },
+        { id: 'g2', name: 'Семья', mode: 'ВСЕ, КРОМЕ СКРЫТЫХ', visible: false, manual: true },
+        { id: 'g3', name: 'Друзья', mode: 'ТОЛЬКО ВЫБРАННЫЕ', visible: true, manual: true },
+        { id: 'g4', name: 'Работа', mode: 'ТОЛЬКО ВЫБРАННЫЕ', visible: false, manual: false },
       ],
     },
   };

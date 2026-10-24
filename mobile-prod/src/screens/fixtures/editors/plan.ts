@@ -15,7 +15,9 @@ const trip: PlanEditorScreenProps = {
   period: 'СР 7 ОКТ → ПТ 9 ОКТ',
   repeat: null,
   people: [karina],
+  visible: 'МЫ С КАРИНОЙ',
   remind: 'НАКАНУНЕ В 20:00',
+  saveDisabled: false,
   expanded: null,
 };
 

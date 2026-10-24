@@ -2,6 +2,7 @@
  * Ответ на вопрос о планах. ИИ только говорит «чьи» и «на какой период» (PlansQuery),
  * а какие группы и дела показать — решает этот код. Выдумать дело он не может.
  */
+import { PERSONAL, taskGroups } from './visibility';
 import { addDays, fromISODate, shortDate, sortKey, toISODate } from './dates';
 import { normTitle } from './dupes';
 import { dayNo, instance, isoOf, occurrences, taskKey } from './recur';
@@ -32,13 +33,15 @@ const stem = (w: string) => {
 /** Какие группы имеются в виду */
 function resolveGroups(q: PlansQuery, s: State): { groups: Group[] } | { error: string } {
   const mine = s.groups.filter((g) => g.memberIds.includes(s.me.id));
-  const current = mine.find((g) => g.id === s.currentGroupId);
+  // Личный календарь — как группа из меня одного (дела, не видные ни одной группе)
+  const personal: Group = { id: PERSONAL, name: 'Личное', category: 'other', inviteCode: '', memberIds: [s.me.id], ownerId: s.me.id, adminIds: [] };
+  const current = s.currentGroupId === PERSONAL ? personal : mine.find((g) => g.id === s.currentGroupId);
   const sc = q.scope;
 
   if (sc.kind === 'current') return current ? { groups: [current] } : { error: 'Нет группы' };
 
   // «Что я делаю» — все мои группы (свои дела отбирает who)
-  if (sc.kind === 'me') return mine.length ? { groups: mine } : { error: 'Нет группы' };
+  if (sc.kind === 'me') return { groups: [...mine, personal] };
 
   if (sc.kind === 'us') {
     const couple = mine.filter((g) => g.category === 'couple');
@@ -107,22 +110,35 @@ export function answerPlans(q: PlansQuery, s: State): { ok: true; answer: PlansA
     return occurrences(t, isoOf(dayNo(q.from) - span), q.to).map((o) => instance(t, o));
   };
 
-  const sections = r.groups.map((g) => {
-    const list = s.tasks
-      .filter((t) => t.groupId === g.id && matches(t) && takes(t))
-      // Повторы серии в периоде — как отдельные дела
-      .flatMap(expand)
-      // С поиском («когда дача») показываем и дела без даты
-      .filter((t) => (t.date ? inPeriod(t) : words.length > 0))
-      .sort((a, b) => sortKey(a.date, a.time).localeCompare(sortKey(b.date, b.time)));
-    return { groupId: g.id, groupName: g.name, taskIds: list.map(taskKey) };
-  });
+  // Каждое дело — в одном разделе: группа, где его создали (если она среди названных и видит его), иначе первая такая;
+  // своё, не видное ни одной группе, — «Личное»
+  const ids = r.groups.map((g) => g.id);
+  const sectionOf = (t: Task): ID | null => {
+    const where = taskGroups(t, s.groups, s.me.id).filter((g) => ids.includes(g));
+    if (where.includes(t.groupId)) return t.groupId;
+    if (where.length) return ids.find((g) => where.includes(g)) ?? null;
+    return ids.includes(PERSONAL) && t.createdBy === s.me.id && !taskGroups(t, s.groups, s.me.id).length ? PERSONAL : null;
+  };
+  const sections = r.groups
+    .map((g) => {
+      const list = s.tasks
+        .filter((t) => sectionOf(t) === g.id && matches(t) && takes(t))
+        // Повторы серии в периоде — как отдельные дела
+        .flatMap(expand)
+        // С поиском («когда дача») показываем и дела без даты
+        .filter((t) => (t.date ? inPeriod(t) : words.length > 0))
+        .sort((a, b) => sortKey(a.date, a.time).localeCompare(sortKey(b.date, b.time)));
+      return { groupId: g.id, groupName: g.name, taskIds: list.map(taskKey) };
+    })
+    // Пустое «Личное» не показываем
+    .filter((x) => x.groupId !== PERSONAL || x.taskIds.length > 0);
+  const shown = new Set(sections.map((x) => x.groupId));
 
   return {
     ok: true,
     answer: {
       title: words.length ? `«${q.query}»` : periodTitle(q.from, q.to),
-      groupNames: r.groups.map((g) => g.name),
+      groupNames: r.groups.filter((g) => shown.has(g.id)).map((g) => g.name),
       sections,
       from: q.from,
       to: q.to,

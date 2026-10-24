@@ -1,21 +1,20 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Animated, PanResponder, StyleSheet, useWindowDimensions } from 'react-native';
 import { useBottomSpace } from '@/containers/common/layout';
 import { useStore } from '@/lib/store';
-import { motion, space, useColors } from '@/theme';
-import { Button, T } from './ui';
+import { UndoToastView } from '@/screens/sheets';
+import { space } from '@/ui';
 
 const UNDO_MS = 5000;
+const AWAY_MS = 150;
 
 /**
- * «Удалено · Отменить» — 5 секунд после удаления; так же — короткие сообщения без кнопки.
- * Смахнуть влево (или вправо) — убрать сразу
+ * «УДАЛЕНО · ОТМЕНИТЬ» — 5 секунд после удаления; так же — короткие сообщения без кнопки.
+ * Над нижней навигацией; смахнуть влево (или вправо) — убрать сразу
  */
 export function UndoToast() {
-  const c = useColors();
   const undo = useStore((s) => s.undo);
   const clearUndo = useStore((s) => s.clearUndo);
-  // Над нижней навигацией
   const bottom = useBottomSpace();
   const { width } = useWindowDimensions();
   const x = useRef(new Animated.Value(0)).current;
@@ -35,7 +34,7 @@ export function UndoToast() {
         onPanResponderRelease: (_, g) => {
           if (Math.abs(g.dx) > 80 || Math.abs(g.vx) > 0.5) {
             const dir = g.dx < 0 ? -1 : 1;
-            Animated.timing(x, { toValue: dir * width, duration: motion.fast, useNativeDriver: true }).start(() => useStore.getState().clearUndo());
+            Animated.timing(x, { toValue: dir * width, duration: AWAY_MS, useNativeDriver: true }).start(() => useStore.getState().clearUndo());
           } else Animated.spring(x, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
         },
         onPanResponderTerminate: () => Animated.spring(x, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start(),
@@ -51,31 +50,16 @@ export function UndoToast() {
         styles.toast,
         {
           bottom,
-          backgroundColor: c.primary,
           transform: [{ translateX: x }],
           opacity: x.interpolate({ inputRange: [-width, 0, width], outputRange: [0, 1, 0] }),
         },
       ]}
     >
-      <T color={c.onPrimary} style={{ flex: 1 }}>
-        {undo.label}
-      </T>
-      {undo.restore ? <Button kind="text" title="Отменить" color={c.onPrimary} onPress={undo.restore} style={{ height: 40 }} /> : null}
+      <UndoToastView label={undo.label} onUndo={undo.restore} />
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  toast: {
-    position: 'absolute',
-    left: space.side,
-    right: space.side,
-    minHeight: 48,
-    borderRadius: 10,
-    paddingLeft: 16,
-    paddingRight: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  toast: { position: 'absolute', left: space.side, right: space.side },
 });

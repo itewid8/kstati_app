@@ -41,11 +41,17 @@ export type Group = {
   ownerId: string;
   adminIds: string[];
   memberIds: string[];
+  /** Участники с режимом «Только выбранные»: группе видны только их отмеченные дела (visibility.ts). Нет — у всех «Все» */
+  selectOnly?: string[];
   createdAt: string;
 };
 
 export type Task = {
   id: string;
+  /**
+   * Раздел хранения. API 3: «u:<владелец>» — личный календарь владельца (visibility.ts).
+   * Старые записи лежали в разделе группы — переносятся при первой синхронизации (api.ts, migrateGroup)
+   */
   groupId: string;
   type: 'task';
   title: string;
@@ -65,8 +71,14 @@ export type Task = {
   endTime?: string | null;
   /** Кто занят: участники группы; нет — автор */
   people?: string[];
-  /** Подзадача плана: id большого дела в той же группе */
+  /** Подзадача плана: id большого дела того же владельца */
   parentId?: string | null;
+  /** Группа, в которой дело создали; null — в личном календаре */
+  home?: string | null;
+  /** «Только я»: не видно ни одной группе */
+  only?: boolean;
+  /** Отметки по группам: true — показать, false — скрыть; нет — по режиму владельца в группе */
+  share?: Record<string, boolean>;
   createdAt: string;
   updatedAt: string;
 };
@@ -257,3 +269,7 @@ export const irev = (userId: string) => `irev#${userId}`;
  * «моя ревизия выросла, а я ничего не менял» выдаёт подарок (docs/security/REVIEW-v2.md, V2-2)
  */
 export const giftrev = (userId: string) => `giftrev#${userId}`;
+/** Ревизия дел человека (его личный календарь, API 3): меняется при любой правке его дел */
+export const trev = (userId: string) => `trev#${userId}`;
+/** Старые дела группы уже перенесены в разделы владельцев (1 — да) */
+export const migrated = (groupId: string) => `mig#${groupId}`;

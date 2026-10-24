@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { settingsProps, voiceLangOf } from '@/adapters/account/settings';
@@ -10,6 +10,7 @@ import type { MicMode, ThemePref } from '@/lib/types';
 import { SettingsScreen, type RecognitionLang } from '@/screens/account/SettingsScreen';
 import { useVpnActive } from '../../../modules/kstati-net';
 import { nav, useInsets } from '../common';
+import { backToProfile } from './back';
 
 /** «0.1.0 (1)»: версия и номер сборки из app.json */
 const VERSION = (() => {
@@ -18,16 +19,14 @@ const VERSION = (() => {
   return `${cfg?.version ?? '0'} (${build ?? '0'})`;
 })();
 
-const back = () => (router.canGoBack() ? router.back() : router.navigate(nav.profile()));
-const changeTheme = (t: ThemePref) => useStore.getState().setTheme(t);
-const changeMicMode = (m: MicMode) => useStore.getState().setMicMode(m);
-const changeLanguage = (lang: RecognitionLang) => useStore.getState().setVoiceLang(voiceLangOf(lang));
-const toggleReminders = (enabled: boolean) => useStore.getState().setReminders({ enabled });
 const editReminders = () => router.push(nav.reminders());
 
+/** Выбор на экране, ещё не сохранённый: только то, что меняли */
+type Draft = { theme?: ThemePref; micMode?: MicMode; language?: RecognitionLang; remindersOn?: boolean };
+
 /**
- * C-Settings. Счётчик голоса — с сервера при каждом показе экрана. Адресов поддержки и политики пока нет —
- * их строки без действия
+ * C-Settings. Тема, кнопка REC, язык и «Напоминать о делах» — черновик до СОХРАНИТЬ, ОТМЕНА — назад без изменений.
+ * Счётчик голоса — с сервера при каждом показе экрана. Адресов поддержки и политики пока нет — их строки скрыты
  */
 export function SettingsContainer() {
   const insets = useInsets();
@@ -42,7 +41,11 @@ export function SettingsContainer() {
       net: s.net,
     })),
   );
-  const data = useMemo(() => settingsProps({ ...st, vpnOn, version: VERSION }), [st, vpnOn]);
+  const [draft, setDraft] = useState<Draft>({});
+  const saved = useMemo(() => settingsProps({ ...st, vpnOn, version: VERSION }), [st, vpnOn]);
+  const data = useMemo(() => ({ ...saved, ...draft }), [saved, draft]);
+  const canSave =
+    data.theme !== saved.theme || data.micMode !== saved.micMode || data.language !== saved.language || data.remindersOn !== saved.remindersOn;
 
   useFocusEffect(
     useCallback(() => {
@@ -56,18 +59,39 @@ export function SettingsContainer() {
     }, []),
   );
 
+  const onChangeTheme = useCallback((theme: ThemePref) => setDraft((d) => ({ ...d, theme })), []);
+  const onChangeMicMode = useCallback((micMode: MicMode) => setDraft((d) => ({ ...d, micMode })), []);
+  const onChangeLanguage = useCallback((language: RecognitionLang) => setDraft((d) => ({ ...d, language })), []);
+  const onToggleReminders = useCallback((remindersOn: boolean) => setDraft((d) => ({ ...d, remindersOn })), []);
+  const onSave = useCallback(() => {
+    const store = useStore.getState();
+    if (data.theme !== saved.theme) store.setTheme(data.theme);
+    if (data.micMode !== saved.micMode) store.setMicMode(data.micMode);
+    if (data.language !== saved.language) store.setVoiceLang(voiceLangOf(data.language));
+    if (data.remindersOn !== saved.remindersOn) store.setReminders({ enabled: data.remindersOn });
+    setDraft({});
+    backToProfile();
+  }, [data, saved]);
+
   return (
     <SettingsScreen
       {...data}
       insets={insets}
       showAboutLinks={false}
-      onBack={back}
-      onChangeTheme={changeTheme}
-      onChangeMicMode={changeMicMode}
-      onChangeLanguage={changeLanguage}
-      onToggleReminders={toggleReminders}
+      canSave={canSave}
+      onBack={backToProfile}
+      onChangeTheme={onChangeTheme}
+      onChangeMicMode={onChangeMicMode}
+      onChangeLanguage={onChangeLanguage}
+      onToggleReminders={onToggleReminders}
       onEditTimedReminders={editReminders}
       onEditAllDayReminders={editReminders}
+      onOpenWidget={OPEN_WIDGET}
+      onCancel={backToProfile}
+      onSave={onSave}
     />
   );
 }
+
+/** Виджет на рабочем столе есть только на Android (на iOS — со сборкой под платный аккаунт) */
+const OPEN_WIDGET = Platform.OS === 'android' ? () => router.push(nav.widgetSettings()) : undefined;

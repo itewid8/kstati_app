@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- По умолчанию самый маленький: одна клетка, кнопка REC. Растягивается до любого размера (шапка, дела, REC снизу)
+     и обратно; maxResize задан явно — некоторые оболочки без него не дают вернуть размер после уменьшения -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:minWidth="40dp"
+  android:minHeight="40dp"
+  android:minResizeWidth="40dp"
+  android:minResizeHeight="40dp"
+  android:maxResizeWidth="1000dp"
+  android:maxResizeHeight="1000dp"
+  android:targetCellWidth="1"
+  android:targetCellHeight="1"
+  android:resizeMode="horizontal|vertical"
+  android:updatePeriodMillis="1800000"
+  android:widgetCategory="home_screen"
+  android:initialLayout="@layout/kstati_widget_mic"
+  android:previewLayout="@layout/kstati_widget_preview"
+  android:description="@string/kstati_widget_description"
+  android:configure="expo.modules.kstatiwidget.KstatiWidgetConfigActivity"
+  android:widgetFeatures="reconfigurable|configuration_optional" />

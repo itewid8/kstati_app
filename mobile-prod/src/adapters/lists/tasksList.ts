@@ -2,6 +2,7 @@
  * C-List: дела текущей группы списком по разделам ПРОШЛО / СЕГОДНЯ / БЕЗ ДАТЫ / ЗАВТРА / НЕДЕЛЯ / ПОЗЖЕ.
  * У серии — один ближайший неотмеченный раз (и сегодняшний, если уже отмечен), план — строкой с подзадачами.
  */
+import { scopeFilter } from '@/lib/visibility';
 import { dayNo, isoOf, type IsoDate } from '@/lib/calendarLayout';
 import { sortKey } from '@/lib/dates';
 import { listInstances, taskKey } from '@/lib/recur';
@@ -106,9 +107,9 @@ const taskItem = (t: Task, section: ListSection, colors: ColorMap): TaskItem => 
 });
 
 /** Разделы списка: пустые не показываются. id строки дела — taskKey («id@дата» у раза серии), шага плана — id подзадачи */
-export function tasksListSections(s: Pick<Snapshot, 'tasks' | 'currentGroupId'>, colors: ColorMap, clock: Pick<Clock, 'today'>): TaskSection[] {
+export function tasksListSections(s: Pick<Snapshot, 'tasks' | 'currentGroupId' | 'groups' | 'me'>, colors: ColorMap, clock: Pick<Clock, 'today'>): TaskSection[] {
   const { today } = clock;
-  const tasks = s.tasks.filter((t) => t.groupId === s.currentGroupId);
+  const tasks = s.tasks.filter(scopeFilter({ viewId: s.currentGroupId, groups: s.groups, meId: s.me.id }));
   const plans = planIds(tasks);
   const own = new Set(tasks.map((t) => t.id));
   const by = new Map<ListSection, Task[]>();

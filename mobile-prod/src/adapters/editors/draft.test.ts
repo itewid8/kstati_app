@@ -1,14 +1,17 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  canSaveDraft,
   draftFromSeed,
   draftFromTask,
   draftToItem,
   emptyDraft,
   initialUi,
+  noteValue,
   reduceDraft,
   reduceEditor,
   repeatPresetOf,
+  titleInput,
   type DraftAction,
   type EditorDraft,
   type EditorState,
@@ -133,6 +136,8 @@ describe('draftToItem', () => {
         endTime: null,
         people: ['sanya', 'karina'],
         parentId: null,
+        only: false,
+        share: {},
       },
     });
   });
@@ -200,5 +205,54 @@ describe('reduceEditor — что раскрыто', () => {
     assert.deepEqual([year.ui.dateView, year.ui.cursor], ['year', { year: 2025, month: 11 }]);
     const month = reduceEditor(year, { type: 'pickMonth', month: 3 });
     assert.deepEqual([month.ui.dateView, month.ui.cursor], ['month', { year: 2025, month: 3 }]);
+  });
+});
+
+describe('название и описание — правка прямо в окне', () => {
+  test('новое дело открывается пустым: без названия сохранить нельзя', () => {
+    const d = emptyDraft(s, { date: '2026-10-06', time: '12:00' });
+    assert.equal(d.title, '');
+    assert.equal(canSaveDraft(d), false);
+    assert.equal(canSaveDraft(apply(d, { type: 'title', title: '   ' })), false);
+    assert.equal(canSaveDraft(apply(d, { type: 'title', title: 'К' })), true);
+  });
+
+  test('название по буквам: пробелы по краям остаются, пока печатают, — убирает сохранение', () => {
+    const d = apply(emptyDraft(s), { type: 'title', title: 'Купить' }, { type: 'title', title: 'Купить ' }, { type: 'title', title: 'Купить х' });
+    assert.equal(d.title, 'Купить х');
+    assert.equal(apply(d, { type: 'title', title: 'Купить хлеб ' }).title, 'Купить хлеб ');
+    assert.equal(draftToItem(apply(d, { type: 'title', title: 'Купить хлеб ' })).data.title, 'Купить хлеб');
+  });
+
+  test('название — одна строка: перевод строки из вставки становится пробелом', () => {
+    assert.equal(titleInput('Ужин\nу родителей'), 'Ужин у родителей');
+    assert.equal(titleInput('Ужин  \r\n\n  у родителей'), 'Ужин у родителей');
+    assert.equal(titleInput('Ужин  у родителей'), 'Ужин  у родителей');
+    assert.equal(apply(emptyDraft(s), { type: 'title', title: 'Йога\n' }).title, 'Йога ');
+  });
+
+  test('стёрли название у существующего дела — сохранить нельзя, остальное не тронуто', () => {
+    const dinner = draftFromTask(DINNER, s);
+    assert.equal(canSaveDraft(dinner), true);
+    const cleared = apply(dinner, { type: 'title', title: '' });
+    assert.equal(canSaveDraft(cleared), false);
+    assert.deepEqual({ ...cleared, title: dinner.title }, dinner);
+  });
+
+  test('то же название — черновик тот же (окно не перерисовывается)', () => {
+    const st: EditorState = { draft: draftFromTask(DINNER, s), ui: initialUi(draftFromTask(DINNER, s), CLOCK.today) };
+    assert.equal(reduceEditor(st, { type: 'title', title: 'Ужин у родителей' }), st);
+    assert.equal(reduceEditor(st, { type: 'note', note: st.draft.note }), st);
+    // Правка названия не сворачивает раскрытую строку
+    const open = reduceEditor(st, { type: 'toggle', field: 'when', today: CLOCK.today });
+    assert.equal(reduceEditor(open, { type: 'title', title: 'Ужин' }).ui, open.ui);
+  });
+
+  test('описание как есть, пока печатают; одни пробелы — пусто', () => {
+    const d = emptyDraft(s);
+    assert.equal(noteValue(d), null);
+    assert.equal(noteValue(apply(d, { type: 'note', note: '  \n' })), null);
+    assert.equal(noteValue(apply(d, { type: 'note', note: 'Взять торт\n' })), 'Взять торт\n');
+    assert.equal(draftToItem(apply(d, { type: 'title', title: 'Ужин' }, { type: 'note', note: ' Взять торт\n' })).data.note, 'Взять торт');
   });
 });

@@ -1,18 +1,18 @@
 /**
  * Окно плана (C-EditPlan / -Period / -Year). Период, люди, напоминания, описание и название — в черновике, в хранилище —
  * по «СОХРАНИТЬ»; подзадачи при переносе периода не двигаются (вышедшие — «вне периода»). Отметка подзадачи — сразу
- * (это отдельные дела). field — что открыть при входе: период, описание или список подзадач.
+ * (это отдельные дела). field — что открыть при входе: период, описание (курсор в строке) или список подзадач.
+ * Название и описание правятся прямо в окне; без названия «СОХРАНИТЬ» недоступна.
  */
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { draftFromTask, initialUi, type EditorState } from '@/adapters/editors/draft';
+import { Keyboard, StyleSheet, View, type TextInput } from 'react-native';
+import { canSaveDraft, draftFromTask, initialUi, type EditorState } from '@/adapters/editors/draft';
 import { planEditorProps } from '@/adapters/editors/planEditor';
 import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { PlanEditorScreen, type PlanEditorScreenProps, type PlanField } from '@/screens/editors/PlanEditorScreen';
 import type { CustomReminder } from '@/screens/editors/panels/RemindPanel';
-import { InputSheet } from '@/ui';
 import { toPlanGrid } from '../common/go';
 import { nav, type PlanEditorField } from '../common/nav';
 import { signedInOnly } from '../common/signedIn';
@@ -24,10 +24,7 @@ import { leaveEditor, notSaved, removeTask, saveDraft, useEditorState, usePanelH
 
 export type PlanEditorContainerProps = { id: ID; field?: PlanEditorField };
 
-type Sheet = 'title' | 'note';
-
-const TITLE_MAX = 200;
-const NOTE_MAX = 2000;
+const noop = () => undefined;
 
 function initial(id: ID, field: PlanEditorField | undefined, today: string): EditorState | null {
   const s = pickSnapshot(useStore.getState());
@@ -51,16 +48,21 @@ function PlanEditor({ start, openNote }: { start: EditorState; openNote: boolean
   const clock = useClock();
   const insets = useInsets();
   const { state, dispatch, latest } = useEditorState(() => start);
-  const { draft } = state;
-  const [sheet, setSheet] = useState<Sheet | null>(openNote ? 'note' : null);
   const [custom, setCustom] = useState<CustomReminder | null>(null);
-  const closeSheet = useCallback(() => setSheet(null), []);
   const closeCustom = useCallback(() => setCustom(null), []);
+  const titleRef = useRef<TextInput>(null);
+  const noteRef = useRef<TextInput>(null);
+
+  // Открыли «на описании» — курсор сразу в строке «ОПИСАНИЕ»
+  useEffect(() => {
+    if (openNote) noteRef.current?.focus();
+  }, [openNote]);
 
   const ctx = useRef<EditorContext>({ today: clock.today, snapshot: s });
   ctx.current = { today: clock.today, snapshot: s };
 
-  const handlers = usePanelHandlers({ dispatch, latest, ctx, onPickUntil: closeSheet, onCustom: setCustom });
+  // У плана повтора нет — «ДО ДАТЫ» не выбирается
+  const handlers = usePanelHandlers({ dispatch, latest, ctx, onPickUntil: noop, onCustom: setCustom });
 
   const planId = start.draft.id ?? '';
 
@@ -68,7 +70,7 @@ function PlanEditor({ start, openNote }: { start: EditorState; openNote: boolean
     (f: PlanField) => {
       switch (f) {
         case 'note':
-          return setSheet('note');
+          return noteRef.current?.focus();
         // Сводка подзадач — свернуть раскрытую строку, под полями снова список
         case 'subtasks':
           return dispatch({ type: 'collapse' });
@@ -87,17 +89,24 @@ function PlanEditor({ start, openNote }: { start: EditorState; openNote: boolean
     const t = st.tasks.find((x) => x.id === id);
     if (t && !!t.doneAt !== done) st.toggleTask(id);
   }, []);
-  const onOpenSubtask = useCallback((id: ID) => router.push(nav.taskEditor({ id })), []);
-  const onAddSubtask = useCallback(
-    () => router.push(nav.taskEditor({ parentId: planId, date: latest.current.draft.date })),
-    [planId, latest],
-  );
+  const onOpenSubtask = useCallback((id: ID) => {
+    Keyboard.dismiss();
+    router.push(nav.taskEditor({ id }));
+  }, []);
+  const onAddSubtask = useCallback(() => {
+    Keyboard.dismiss();
+    router.push(nav.taskEditor({ parentId: planId, date: latest.current.draft.date }));
+  }, [planId, latest]);
   // Сетка — во вкладке «Дела»: окно закрывается, под ним уже открытые вкладки (не второй (tabs); QA-1 С3)
-  const onOpenGrid = useCallback(() => toPlanGrid(planId), [planId]);
+  const onOpenGrid = useCallback(() => {
+    Keyboard.dismiss();
+    toPlanGrid(planId);
+  }, [planId]);
   const onDelete = useCallback(() => removeTask(planId), [planId]);
   const onSave = useCallback(() => {
     const d = latest.current.draft;
-    if (!d.title.trim()) return setSheet('title');
+    // Кнопка без названия недоступна; на всякий случай — курсор в заголовок
+    if (!canSaveDraft(d)) return titleRef.current?.focus();
     if (!saveDraft(d)) return notSaved(d);
     leaveEditor();
   }, [latest]);
@@ -111,21 +120,8 @@ function PlanEditor({ start, openNote }: { start: EditorState; openNote: boolean
       ],
     });
   }, [latest, onOpenGrid, onDelete]);
-  const onEditTitle = useCallback(() => setSheet('title'), []);
-  const onTitle = useCallback(
-    (title: string) => {
-      dispatch({ type: 'title', title });
-      setSheet(null);
-    },
-    [dispatch],
-  );
-  const onNote = useCallback(
-    (note: string) => {
-      dispatch({ type: 'note', note });
-      setSheet(null);
-    },
-    [dispatch],
-  );
+  const onChangeTitle = useCallback((title: string) => dispatch({ type: 'title', title }), [dispatch]);
+  const onChangeNote = useCallback((note: string) => dispatch({ type: 'note', note }), [dispatch]);
 
   const data = useMemo(() => planEditorProps(state.draft, state.ui, s, clock), [state, s, clock]);
   const screen = useMemo<PlanEditorScreenProps>(
@@ -134,10 +130,14 @@ function PlanEditor({ start, openNote }: { start: EditorState; openNote: boolean
       periodPanel: data.periodPanel && { ...data.periodPanel, ...handlers.period },
       remindPanel: data.remindPanel && { ...data.remindPanel, ...handlers.remind },
       whoPanel: data.whoPanel && { ...data.whoPanel, ...handlers.who },
+      visiblePanel: data.visiblePanel && { ...data.visiblePanel, ...handlers.visible },
       insets,
+      titleRef,
+      noteRef,
       onBack: leaveEditor,
       onMore,
-      onEditTitle,
+      onChangeTitle,
+      onChangeNote,
       onField,
       onToggleSubtask,
       onOpenSubtask,
@@ -146,30 +146,13 @@ function PlanEditor({ start, openNote }: { start: EditorState; openNote: boolean
       onDelete,
       onSave,
     }),
-    [data, handlers, insets, onMore, onEditTitle, onField, onToggleSubtask, onOpenSubtask, onAddSubtask, onOpenGrid, onDelete, onSave],
+    [data, handlers, insets, onMore, onChangeTitle, onChangeNote, onField, onToggleSubtask, onOpenSubtask, onAddSubtask, onOpenGrid, onDelete, onSave],
   );
 
   return (
     <View style={styles.fill}>
       <PlanEditorScreen {...screen} />
       <CustomRemindSheet kind={custom} bottomInset={insets.bottom} onAdd={handlers.addReminder} onClose={closeCustom} />
-      <InputSheet
-        visible={sheet === 'title'}
-        value={draft.title}
-        maxLength={TITLE_MAX}
-        bottomInset={insets.bottom}
-        onSubmit={onTitle}
-        onClose={closeSheet}
-      />
-      <InputSheet
-        visible={sheet === 'note'}
-        value={draft.note}
-        multiline
-        maxLength={NOTE_MAX}
-        bottomInset={insets.bottom}
-        onSubmit={onNote}
-        onClose={closeSheet}
-      />
     </View>
   );
 }

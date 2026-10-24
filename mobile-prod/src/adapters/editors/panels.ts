@@ -2,6 +2,7 @@
  * Данные раскрытых строк окна дела / плана: календарь с колесом («КОГДА», «ПЕРИОД», конец),
  * повтор, напоминания, участники. Колбэки панелей добавляет контейнер.
  */
+import { PERSONAL } from '@/lib/visibility';
 import { weekdayOf } from '@/lib/recur';
 import { effectiveSpecs, specLabel } from '@/lib/remind';
 import { lastDay } from '@/lib/span';
@@ -112,8 +113,9 @@ export function remindPanel(d: EditorDraft, ui: Pick<EditorUi, 'remindScope'>, s
 
 /** Участники группы черновика: я первым, потом по порядку вступления */
 export function memberIds(s: Pick<Snapshot, 'me' | 'groups'>, groupId: ID | null): ID[] {
-  const group = groupId ? s.groups.find((g) => g.id === groupId) : undefined;
-  return [s.me.id, ...(group?.memberIds ?? []).filter((id) => id !== s.me.id)];
+  // Личное дело — люди всех моих групп
+  const ids = groupId === PERSONAL ? [...new Set(s.groups.flatMap((g) => g.memberIds))] : (s.groups.find((g) => g.id === groupId)?.memberIds ?? []);
+  return [s.me.id, ...ids.filter((id) => id !== s.me.id)];
 }
 
 /** «КТО»: все в группе / выбрать; у каждого — свободен или «ЗАНЯТА 19:00–20:00 · ЙОГА» в это время */

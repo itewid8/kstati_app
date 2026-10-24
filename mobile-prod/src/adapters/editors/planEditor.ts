@@ -14,15 +14,16 @@ import type { Clock, DataOf, Snapshot } from '../snapshot';
 import { colorMap, colorOf } from '../common/people';
 import { kidsOf } from '../common/tasks';
 import { periodLabel } from '../common/when';
-import type { EditorDraft, EditorField, EditorUi } from './draft';
+import { canSaveDraft, noteValue, type EditorDraft, type EditorField, type EditorUi } from './draft';
 import { remindSummary, subtaskMeta, subtaskSummary } from './labels';
 import { mySpecs, periodPanel, remindPanel, whoPanel } from './panels';
 import { draftPeopleRefs, editorCaption } from './taskEditor';
+import { visibleField, visibleGroups } from './visible';
 
 export type PlanEditorData = DataOf<PlanEditorScreenProps>;
 
 /** У плана повтора нет — строка «ПОВТОР» не раскрывается */
-const PLAN_FIELDS: ReadonlySet<EditorField> = new Set<PlanField>(['period', 'who', 'remind', 'note', 'subtasks']);
+const PLAN_FIELDS: ReadonlySet<EditorField> = new Set<PlanField>(['period', 'who', 'visible', 'remind', 'note', 'subtasks']);
 const isPlanField = (f: EditorField | null): f is PlanField => f !== null && PLAN_FIELDS.has(f);
 
 /** Подзадача вне [начало, последний день] периода черновика */
@@ -55,22 +56,26 @@ export function planEditorProps(d: EditorDraft, ui: EditorUi, s: Snapshot, clock
   const { items, kids } = planSubtasks(d, s);
   const yearView = expanded === 'period' && ui.dateView === 'year';
   const notice = outsideNotice(d, kids);
+  const visible = visibleField(d, s);
   return {
-    caption: editorCaption('ПЛАН', s, d.groupId),
+    caption: editorCaption('ПЛАН', s, d.groupId, d.createdBy),
     title: d.title,
     colors: refs.colors,
     color,
     period: periodLabel(d),
     repeat: null,
     people: refs.people,
+    ...(visible !== undefined && { visible }),
     remind: remindSummary(mySpecs(d, s.reminders), d.time),
+    saveDisabled: !canSaveDraft(d),
     expanded,
     // Ничего не раскрыто — описание и список подзадач; раскрыто — сводка и плашка «вне периода»; вид года — ничего
-    ...(expanded === null && { note: d.note.trim() || null, subtasks: items }),
+    ...(expanded === null && { note: noteValue(d), subtasks: items }),
     ...(expanded !== null && !yearView && { subtaskSummary: subtaskSummary(items.length, items.filter((i) => i.done).length) }),
     ...(expanded !== null && !yearView && notice && { notice }),
     ...(expanded === 'period' && { periodPanel: periodPanel(d, ui, clock, color) }),
     ...(expanded === 'remind' && { remindPanel: remindPanel(d, ui, s.reminders) }),
     ...(expanded === 'who' && { whoPanel: whoPanel(d, ui, s, colors) }),
+    ...(expanded === 'visible' && visible !== undefined && { visiblePanel: { onlyMe: d.only, groups: visibleGroups(d, s) } }),
   };
 }

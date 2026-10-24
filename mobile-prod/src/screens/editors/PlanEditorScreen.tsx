@@ -5,7 +5,8 @@
  * с «ПЛАН СЕТКОЙ ›» или плашка «ВНЕ ПЕРИОДА». Что показывать, решает вызывающий: в макетах при раскрытом
  * периоде описание и список подзадач свёрнуты в сводку, чтобы всё помещалось над кнопками.
  */
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, type RefObject } from 'react';
+import type { TextInput } from 'react-native';
 import type { ID, PersonColor } from '@/lib/types';
 import { useTheme } from '@/ui';
 import { LinkButton } from './components/Buttons';
@@ -13,20 +14,23 @@ import { EditorScaffold, Notice, type EditorInsets, type EditorNotice } from './
 import {
   ExpandedPanel,
   FieldDescription,
+  FieldInputRow,
   FieldPeople,
   FieldRow,
   FieldTable,
   FieldValue,
   type EditorPerson,
 } from './components/FieldTable';
+import { NOTE_MAX } from './components/limits';
 import { SubtaskBox, type SubtaskItem } from './components/SubtaskBox';
 import { PeriodPanel, type PeriodPanelProps } from './panels/PeriodPanel';
 import { RemindPanel, type RemindPanelProps } from './panels/RemindPanel';
 import { RepeatPanel, type RepeatPanelProps } from './panels/RepeatPanel';
+import { VisiblePanel, type VisiblePanelProps } from './panels/VisiblePanel';
 import { WhoPanel, type WhoPanelProps } from './panels/WhoPanel';
 import type { EditorPersonRef } from './TaskEditorScreen';
 
-export type PlanField = 'period' | 'repeat' | 'who' | 'remind' | 'note' | 'subtasks';
+export type PlanField = 'period' | 'repeat' | 'who' | 'visible' | 'remind' | 'note' | 'subtasks';
 
 export type PlanEditorScreenProps = {
   /** «ПЛАН · МЫ С КАРИНОЙ» */
@@ -53,12 +57,23 @@ export type PlanEditorScreenProps = {
   repeatPanel?: RepeatPanelProps;
   remindPanel?: RemindPanelProps;
   whoPanel?: WhoPanelProps;
+  /** «ДРУЗЬЯ, СЕМЬЯ» — кому видно; null — «ТОЛЬКО Я»; undefined — строки нет (чужой план) */
+  visible?: string | null;
+  visiblePanel?: VisiblePanelProps;
+
+  /** «СОХРАНИТЬ» недоступна: нет названия */
+  saveDisabled?: boolean;
+  /** Поля названия и описания — фокус снаружи (назвать дело перед «Сделать планом», открыть план сразу на описании) */
+  titleRef?: RefObject<TextInput | null>;
+  noteRef?: RefObject<TextInput | null>;
 
   insets?: EditorInsets;
   onBack?: () => void;
   onMore?: () => void;
-  /** Тап по заголовку — переименовать (необязательный: без него заголовок только текст) */
-  onEditTitle?: () => void;
+  /** Название правится прямо в заголовке (без колбэка заголовок только текст) */
+  onChangeTitle?: (title: string) => void;
+  /** Описание правится прямо в строке «ОПИСАНИЕ» (без колбэка строка открывает onField('note')) */
+  onChangeNote?: (note: string) => void;
   onField?: (field: PlanField) => void;
   onToggleSubtask?: (id: ID, done: boolean) => void;
   onOpenSubtask?: (id: ID) => void;
@@ -82,9 +97,11 @@ export const PlanEditorScreen = memo(function PlanEditorScreen(props: PlanEditor
       title={props.title}
       colors={stripColors}
       insets={props.insets}
+      saveDisabled={props.saveDisabled}
+      titleRef={props.titleRef}
       onBack={props.onBack}
       onMore={props.onMore}
-      onEditTitle={props.onEditTitle}
+      onChangeTitle={props.onChangeTitle}
       onDelete={props.onDelete}
       onSave={props.onSave}
     >
@@ -116,6 +133,17 @@ export const PlanEditorScreen = memo(function PlanEditorScreen(props: PlanEditor
           </ExpandedPanel>
         ) : null}
 
+        {props.visible !== undefined ? (
+          <FieldRow label="ВИДНО" expanded={expanded === 'visible'} onPress={tap('visible')}>
+            <FieldValue text={props.visible ?? 'ТОЛЬКО Я'} muted={props.visible === null} />
+          </FieldRow>
+        ) : null}
+        {expanded === 'visible' && props.visiblePanel ? (
+          <ExpandedPanel>
+            <VisiblePanel {...props.visiblePanel} />
+          </ExpandedPanel>
+        ) : null}
+
         <FieldRow label="НАПОМНИТЬ" expanded={expanded === 'remind'} onPress={tap('remind')}>
           <FieldValue text={props.remind ?? 'НЕ НАПОМИНАТЬ'} muted={!props.remind} />
         </FieldRow>
@@ -125,7 +153,16 @@ export const PlanEditorScreen = memo(function PlanEditorScreen(props: PlanEditor
           </ExpandedPanel>
         ) : null}
 
-        {props.note !== undefined ? (
+        {props.note !== undefined && props.onChangeNote ? (
+          <FieldInputRow
+            label="ОПИСАНИЕ"
+            value={props.note}
+            empty="+ ОПИСАНИЕ"
+            maxLength={NOTE_MAX}
+            inputRef={props.noteRef}
+            onChangeText={props.onChangeNote}
+          />
+        ) : props.note !== undefined ? (
           <FieldRow label="ОПИСАНИЕ" onPress={tap('note')}>
             {props.note ? <FieldDescription text={props.note} /> : <FieldValue text="+ ОПИСАНИЕ" muted />}
           </FieldRow>

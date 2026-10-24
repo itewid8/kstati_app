@@ -6,6 +6,7 @@
 import { toISODate } from './dates';
 import { normTitle } from './dupes';
 import { uid } from './ids';
+import { newTaskShare } from './visibility';
 import { instance, nextOpen } from './recur';
 import { daysBetween, hhmm, normalizeEnd, shiftIso, toMin } from './span';
 import type { ChangeDraft, ChangePatch, DraftItem, ID, Idea, Task, TaskReminderOverride, Topic, WatchItem, Wish } from './types';
@@ -115,17 +116,25 @@ export function saveDraftItems(lists: Lists, items: readonly DraftItem[], ctx: S
       // Подзадача живёт в группе своего плана
       const parent = fields.parentId ? tasks.find((t) => t.id === fields.parentId && !t.parentId) : null;
       if (!parent) fields.parentId = null;
-      const groupId = parent?.groupId ?? currentGroupId;
+      // Новое: подзадача — в группе плана и с его видимостью, иначе — по текущему виду (группа или личный календарь)
+      const place: Pick<Task, 'groupId' | 'share' | 'only'> = parent
+        ? { groupId: parent.groupId, ...(parent.share && { share: parent.share }), ...(parent.only && { only: true }) }
+        : newTaskShare(currentGroupId);
       let id = it.id;
       // Подзадачу вынули из плана или перенесли в другой — прежний план пересчитываем
       const oldParent = id ? tasks.find((t) => t.id === id)?.parentId : null;
       if (id) {
         if (has(tasks, id)) ids.push(id);
         tasks = tasks.map((t) => (t.id === id ? { ...t, ...fields, ...(rep && { doneAt: null }) } : t));
-      } else if (groupId) {
+      } else {
         id = uid();
-        tasks = [...tasks, { id, groupId, createdBy: meId, doneAt: null, createdAt: now, ...fields }];
+        tasks = [...tasks, { id, ...place, createdBy: meId, doneAt: null, createdAt: now, ...fields }];
         ids.push(id);
+      }
+      // Видимость плана — у его подзадач та же
+      if (id && !parent && (data.only !== undefined || data.share !== undefined)) {
+        const planId = id;
+        tasks = tasks.map((k) => (k.parentId === planId ? { ...k, only: !!fields.only, share: fields.share ?? {} } : k));
       }
       if (parent) tasks = syncParent(tasks, parent.id);
       if (oldParent && oldParent !== parent?.id) tasks = syncParent(tasks, oldParent);

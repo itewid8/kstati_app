@@ -2,27 +2,43 @@
  * Каркас экранов календаря: верхняя панель (группа, список, +, лента, профиль), переключатель вида (top 68),
  * строка периода (top 104, h 40), содержимое и нижняя навигация. Размер экрана меряется onLayout —
  * сетка часов вписывается в высоту без прокрутки (видимые часы подстраиваются под дела).
+ *
+ * Содержимое вида можно обернуть (CalendarContentWrap — даёт контейнер): щипок между видами масштабирует
+ * только содержимое, панели стоят. Вкладки людей (overlay) — поверх содержимого и тоже не масштабируются.
  */
-import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
+import { createContext, memo, useCallback, useContext, useMemo, useState, type ComponentType, type ReactNode } from 'react';
 import { StyleSheet, View, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
+import { GRID, type ViewFrame } from '@/lib/calendarLayout';
 import { BottomNav, TopBar, size as S, space, useTheme, type TopBarAction } from '@/ui';
 import type { CalendarChromeProps, CalendarView } from '../types';
 import { ViewSwitch } from './ViewSwitch';
 
 /** Вертикальная сетка экрана календаря (макеты C-Day/Week/Month/Year) */
 export const CAL = {
-  viewTop: 68,
-  periodTop: 104,
+  viewTop: 116,
+  periodTop: 68,
   periodHeight: 40,
   /** Левый край сетки часов (подписи часов слева) и правое поле под вкладки людей */
-  gridLeft: 44,
-  gridRight: 26,
+  gridLeft: GRID.left,
+  gridRight: GRID.right,
   hourLabelLeft: 14,
 } as const;
 
 export const NO_INSETS = { top: 0, bottom: 0 };
 
 export type ScreenSize = { width: number; height: number };
+
+/** Кадр вида для общей геометрии (viewGeometry): снизу — навигация и safe area */
+export const frameOf = (size: ScreenSize, insets: { top: number; bottom: number }): ViewFrame => ({
+  width: size.width,
+  height: size.height,
+  top: insets.top,
+  bottom: insets.bottom + S.contentBottom,
+});
+
+/** Обёртка содержимого вида (на весь экран, касания насквозь); нет — содержимое без обёртки */
+export type CalendarContentWrapper = ComponentType<{ children?: ReactNode }>;
+export const CalendarContentWrap = createContext<CalendarContentWrapper | null>(null);
 
 /** Размер экрана: сначала окно, потом настоящий размер корня из onLayout */
 export function useScreenSize(): [ScreenSize, (e: LayoutChangeEvent) => void] {
@@ -39,6 +55,8 @@ type Props = CalendarChromeProps & {
   view: CalendarView;
   /** Строка периода: заголовок, стрелки, «СЕГОДНЯ» */
   period: ReactNode;
+  /** Поверх содержимого, вне масштаба щипка: вкладки людей */
+  overlay?: ReactNode;
   onLayout?: (e: LayoutChangeEvent) => void;
   children?: ReactNode;
 };
@@ -47,6 +65,7 @@ export const CalendarScaffold = memo(function CalendarScaffold(props: Props) {
   const {
     view,
     period,
+    overlay,
     onLayout,
     children,
     groupLabel,
@@ -63,6 +82,7 @@ export const CalendarScaffold = memo(function CalendarScaffold(props: Props) {
     onRec,
   } = props;
   const { c, person, personInk } = useTheme();
+  const Wrap = useContext(CalendarContentWrap);
 
   const actions = useMemo<TopBarAction[]>(
     () => [
@@ -84,7 +104,8 @@ export const CalendarScaffold = memo(function CalendarScaffold(props: Props) {
 
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]} onLayout={onLayout}>
-      {children}
+      {Wrap ? <Wrap>{children}</Wrap> : children}
+      {overlay}
       <TopBar lead={lead} actions={actions} style={[styles.side, { top: insets.top + S.topBarTop }]} />
       <ViewSwitch value={view} onChange={onChangeView} style={[styles.side, { top: insets.top + CAL.viewTop }]} />
       <View style={[styles.side, styles.period, { top: insets.top + CAL.periodTop }]}>{period}</View>

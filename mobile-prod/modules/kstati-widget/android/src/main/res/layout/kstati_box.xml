@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Список в рамке 1.5 (как SectionBox): шапка 22 залита цветом текста — группа, день недели и число в красном
+     квадрате; под ней строки дел. Заливка, рамка и цвета задаются из кода (KstatiWidget.kt) -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/kstati_box"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent">
+  <ImageView
+    android:id="@+id/kstati_box_fill"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no" />
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="@dimen/kstati_border">
+    <LinearLayout
+      android:id="@+id/kstati_header"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:gravity="center_vertical"
+      android:minHeight="@dimen/kstati_header"
+      android:orientation="horizontal"
+      android:paddingStart="8dp"
+      android:paddingEnd="3dp">
+      <TextView
+        android:id="@+id/kstati_header_label"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:fontFamily="@font/kstati_geist_mono_semibold"
+        android:includeFontPadding="false"
+        android:letterSpacing="0.08"
+        android:maxLines="1"
+        android:textSize="9sp" />
+      <TextView
+        android:id="@+id/kstati_header_weekday"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="5dp"
+        android:fontFamily="@font/kstati_geist_mono_semibold"
+        android:includeFontPadding="false"
+        android:letterSpacing="0.08"
+        android:maxLines="1"
+        android:textSize="9sp" />
+      <TextView
+        android:id="@+id/kstati_header_day"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/kstati_geist_mono_semibold"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:minWidth="20dp"
+        android:minHeight="16dp"
+        android:paddingStart="3dp"
+        android:paddingEnd="3dp"
+        android:textSize="9.5sp" />
+    </LinearLayout>
+    <LinearLayout
+      android:id="@+id/kstati_list"
+      android:layout_width="match_parent"
+      android:layout_height="0dp"
+      android:layout_weight="1"
+      android:orientation="vertical" />
+  </LinearLayout>
+  <ImageView
+    android:id="@+id/kstati_box_stroke"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no"
+    android:scaleType="fitXY"
+    android:src="@drawable/kstati_stroke" />
+</FrameLayout>

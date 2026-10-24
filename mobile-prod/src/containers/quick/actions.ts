@@ -101,6 +101,9 @@ const taskTile = (v: QuickTaskView, key: QuickTileKey): void => {
     case 'openPlan':
       if (v.planId) toPlanGrid(v.planId);
       return;
+    case 'remind':
+      // Чужое дело: окно дела только с моими напоминаниями
+      return void router.push(nav.taskEditor({ ...(occ ? { id: task.id, occ } : { id: task.id }), field: 'remind' }));
     case 'copy': {
       const me = st.me;
       if (!me) return;

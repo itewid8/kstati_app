@@ -138,3 +138,17 @@ export const quickIdeaFixture: QuickFixture = {
     deletable: true,
   },
 };
+
+/** C-TaskView: чужое дело у участника без прав админа — то же окно, только ГОТОВО / НАПОМНИТЬ / КОПИЯ и ЗАКРЫТЬ */
+export const quickTaskViewFixture: QuickFixture = {
+  ...quickTaskFixture,
+  sheet: {
+    card: quickTaskFixture.sheet.card,
+    tiles: [
+      { key: 'done', label: 'ГОТОВО', primary: true },
+      { key: 'remind', label: 'НАПОМНИТЬ' },
+      { key: 'copy', label: 'КОПИЯ' },
+    ],
+    deletable: false,
+  },
+};

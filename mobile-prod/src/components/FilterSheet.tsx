@@ -1,10 +1,7 @@
-import { Check } from '@/components/icons';
-import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { FRESH_LABEL, GENRE_LABEL, KIND_LABEL, ORIGIN_LABEL, type WatchFilters } from '@/lib/types';
-import { ICON, space, useColors } from '@/theme';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FRESH_LABEL, GENRE_LABEL, KIND_LABEL, ORIGIN_LABEL, type Freshness, type Genre, type Kind, type Origin, type WatchFilters } from '@/lib/types';
+import { FilterSheetView, type FilterOption } from '@/screens/sheets';
 import { Sheet } from './Sheet';
-import { Button, T } from './ui';
 
 export type FilterKey = keyof WatchFilters;
 
@@ -15,6 +12,26 @@ export const FILTER_META: Record<FilterKey, { title: string; labels: Record<stri
   fresh: { title: 'Новизна', labels: FRESH_LABEL },
 };
 
+const only =
+  <K extends string>(labels: Record<K, string>) =>
+  (values: readonly string[]): K[] =>
+    values.filter((v): v is K => v in labels);
+
+/** Те же фильтры с новым набором значений одного поля (незнакомые значения отбрасываются) */
+function withField(f: WatchFilters, key: FilterKey, values: readonly string[]): WatchFilters {
+  switch (key) {
+    case 'kind':
+      return { ...f, kind: only<Kind>(KIND_LABEL)(values) };
+    case 'genre':
+      return { ...f, genre: only<Genre>(GENRE_LABEL)(values) };
+    case 'origin':
+      return { ...f, origin: only<Origin>(ORIGIN_LABEL)(values) };
+    case 'fresh':
+      return { ...f, fresh: only<Freshness>(FRESH_LABEL)(values) };
+  }
+}
+
+/** Фильтр «Смотреть» по одному полю: варианты плитками, «ОЧИСТИТЬ» / «ГОТОВО» */
 export function FilterSheet({
   field,
   filters,
@@ -26,60 +43,35 @@ export function FilterSheet({
   onChange: (f: WatchFilters) => void;
   onClose: () => void;
 }) {
-  const c = useColors();
-  const meta = field ? FILTER_META[field] : null;
-  const selected: string[] = field ? filters[field] : [];
+  // Держим последнее поле, чтобы окно не «пустело» во время закрытия
+  const [shown, setShown] = useState<FilterKey | null>(field);
+  useEffect(() => {
+    if (field) setShown(field);
+  }, [field]);
 
-  const toggle = (v: string) => {
-    if (!field) return;
-    const cur = filters[field] as string[];
-    const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
-    onChange({ ...filters, [field]: next } as WatchFilters);
-  };
+  const meta = shown ? FILTER_META[shown] : null;
+  const selected: readonly string[] = shown ? filters[shown] : [];
+  const options = useMemo<FilterOption[]>(
+    () => (meta ? Object.entries(meta.labels).map(([key, label]) => ({ key, label, selected: selected.includes(key) })) : []),
+    [meta, selected],
+  );
+
+  const toggle = useCallback(
+    (v: string) => {
+      if (!shown) return;
+      const cur: readonly string[] = filters[shown];
+      const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
+      onChange(withField(filters, shown, next));
+    },
+    [shown, filters, onChange],
+  );
+  const clear = useCallback(() => {
+    if (shown) onChange(withField(filters, shown, []));
+  }, [shown, filters, onChange]);
 
   return (
-    <Sheet visible={!!field} onClose={onClose}>
-      {meta && (
-        <View>
-          <T weight="semibold" style={styles.title}>
-            {meta.title}
-          </T>
-          {Object.entries(meta.labels).map(([k, label]) => {
-            const on = selected.includes(k);
-            return (
-              <Pressable
-                key={k}
-                onPress={() => toggle(k)}
-                style={({ pressed }) => [styles.row, { backgroundColor: pressed ? c.background : 'transparent' }]}
-              >
-                <T style={{ flex: 1 }}>{label[0].toUpperCase() + label.slice(1)}</T>
-                {on && <Check size={ICON.size} strokeWidth={ICON.stroke} color={c.text} />}
-              </Pressable>
-            );
-          })}
-          <View style={styles.actions}>
-            <Button
-              kind="text"
-              title="Очистить"
-              disabled={!selected.length}
-              onPress={() => field && onChange({ ...filters, [field]: [] } as WatchFilters)}
-            />
-            <Button title="Готово" onPress={onClose} />
-          </View>
-        </View>
-      )}
+    <Sheet visible={!!field} onClose={onClose} inset>
+      {meta ? <FilterSheetView title={meta.title} options={options} onToggle={toggle} onClear={clear} onDone={onClose} /> : null}
     </Sheet>
   );
 }
-
-const styles = StyleSheet.create({
-  title: { paddingHorizontal: space.side, paddingVertical: 8 },
-  row: { minHeight: 48, paddingHorizontal: space.side, flexDirection: 'row', alignItems: 'center' },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: space.side,
-    paddingTop: 8,
-  },
-});

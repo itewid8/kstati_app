@@ -8,7 +8,7 @@
 import type { FastifyRequest } from 'fastify';
 
 /** Самый новый уровень API, который понимает сервер (отдаётся в /health) */
-export const API_LEVEL = 2;
+export const API_LEVEL = 3;
 
 const header = (req: FastifyRequest, name: string) => {
   const v = req.headers[name];

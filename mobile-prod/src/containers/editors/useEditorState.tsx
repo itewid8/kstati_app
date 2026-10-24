@@ -16,7 +16,9 @@ import type { DatePickerProps } from '@/screens/editors/panels/DatePanel';
 import type { PeriodEdge, PeriodPanelProps } from '@/screens/editors/panels/PeriodPanel';
 import type { CustomReminder, RemindPanelProps, RemindScope } from '@/screens/editors/panels/RemindPanel';
 import type { RepeatEnd, RepeatPanelProps, RepeatPreset, RepeatUnit } from '@/screens/editors/panels/RepeatPanel';
+import type { VisiblePanelProps } from '@/screens/editors/panels/VisiblePanel';
 import type { WhoMode, WhoPanelProps } from '@/screens/editors/panels/WhoPanel';
+import { visibleGroups } from '@/adapters/editors/visible';
 import { nav } from '../common/nav';
 
 export type EditorDispatch = Dispatch<EditorAction>;
@@ -76,6 +78,7 @@ export type PanelHandlers = {
   repeat: Pick<RepeatPanelProps, 'onPreset' | 'onEvery' | 'onUnit' | 'onToggleWeekday' | 'onEnd' | 'onPickUntil' | 'onCount'>;
   remind: Pick<RemindPanelProps, 'onScope' | 'onRemove' | 'onAdd' | 'onCustom'>;
   who: Pick<WhoPanelProps, 'onMode' | 'onToggleMember'>;
+  visible: Pick<VisiblePanelProps, 'onToggleOnly' | 'onToggleGroup' | 'onReset'>;
   /** Своё напоминание из окна CustomRemindSheet */
   addReminder: (spec: ReminderSpec) => void;
 };
@@ -149,6 +152,14 @@ export function usePanelHandlers({ dispatch, latest, ctx, onPickUntil, onCustom 
           // Сняли или добавили человека вручную — это уже «ВЫБРАТЬ»
           if (latest.current.ui.whoMode === 'all') dispatch({ type: 'whoMode', mode: 'pick', members: [] });
         },
+      },
+      visible: {
+        onToggleOnly: () => dispatch({ type: 'onlyMe' }),
+        onToggleGroup: (id: ID) => {
+          const g = visibleGroups(latest.current.draft, ctx.current.snapshot).find((x) => x.id === id);
+          if (g) dispatch({ type: 'shareGroup', id, visible: !g.visible });
+        },
+        onReset: () => dispatch({ type: 'shareReset' }),
       },
       addReminder,
     };

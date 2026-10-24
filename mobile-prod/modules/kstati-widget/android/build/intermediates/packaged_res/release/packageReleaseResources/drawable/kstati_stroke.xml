@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Рамка 1.5 без заливки и без скругления; цвет — setColorFilter из кода -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+  <solid android:color="#00000000" />
+  <stroke android:width="@dimen/kstati_border" android:color="#FFFFFFFF" />
+</shape>

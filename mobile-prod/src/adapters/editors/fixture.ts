@@ -47,6 +47,8 @@ export const YOGA = task('yoga', '2026-09-05', '10:00', 'Йога', ['karina'], 
   repeat: { freq: 'week', every: 1, weekdays: [6], until: '2026-12-31' },
 });
 export const TRIP = task('trip', '2026-10-07', '07:00', 'Командировка в Казань', ['karina'], {
+  // План создал Саня для Карины (макет C-EditPlan: Сане видна строка «ВИДНО»)
+  createdBy: 'sanya',
   endDate: '2026-10-09',
   endTime: '15:00',
   note: 'Переговоры с заказчиком. Отель на Баумана, 12',

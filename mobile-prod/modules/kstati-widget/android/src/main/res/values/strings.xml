@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="kstati_widget_label">Кстати</string>
+  <string name="kstati_widget_description">Ближайшие дела и кнопка записи</string>
+  <string name="kstati_widget_empty">Дел нет</string>
+  <string name="kstati_widget_rec" translatable="false">REC</string>
+  <string name="kstati_widget_record">Записать</string>
+</resources>

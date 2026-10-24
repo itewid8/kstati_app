@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Полоса 1.5 слева от строки: цвет человека; двое — верх и низ (как ListRow) -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="@dimen/kstati_strip"
+  android:layout_height="match_parent"
+  android:orientation="vertical">
+  <ImageView
+    android:id="@+id/kstati_strip_a"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1"
+    android:importantForAccessibility="no" />
+  <ImageView
+    android:id="@+id/kstati_strip_b"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1"
+    android:importantForAccessibility="no"
+    android:visibility="gone" />
+</LinearLayout>

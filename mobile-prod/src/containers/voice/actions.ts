@@ -13,23 +13,18 @@ import type { Snapshot } from '@/adapters/snapshot';
 import type { DeleteScope } from '@/screens/voice';
 import { track } from '@/lib/analytics';
 import type { PlansAnswer } from '@/lib/plans';
-import { useStore, type Card } from '@/lib/store';
+import { useStore } from '@/lib/store';
 import { INBOX, type ChangeDraft, type DraftItem, type ID, type ItemType } from '@/lib/types';
-import { TAB_FOR, beginRecording, cancelVoice, disarmRecording } from '@/lib/voice';
+import { TAB_FOR, beginRecording, cancelVoice } from '@/lib/voice';
 import { toPlanGrid, toTabRoute, toTopic } from '../common/go';
 import { nav } from '../common/nav';
-import { pickSnapshot } from '../common/useSnapshot';
 
 const success = () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
 export const closeCard = () => useStore.getState().setCard(null);
 
-/** Закрыть всё голосовое: запись или разбор — отменить, окно — закрыть */
-export function closeVoice() {
-  if (useStore.getState().voice !== 'idle') return cancelVoice();
-  disarmRecording();
-  closeCard();
-}
+/** Закрыть всё голосовое: запись или разбор — отменить, окно ссылки или ответа — закрыть (автомат adapters/voice/recording) */
+export const closeVoice = () => cancelVoice();
 
 export const retryVoice = () => void beginRecording();
 
@@ -157,21 +152,4 @@ function addManually(type: ItemType, title: string) {
 /** Окно ошибки «ДОБАВИТЬ»: выбор типа записи; title — сказанное (или то, что не нашлось) */
 export function openAddMenu(menuTitle: string, title: string) {
   openMenu({ title: menuTitle, actions: ADD_AS.map(({ type, label }) => ({ label, onPress: () => addManually(type, title) })) });
-}
-
-/**
- * «ИЗМЕНИТЬ» во время записи (QA-1 М10): ответ пришёл — сразу правка. Одна запись — её редактор; несколько — старое окно
- * в режиме правки; одна правка (перенос, отметка) — как «Изменить» в C-AskMove. Удаление, вопрос о планах, ошибка — как есть
- */
-export function editVoiceResult(card: Card) {
-  if (card.source !== 'voice' || 'problem' in card || 'plans' in card) return;
-  if ('changes' in card) {
-    const [change, ...rest] = card.changes;
-    if (change && !rest.length && change.action !== 'delete') editChange(change, pickSnapshot(useStore.getState()));
-    return;
-  }
-  const [item, ...rest] = card.items;
-  if (!item) return;
-  if (!rest.length) return editVoiceItem(item, card.transcript ?? '');
-  useStore.getState().setCard({ ...card, editing: true });
 }

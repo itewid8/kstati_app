@@ -3,22 +3,25 @@
 // Под каждым окном — упрощённый экран «Дела», как в макетах.
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { AskAgendaSheet, AskDeleteSheet, AskMoveSheet, VoiceCreateSheet } from '@/screens/voice';
+import { AskAgendaSheet, AskDeleteSheet, AskMoveSheet, RecordingSheet, VoiceCreateSheet } from '@/screens/voice';
 import { VoiceBackdrop } from '@/screens/fixtures/voice/Backdrop';
 import {
   askDeleteFixture,
   askMoveFixture,
   askWeekFixture,
   askWeekendFixture,
+  recordHoldFixture,
+  recordTapFixture,
+  recordWaitFixture,
   voiceCreateFixture,
 } from '@/screens/fixtures/voice';
 import type { Scheme } from '@/ui';
 
 type Props = { theme: Scheme };
 
-const Stage = ({ children }: { children: ReactNode }) => (
+const Stage = ({ children, nav }: { children: ReactNode; nav?: 'idle' | 'held' }) => (
   <View style={styles.stage}>
-    <VoiceBackdrop />
+    <VoiceBackdrop nav={nav} />
     {children}
   </View>
 );
@@ -47,6 +50,22 @@ export const screens = {
   'C-AskWeekend': (_: Props) => (
     <Stage>
       <AskAgendaSheet {...askWeekendFixture} />
+    </Stage>
+  ),
+  // Без макетов: только рендер (сравнивать не с чем)
+  'X-RecordHold': (_: Props) => (
+    <Stage nav="held">
+      <RecordingSheet {...recordHoldFixture} />
+    </Stage>
+  ),
+  'X-RecordTap': (_: Props) => (
+    <Stage nav="idle">
+      <RecordingSheet {...recordTapFixture} />
+    </Stage>
+  ),
+  'X-RecordWait': (_: Props) => (
+    <Stage nav="idle">
+      <RecordingSheet {...recordWaitFixture} />
     </Stage>
   ),
 };

@@ -6,6 +6,7 @@ import { QuickBackdrop, backdropLift } from '@/screens/fixtures/quick/Backdrop';
 import {
   quickIdeaFixture,
   quickTaskFixture,
+  quickTaskViewFixture,
   quickWatchFixture,
   quickWishFixture,
   type QuickFixture,
@@ -27,6 +28,7 @@ export const screens = {
   'C-QuickWish': (_: Props) => <Stage fixture={quickWishFixture} />,
   'C-QuickWatch': (_: Props) => <Stage fixture={quickWatchFixture} />,
   'C-QuickIdea': (_: Props) => <Stage fixture={quickIdeaFixture} />,
+  'C-TaskView': (_: Props) => <Stage fixture={quickTaskViewFixture} />,
 };
 
 const styles = StyleSheet.create({

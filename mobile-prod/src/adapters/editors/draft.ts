@@ -20,6 +20,7 @@ import type { WhoMode } from '@/screens/editors/panels/WhoPanel';
 import type { PlanField } from '@/screens/editors/PlanEditorScreen';
 import type { TaskField } from '@/screens/editors/TaskEditorScreen';
 import { moveEnd, moveStart, type Period, type PeriodPoint } from '@/screens/editors/periodMath';
+import { newTaskShare } from '@/lib/visibility';
 import type { Snapshot } from '../snapshot';
 
 /* ---------- Черновик ---------- */
@@ -43,6 +44,9 @@ export type EditorDraft = {
   /** Общие напоминания группы (null — у каждого свои по умолчанию) */
   shared: ReminderSpec[] | null;
   parentId: ID | null;
+  /** «Только я» и отметки по группам (строка «ВИДНО», lib/visibility.ts) */
+  only: boolean;
+  share: Record<ID, boolean>;
   /** Открытый раз серии: черновик показывает его дату */
   occ: IsoDate | null;
   /** Дата начала серии (когда открыт раз occ) */
@@ -60,10 +64,12 @@ export const DEFAULT_TIME = '09:00';
 
 const shiftDay = (iso: IsoDate, n: number) => isoOf(dayNo(iso) + n);
 
-/** Группа нового дела: группа плана (подзадача), иначе текущая */
-function groupFor(s: Pick<Snapshot, 'tasks' | 'currentGroupId'>, parentId: ID | null): { groupId: ID | null; parentId: ID | null } {
+/** Группа нового дела: подзадача — как у плана (группа и видимость), иначе текущий вид (группа или личный календарь) */
+function groupFor(s: Pick<Snapshot, 'tasks' | 'currentGroupId'>, parentId: ID | null): Pick<EditorDraft, 'groupId' | 'parentId' | 'only' | 'share'> {
   const parent = parentId ? s.tasks.find((t) => t.id === parentId && !t.parentId) : undefined;
-  return parent ? { groupId: parent.groupId, parentId: parent.id } : { groupId: s.currentGroupId, parentId: null };
+  if (parent) return { groupId: parent.groupId, parentId: parent.id, only: !!parent.only, share: parent.share ?? {} };
+  const v = newTaskShare(s.currentGroupId);
+  return { groupId: v.groupId, parentId: null, only: false, share: v.share ?? {} };
 }
 
 /** Новое дело: из «+» (без даты), из календаря (дата дня, время), подзадача плана (parentId) */
@@ -114,6 +120,8 @@ export function draftFromTask(task: Task, s: Pick<Snapshot, 'overrides'>, occ?: 
     mine: s.overrides[task.id],
     shared: task.reminders ?? null,
     parentId: task.parentId ?? null,
+    only: !!task.only,
+    share: task.share ?? {},
     occ: series && occ ? occ : null,
     seriesDate: series ? task.date : null,
     lastTime: task.time ?? DEFAULT_TIME,
@@ -314,14 +322,42 @@ export type DraftAction =
   /** Края периода плана */
   | { type: 'periodDay'; edge: PeriodEdge; date: IsoDate }
   | { type: 'periodTime'; edge: PeriodEdge; time: string }
-  | { type: 'periodNoTime'; edge: PeriodEdge };
+  | { type: 'periodNoTime'; edge: PeriodEdge }
+  /** Строка «ВИДНО»: «Только я», показать / скрыть группе, сброс к режимам групп */
+  | { type: 'onlyMe' }
+  | { type: 'shareGroup'; id: ID; visible: boolean }
+  | { type: 'shareReset' };
+
+/**
+ * Название правится прямо в заголовке окна: одна строка (перевод строки из вставки — пробел).
+ * Пробелы по краям не трогаем, пока человек печатает, — их убирает draftToItem
+ */
+export const titleInput = (text: string): string => text.replace(/[ \t]*[\r\n]+[ \t]*/g, ' ');
+
+/** «СОХРАНИТЬ» (и «Сделать планом») доступны только с названием */
+export const canSaveDraft = (d: Pick<EditorDraft, 'title'>): boolean => d.title.trim().length > 0;
+
+/**
+ * Описание в строке «ОПИСАНИЕ» (правится в ней же): текст как есть — пробел или перевод строки в конце не съедаются,
+ * пока человек печатает; одни пробелы — пусто (null, «+ ОПИСАНИЕ»)
+ */
+export const noteValue = (d: Pick<EditorDraft, 'note'>): string | null => (d.note.trim() ? d.note : null);
 
 export function reduceDraft(d: EditorDraft, a: DraftAction): EditorDraft {
   switch (a.type) {
-    case 'title':
-      return { ...d, title: a.title };
+    case 'title': {
+      const title = titleInput(a.title);
+      return title === d.title ? d : { ...d, title };
+    }
     case 'note':
-      return { ...d, note: a.note };
+      return a.note === d.note ? d : { ...d, note: a.note };
+    case 'onlyMe':
+      return { ...d, only: !d.only };
+    case 'shareGroup':
+      // Отметили группу — дело уже не «только моё»
+      return { ...d, only: a.visible ? false : d.only, share: { ...d.share, [a.id]: a.visible } };
+    case 'shareReset':
+      return { ...d, only: false, share: {} };
     case 'day':
       return moveStartTo(d, { date: a.date, time: d.date ? d.time : null });
     case 'clearDate':
@@ -550,6 +586,8 @@ export function draftToItem(d: EditorDraft): Extract<DraftItem, { type: 'task' }
     endTime: d.endTime,
     people: draftPeople(d),
     parentId: d.parentId,
+    only: d.only,
+    share: d.share,
   };
   return d.id ? { key: d.id, type: 'task', id: d.id, data } : { key: 'new', type: 'task', data };
 }

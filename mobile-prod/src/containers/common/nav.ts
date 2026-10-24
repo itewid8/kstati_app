@@ -19,7 +19,7 @@ function query(params: Record<string, string | null | undefined>): string {
 export const NEW_TASK = 'new';
 
 /** Строка окна дела, раскрытая при открытии: when — дата и время (ДАТА… в быстрых действиях) */
-export type TaskEditorField = 'when';
+export type TaskEditorField = 'when' | 'remind';
 export type TaskEditorParams = { id?: ID; occ?: string; date?: string | null; time?: string | null; parentId?: ID | null; field?: TaskEditorField };
 /** Поле, которое раскрыть при открытии окна плана */
 export type PlanEditorField = 'period' | 'note' | 'subtasks';
@@ -43,6 +43,7 @@ export const nav = {
   group: (id: ID): Href => `/group/${encodeURIComponent(id)}`,
   reminders: (): Href => '/settings/reminders',
   avatar: (): Href => '/settings/avatar',
+  widgetSettings: (): Href => '/settings/widget',
   profileEdit: (field?: ProfileField): Href => `/settings/edit${query({ field })}`,
   topic: (id: ID): Href => `/ideas/${encodeURIComponent(id)}`,
 } as const;

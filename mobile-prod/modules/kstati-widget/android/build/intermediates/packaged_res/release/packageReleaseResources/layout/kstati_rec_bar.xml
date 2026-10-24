@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Кнопка REC под списком во всю ширину: точка со свечением и «REC» в строку. Те же id, что в kstati_rec.xml -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/kstati_rec"
+  android:layout_width="match_parent"
+  android:layout_height="@dimen/kstati_rec_bar"
+  android:contentDescription="@string/kstati_widget_record">
+  <ImageView
+    android:id="@+id/kstati_rec_fill"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no" />
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="horizontal">
+    <FrameLayout
+      android:layout_width="@dimen/kstati_glow"
+      android:layout_height="@dimen/kstati_glow">
+      <ImageView
+        android:id="@+id/kstati_rec_glow"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:src="@drawable/kstati_glow" />
+      <ImageView
+        android:id="@+id/kstati_rec_dot"
+        android:layout_width="@dimen/kstati_dot"
+        android:layout_height="@dimen/kstati_dot"
+        android:layout_gravity="center"
+        android:importantForAccessibility="no"
+        android:src="@drawable/kstati_dot" />
+    </FrameLayout>
+    <TextView
+      android:id="@+id/kstati_rec_label"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="6dp"
+      android:fontFamily="@font/kstati_geist_mono_semibold"
+      android:importantForAccessibility="no"
+      android:includeFontPadding="false"
+      android:letterSpacing="0.12"
+      android:maxLines="1"
+      android:text="@string/kstati_widget_rec"
+      android:textSize="10sp" />
+  </LinearLayout>
+  <ImageView
+    android:id="@+id/kstati_rec_stroke"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no"
+    android:scaleType="fitXY"
+    android:src="@drawable/kstati_stroke" />
+</FrameLayout>

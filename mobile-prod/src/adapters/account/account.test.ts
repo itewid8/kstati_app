@@ -108,12 +108,12 @@ describe('groupProps (C-Group)', () => {
     ideas: [idea('x1', 't1'), idea('x2', 't1'), idea('y', 't2'), idea('z', null)],
   });
 
-  test('совпадает с макетом, кроме счётчиков списков', () => {
+  test('совпадает с макетом, кроме счётчиков списков и моих дел', () => {
     const fx = groupFixture();
     const got = groupProps(s, colorMap(s), 'g1', CLOCK);
     assert.ok(got);
-    const { lists: _a, members, ...rest } = got;
-    const { lists: _b, members: fxMembers, ...fxRest } = fx;
+    const { lists: _a, share: _c, members, ...rest } = got;
+    const { lists: _b, share: _d, members: fxMembers, ...fxRest } = fx;
     assert.deepEqual(rest, fxRest);
     assert.deepEqual(members.map(({ id: _, ...m }) => m), fxMembers.map(({ id: _, ...m }) => m));
   });

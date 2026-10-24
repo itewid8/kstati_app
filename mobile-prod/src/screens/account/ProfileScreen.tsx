@@ -1,5 +1,6 @@
 /**
- * Профиль (C-Profile): аватар-квадрат цвета человека, имя, разделы ПРОФИЛЬ / ГРУППЫ / ПРИЛОЖЕНИЕ И АККАУНТ.
+ * Профиль (C-Profile): аватар-квадрат цвета человека, имя, разделы ПРОФИЛЬ / ГРУППЫ (с «Новая группа» и
+ * «Вступить по коду») / ПРИЛОЖЕНИЕ И АККАУНТ.
  * Презентационный экран: данные — пропсами, действия — колбэками.
  */
 import { memo } from 'react';
@@ -45,6 +46,7 @@ export type ProfileScreenProps = {
   onPickCustomColor?: () => void;
   onOpenGroup?: (id: ID) => void;
   onCreateGroup?: () => void;
+  onJoinGroup?: () => void;
   onOpenAppSettings?: () => void;
   onChangePassword?: () => void;
   onLogout?: () => void;
@@ -71,6 +73,7 @@ export const ProfileScreen = memo(function ProfileScreen(props: ProfileScreenPro
     onPickCustomColor,
     onOpenGroup,
     onCreateGroup,
+    onJoinGroup,
     onOpenAppSettings,
     onChangePassword,
     onLogout,
@@ -133,6 +136,7 @@ export const ProfileScreen = memo(function ProfileScreen(props: ProfileScreenPro
             />
           ))}
           <AccountRow label="Новая группа" value="+" onPress={onCreateGroup} />
+          <AccountRow label="Вступить по коду" onPress={onJoinGroup} />
         </SectionBox>
 
         <SectionBox title="ПРИЛОЖЕНИЕ И АККАУНТ">

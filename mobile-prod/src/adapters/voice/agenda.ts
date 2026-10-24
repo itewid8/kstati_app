@@ -16,7 +16,7 @@ import { MONTHS_SHORT, WEEKDAYS, parts, weekday } from '@/screens/calendar/forma
 import type { Clock, Snapshot } from '../snapshot';
 import { colorMap, userOf, type ColorMap } from '../common/people';
 import { plural, upper } from '../common/ru';
-import { instancesIn, planIds } from '../common/tasks';
+import { ALL_TASKS, instancesIn, planIds } from '../common/tasks';
 import { dayMonthShort, dayShort, rangeDays } from '../common/when';
 import { freeText } from './free';
 import { clip, colorsOf, dayLabel, namesText } from './labels';
@@ -87,8 +87,8 @@ function noteOf(t: Task, day: IsoDate, to: IsoDate): string {
 export function agendaSheetProps(answer: PlansAnswer, s: Snapshot, clock: Clock, opts: AgendaOptions = {}): AgendaSheetData {
   const { from, to } = answer;
   const colors: ColorMap = colorMap(s);
-  const groupIds = answer.sections.map((x) => x.groupId);
-  const byKey = new Map(instancesIn(s.tasks, groupIds, from, to).map((t) => [taskKey(t), t]));
+  // Ключи дел ответа уже отобраны по группам (lib/plans.ts) — здесь только разворачиваем повторы
+  const byKey = new Map(instancesIn(s.tasks, ALL_TASKS, from, to).map((t) => [taskKey(t), t]));
   const keys = [...new Set(answer.sections.flatMap((x) => x.taskIds))];
   // Ключ без повтора, которого нет в периоде, — дело без даты из поиска («когда дача»)
   const found = keys.flatMap((k): Task[] => {

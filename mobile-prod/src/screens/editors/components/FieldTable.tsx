@@ -1,11 +1,14 @@
 /**
  * Таблица полей дела: рамка 1.5px, строки ≥ 44px, колонка подписи 88px.
  * Раскрытая строка — подпись инвертирована и со стрелкой вверх, под ней ExpandedPanel.
+ * Тап по строке закрывает клавиатуру; FieldInputRow — строка, которая правится прямо в ней (описание).
  */
-import { memo, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { memo, useCallback, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Keyboard, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Icon, PersonTag, size as S, type as T, useTheme } from '@/ui';
+import { useKeyboardTarget } from './keyboard';
 import { ET } from './text';
+import { useWebAutoHeight } from './webAutoHeight';
 
 export const FieldTable = memo(function FieldTable({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const { c } = useTheme();
@@ -33,6 +36,15 @@ type FieldRowProps = {
 export const FieldRow = memo(function FieldRow({ label, first, expanded, trailing = 'chevron', onPress, onClear, children }: FieldRowProps) {
   const { c } = useTheme();
   const clear = !expanded && trailing === 'clear';
+  // Открыли другую строку — печатать закончили
+  const press = useCallback(() => {
+    Keyboard.dismiss();
+    onPress?.();
+  }, [onPress]);
+  const clearPress = useCallback(() => {
+    Keyboard.dismiss();
+    onClear?.();
+  }, [onClear]);
   return (
     <View
       style={[
@@ -45,7 +57,7 @@ export const FieldRow = memo(function FieldRow({ label, first, expanded, trailin
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityState={{ expanded: !!expanded }}
-        onPress={onPress}
+        onPress={press}
         disabled={!onPress}
         style={styles.main}
       >
@@ -62,12 +74,82 @@ export const FieldRow = memo(function FieldRow({ label, first, expanded, trailin
       </Pressable>
       {clear ? (
         <View style={styles.trailing}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Очистить: ${label}`} onPress={onClear} hitSlop={8}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Очистить: ${label}`} onPress={clearPress} hitSlop={8}>
             <Text style={[ET.clear, { color: c.muted }]}>×</Text>
           </Pressable>
         </View>
       ) : null}
     </View>
+  );
+});
+
+type FieldInputRowProps = {
+  label: string;
+  /** Текст как есть; null — пусто */
+  value: string | null;
+  /** Что видно в пустой строке без фокуса: «+ ОПИСАНИЕ» — как у остальных пустых строк */
+  empty: string;
+  maxLength: number;
+  inputRef?: RefObject<TextInput | null>;
+  onChangeText: (text: string) => void;
+};
+
+/**
+ * Строка, которая правится на месте (описание): тап по любой её части ставит курсор в поле, текст 13/17 — как у
+ * FieldDescription. Справа «›», как у остальных строк в макете. Поле в фокусе сообщает окну (useKeyboardTarget),
+ * и окно прокручивается так, чтобы строка была над клавиатурой
+ */
+export const FieldInputRow = memo(function FieldInputRow({ label, value, empty, maxLength, inputRef, onChangeText }: FieldInputRowProps) {
+  const { c } = useTheme();
+  const setTarget = useKeyboardTarget();
+  const row = useRef<View>(null);
+  const own = useRef<TextInput>(null);
+  const input = inputRef ?? own;
+  const [focused, setFocused] = useState(false);
+  const auto = useWebAutoHeight(ET.description.lineHeight);
+  const focus = useCallback(() => input.current?.focus(), [input]);
+  const onFocus = useCallback(() => {
+    setFocused(true);
+    setTarget(row.current);
+  }, [setTarget]);
+  const onBlur = useCallback(() => {
+    setFocused(false);
+    setTarget(null);
+  }, [setTarget]);
+
+  return (
+    <Pressable ref={row} accessible={false} onPress={focus} style={[styles.row, styles.divided, { backgroundColor: c.panel, borderTopColor: c.hair }]}>
+      <View style={styles.label}>
+        <Text style={[T.fieldLabel, { color: c.muted }]}>{label}</Text>
+      </View>
+      <View style={styles.value}>
+        <TextInput
+          ref={input}
+          value={value ?? ''}
+          onChangeText={onChangeText}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          multiline
+          {...auto.webProps}
+          onContentSizeChange={auto.onContentSizeChange}
+          maxLength={maxLength}
+          textAlignVertical="top"
+          underlineColorAndroid="transparent"
+          selectionColor={c.text}
+          cursorColor={c.text}
+          accessibilityLabel={label}
+          style={[ET.description, styles.input, auto.style, { color: c.text }]}
+        />
+        {value === null && !focused ? (
+          <View pointerEvents="none" style={styles.empty}>
+            <FieldValue text={empty} muted />
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.trailing}>
+        <Icon name="chevronRight" size={12} color={c.muted} />
+      </View>
+    </Pressable>
   );
 });
 
@@ -140,6 +222,10 @@ const styles = StyleSheet.create({
   },
   trailing: { width: 28, alignItems: 'center', justifyContent: 'center' },
   shrink: { flexShrink: 1 },
+  /** Без своих отступов (Android — фон EditText, iOS — поля UITextView), до 8 строк — дальше прокрутка внутри */
+  input: { flex: 1, minWidth: 0, padding: 0, margin: 0, maxHeight: 17 * 8 },
+  /** «+ ОПИСАНИЕ» на месте значения (как FieldValue в обычной строке) */
+  empty: { position: 'absolute', left: 10, right: 10, top: 0, bottom: 0, justifyContent: 'center' },
   people: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 4, columnGap: 12 },
   panel: { borderTopWidth: S.hairline, paddingVertical: 10, paddingHorizontal: 8, gap: 8 },
 });

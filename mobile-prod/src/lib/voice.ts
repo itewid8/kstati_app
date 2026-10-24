@@ -6,9 +6,11 @@
  * Сам микрофон живёт в компоненте <VoiceRecorder/> (хуки expo-audio) и регистрируется здесь.
  * Окна результата рисует VoiceHost (одна запись, одна правка, ответ о планах, ошибка), остальное — CardSheet.
  */
+import { scopeFilter } from '@/lib/visibility';
 import * as Haptics from 'expo-haptics';
 import { create } from 'zustand';
 import { QUOTA_DETAIL, quotaText } from '@/adapters/voice/problem';
+import { MIN_HOLD_MS, recStep, type RecEvent, type RecMode, type RecState } from '@/adapters/voice/recording';
 import { nav } from '@/containers/common/nav';
 import { toTab, toTopic } from '@/containers/common/go';
 import { deleteRecording, fetchVoiceQuota, parseOnServer, uploadVoice, type VoiceProblem } from './api';
@@ -22,7 +24,8 @@ import type { ItemType } from './types';
 
 /** Голосовая команда — не длиннее 10 секунд: короткие фразы дешевле и точнее разбираются */
 export const MAX_MS = 10_000;
-const MIN_MS = 700;
+/** Короче — не команда (случайное касание): разбор не запускаем */
+const MIN_MS = MIN_HOLD_MS;
 const FAKE_PROCESSING_MS = 800;
 
 let startedAt = 0;
@@ -47,9 +50,14 @@ export const useVoiceLevel = create<{ level: number | null }>(() => ({ level: nu
 /**
  * armed — запрошена запись без нажатия (ссылка kstatiapp://record с виджета): окно ждёт «ЗАПИСАТЬ».
  * Сама ссылка микрофон не включает — иначе любой сайт или приложение могли бы начать запись (F14).
- * cancelling — запись отменили, микрофон ещё останавливается: окно «разбор» не показываем
+ * cancelling — запись отменили, микрофон ещё останавливается: окно «разбор» не показываем.
+ * held — текущая запись идёт, пока палец на REC (режим «удерживать»): окно без кнопок, отмена — жестом
  */
-export const useVoiceUi = create<{ armed: boolean; cancelling: boolean }>(() => ({ armed: false, cancelling: false }));
+export const useVoiceUi = create<{ armed: boolean; cancelling: boolean; held: boolean }>(() => ({
+  armed: false,
+  cancelling: false,
+  held: false,
+}));
 
 /** Настоящий микрофон, если подключён <VoiceRecorder/> */
 export type RecorderImpl = {
@@ -119,16 +127,55 @@ function startFakeLevels() {
   }, 100);
 }
 
+/* ---------- Автомат записи (adapters/voice/recording) ---------- */
+
+/** Состояние автомата из хранилища и переменных модуля */
+function recState(): RecState {
+  const { voice, card } = useStore.getState();
+  const { armed, held } = useVoiceUi.getState();
+  const mode: RecMode = held ? 'hold' : 'tap';
+  if (starting) return { phase: 'arming', mode };
+  if (voice === 'recording') return { phase: 'recording', mode };
+  if (voice === 'processing') return { phase: 'processing', mode };
+  if (armed) return { phase: 'prompt', mode };
+  return { phase: card ? 'result' : 'idle', mode };
+}
+
+/** Событие от человека → команда автомата → действие */
+function dispatch(e: RecEvent) {
+  const { state, command } = recStep(recState(), e);
+  switch (command) {
+    case 'start':
+      return void begin(state.mode);
+    case 'stop':
+      return void finish();
+    case 'cancel':
+      return void cancelRecording();
+    case 'drop':
+      // Разбор уже идёт: новый номер команды — опоздавший ответ ничего не покажет
+      run++;
+      return useStore.getState().setVoice('idle');
+    case 'close':
+      disarmRecording();
+      return useStore.getState().setCard(null);
+  }
+}
+
 /* ---------- Запись ---------- */
 
-/** Начать запись по нажатию человека (REC, «ЕЩЁ РАЗ», «ЗАПИСАТЬ») */
-export async function beginRecording() {
+/** Начать запись по нажатию человека (REC в режиме «нажать», «ЕЩЁ РАЗ», «ЗАПИСАТЬ») */
+export function beginRecording() {
+  return begin('tap');
+}
+
+async function begin(mode: RecMode) {
   const s = useStore.getState();
   useVoiceUi.setState({ armed: false });
   if (s.voice !== 'idle' || starting) return;
   s.setCard(null);
   const spent = quotaSpent();
   if (spent) return showLimit('', spent);
+  useVoiceUi.setState({ held: mode === 'hold' });
   const mic = useRealMic() ? recorder : null;
   if (mic) {
     const id = run;
@@ -141,9 +188,11 @@ export async function beginRecording() {
     } finally {
       starting = false;
     }
-    // Пока микрофон включался, запись отменили: выключаем и ничего не показываем
+    // Пока микрофон включался, запись отменили (или отпустили REC — системный запрос доступа снимает палец):
+    // выключаем и ничего не показываем. Запрета на микрофон это не касается — без доступа запись не начнётся никогда
     if (id !== run) {
       if (res === 'ok') void mic.stop().then(deleteRecording, () => {});
+      if (res === 'denied') s.setCard({ source: 'voice', transcript: '', problem: 'micDenied' });
       return;
     }
     if (res === 'denied') return s.setCard({ source: 'voice', transcript: '', problem: 'micDenied' });
@@ -154,7 +203,7 @@ export async function beginRecording() {
   lastMs = 0;
   useVoiceLevel.setState({ level: null });
   s.setVoice('recording');
-  autoStop = setTimeout(stopRecording, MAX_MS);
+  autoStop = setTimeout(finish, MAX_MS);
 }
 
 /** Запись по ссылке (виджет kstatiapp://record): только окно с кнопкой «ЗАПИСАТЬ», микрофон — после нажатия */
@@ -173,35 +222,29 @@ export const disarmRecording = () => useVoiceUi.setState({ armed: false });
  */
 export const startRecording = armRecording;
 
-/* ---------- Режим «удерживать»: запись, пока палец на кнопке ---------- */
+/* ---------- Режим «удерживать»: запись, пока палец на кнопке (BottomNav, жест REC) ---------- */
 
-let released = false;
-
-export async function holdStart() {
-  released = false;
-  await beginRecording();
-  // Отпустили раньше, чем микрофон успел включиться
-  if (released) holdEnd();
+/** Палец лёг на REC. Идёт запись, начатая нажатием «ЗАПИСАТЬ», — это ГОТОВО */
+export function holdStart() {
+  dispatch({ type: 'press', mode: 'hold' });
 }
 
-export function holdEnd() {
-  released = true;
-  if (useStore.getState().voice !== 'recording') return;
-  // Короткое касание — не запись: просто отменяем
-  if (Date.now() - startedAt < MIN_MS) return void cancelRecording();
-  void stopRecording();
+/**
+ * Палец отпущен (cancelled — увёл его жестом отмены). Отпустили, пока микрофон включался, или раньше MIN_MS — отмена:
+ * случайное касание не запись. Вызов без аргумента — обычное отпускание
+ */
+export function holdEnd(cancelled?: unknown) {
+  dispatch({ type: 'release', heldMs: Date.now() - startedAt, cancelled: cancelled === true });
 }
 
-/** Отменить запись: ничего не отправляем и не показываем (кнопка «ОТМЕНА» или затемнение) */
+/** Отменить запись: ничего не отправляем и не показываем (ОТМЕНА, затемнение, жест отмены) */
 export async function cancelRecording() {
   if (starting) {
-    // Микрофон ещё включается — beginRecording увидит новый run и сразу его выключит
-    released = true;
+    // Микрофон ещё включается — begin увидит новый run и сразу его выключит
     run++;
     return;
   }
   if (useStore.getState().voice !== 'recording') return;
-  released = true;
   if (autoStop) clearTimeout(autoStop);
   autoStop = null;
   stopFakeLevels();
@@ -215,17 +258,26 @@ export async function cancelRecording() {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 }
 
-/** «Отмена» в окне голоса: идёт запись — отменить её, идёт разбор — не показывать ответ */
-export function cancelVoice() {
-  const v = useStore.getState().voice;
-  if (v === 'recording' || starting) return void cancelRecording();
-  if (v === 'processing') {
-    run++;
-    useStore.getState().setVoice('idle');
-  }
+/**
+ * ОТМЕНА в окне голоса, затемнение, Android «назад»: запись — стереть, разбор — не показывать ответ,
+ * окно ссылки или ответа — закрыть
+ */
+export const cancelVoice = () => dispatch({ type: 'cancel' });
+
+/** ГОТОВО в окне записи: закончить и разобрать */
+export const finishRecording = () => dispatch({ type: 'done' });
+
+/**
+ * Автостоп по тишине (VoiceRecorder). Запись пальцем им не заканчивается: пока палец на REC, конец — отпустить
+ * (окно не должно уходить в разбор из-под пальца); предел MAX_MS действует всегда
+ */
+export function stopRecording() {
+  if (useVoiceUi.getState().held) return;
+  void finish();
 }
 
-export async function stopRecording() {
+/** Закончить запись и отправить на разбор */
+async function finish() {
   const s = useStore.getState();
   if (s.voice !== 'recording') return;
   if (autoStop) clearTimeout(autoStop);
@@ -288,12 +340,8 @@ function silence() {
   useStore.getState().setCard({ source: 'voice', transcript: '', problem: 'silence' });
 }
 
-/** REC в режиме «нажать»: первое нажатие — запись, второе — готово */
-export function toggleRecording() {
-  const v = useStore.getState().voice;
-  if (v === 'idle') void beginRecording();
-  else if (v === 'recording') void stopRecording();
-}
+/** REC в режиме «нажать»: первое нажатие — запись, второе — ГОТОВО; пока микрофон включается или идёт разбор — ничего */
+export const toggleRecording = () => dispatch({ type: 'press', mode: 'tap' });
 
 export const TAB_FOR: Record<ItemType, ReturnType<typeof nav.tab>> = {
   task: nav.tab('tasks'),
@@ -311,7 +359,7 @@ export async function handleTranscript(transcript: string) {
 
   if (!API_URL) {
     const existing = {
-      tasks: s.tasks.filter((t) => t.groupId === s.currentGroupId),
+      tasks: s.tasks.filter(scopeFilter({ viewId: s.currentGroupId, groups: s.groups, meId: me.id })),
       watch: s.watch.filter((w) => w.groupId === s.currentGroupId),
       wishes: s.wishes.filter((w) => w.ownerId === me.id),
     };

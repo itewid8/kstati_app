@@ -10,6 +10,7 @@ import * as TaskManager from 'expo-task-manager';
 import { syncReminders } from './notify';
 import { flushStorage } from './storage';
 import { syncNow } from './sync';
+import { updateWidget } from '../widget/sync';
 
 export const BG_REFRESH = 'kstati-refresh';
 
@@ -21,6 +22,7 @@ export async function refreshInBackground(): Promise<void> {
   try {
     await withTimeout(syncNow(), 20_000);
     await syncReminders(false);
+    updateWidget();
   } finally {
     // Система может остановить приложение сразу после задачи: отложенная запись очереди и карантина не успела бы
     flushStorage();

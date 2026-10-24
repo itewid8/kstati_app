@@ -13,7 +13,13 @@ type Props = {
   error?: boolean;
   editable?: boolean;
   autoFocus?: boolean;
+  /** digits — код из письма (цифры, подсказка кода с клавиатуры); text — код группы (буквы и цифры, заглавные) */
+  kind?: 'digits' | 'text';
+  accessibilityLabel?: string;
 };
+
+/** Код группы: латиница, кириллица и цифры; регистр не трогаем (иначе поле пересоздаётся и клавиатура «прыгает») */
+const NOT_CODE = /[^0-9A-Za-zА-Яа-яЁё]/g;
 
 const SHAKE_STEP = 50;
 
@@ -23,7 +29,7 @@ const SHAKE_STEP = 50;
  * подсказка кода с клавиатуры (one-time-code / sms-otp) и стирание.
  */
 export const CodeCells = forwardRef<TextInput, Props>(function CodeCells(
-  { value, onChange, length = 6, error = false, editable = true, autoFocus },
+  { value, onChange, length = 6, error = false, editable = true, autoFocus, kind = 'digits', accessibilityLabel },
   ref,
 ) {
   const { c } = useTheme();
@@ -44,6 +50,8 @@ export const CodeCells = forwardRef<TextInput, Props>(function CodeCells(
   const width = gridColumn(length);
   const current = editable && value.length < length ? value.length : -1;
   const ink = error ? c.red : c.text;
+  const text = kind === 'text';
+  const clean = (t: string) => (text ? t.replace(NOT_CODE, '') : t.replace(/\D/g, '')).slice(0, length);
 
   return (
     <Animated.View style={[styles.row, { borderColor: c.border }, shakeStyle]}>
@@ -54,7 +62,7 @@ export const CodeCells = forwardRef<TextInput, Props>(function CodeCells(
             key={i}
             style={[styles.cell, { width, backgroundColor: c.panel }, i > 0 && { borderLeftWidth: S.border, borderLeftColor: c.border }]}
           >
-            <Text style={[styles.digit, { color: digit ? ink : c.muted }]}>{digit ?? '·'}</Text>
+            <Text style={[styles.digit, { color: digit ? ink : c.muted }]}>{digit ? digit.toLocaleUpperCase('ru-RU') : '·'}</Text>
             {i === current ? <View style={[styles.caret, { backgroundColor: c.red, boxShadow: `0 0 6px ${c.glow}` }]} /> : null}
           </View>
         );
@@ -62,16 +70,18 @@ export const CodeCells = forwardRef<TextInput, Props>(function CodeCells(
       <TextInput
         ref={ref}
         value={value}
-        onChangeText={onChange ? (t: string) => onChange(t.replace(/\D/g, '').slice(0, length)) : undefined}
-        keyboardType="number-pad"
-        autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
-        textContentType="oneTimeCode"
+        onChangeText={onChange ? (t: string) => onChange(clean(t)) : undefined}
+        keyboardType={text ? 'default' : 'number-pad'}
+        autoComplete={text ? 'off' : Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+        textContentType={text ? 'none' : 'oneTimeCode'}
+        autoCapitalize={text ? 'characters' : 'none'}
+        autoCorrect={false}
         maxLength={length}
         autoFocus={autoFocus}
         editable={editable}
         caretHidden
         contextMenuHidden={false}
-        accessibilityLabel="Код из письма"
+        accessibilityLabel={accessibilityLabel ?? 'Код из письма'}
         style={styles.input}
       />
     </Animated.View>

@@ -1,45 +1,32 @@
 import * as Haptics from 'expo-haptics';
-import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
 import { useStore, type Menu } from '@/lib/store';
-import { space, useColors } from '@/theme';
+import { ActionSheet } from '@/screens/sheets';
 import { Sheet } from './Sheet';
-import { Divider, T } from './ui';
 
-/** Меню действий по долгому нажатию: «Изменить · Удалить» и т. п. */
+/** Меню действий (долгое нажатие, «⋯», выбор «этот раз / вся серия»); одно действие — окно подтверждения */
 export function ActionMenu() {
-  const c = useColors();
   const menu = useStore((s) => s.menu);
   const setMenu = useStore((s) => s.setMenu);
+  // Держим последнее меню, чтобы окно не «пустело» во время закрытия
   const [shown, setShown] = useState<Menu | null>(menu);
   useEffect(() => {
     if (menu) setShown(menu);
   }, [menu]);
 
+  const close = useCallback(() => setMenu(null), [setMenu]);
+  const run = useCallback(
+    (index: number) => {
+      const action = shown?.actions[index];
+      setMenu(null);
+      action?.onPress();
+    },
+    [setMenu, shown],
+  );
+
   return (
-    <Sheet visible={!!menu} onClose={() => setMenu(null)}>
-      {shown && (
-        <View>
-          <T variant="caption" muted numberOfLines={2} style={styles.title}>
-            {shown.title}
-          </T>
-          <Divider />
-          {shown.actions.map((a, i) => (
-            <View key={a.label}>
-              {i > 0 && <Divider inset={space.side} />}
-              <Pressable
-                onPress={() => {
-                  setMenu(null);
-                  a.onPress();
-                }}
-                style={({ pressed }) => [styles.row, { backgroundColor: pressed ? c.background : 'transparent' }]}
-              >
-                <T danger={a.danger}>{a.label}</T>
-              </Pressable>
-            </View>
-          ))}
-        </View>
-      )}
+    <Sheet visible={!!menu} onClose={close} inset>
+      {shown ? <ActionSheet title={shown.title} actions={shown.actions} onAction={run} onClose={close} /> : null}
     </Sheet>
   );
 }
@@ -50,7 +37,10 @@ export function openMenu(menu: Menu) {
   useStore.getState().setMenu(menu);
 }
 
-const styles = StyleSheet.create({
-  title: { paddingHorizontal: space.side, paddingTop: 4, paddingBottom: 12 },
-  row: { minHeight: 52, paddingHorizontal: space.side, justifyContent: 'center' },
-});
+/**
+ * Подтверждение вместо системного Alert: карточка с вопросом и «ОТМЕНА» + действие (danger — красная рамка).
+ * Для экранов, где раньше был Alert.alert(…, [{ text: 'Отмена' }, { text: 'Удалить', style: 'destructive' }])
+ */
+export function openConfirm({ title, action, danger = true, onConfirm }: { title: string; action: string; danger?: boolean; onConfirm: () => void }) {
+  openMenu({ title, actions: [{ label: action, danger, onPress: onConfirm }] });
+}

@@ -3,28 +3,32 @@
  * подписаны вызывающим («СБ 10 ОКТ · 19:00»), раскрытая строка и данные её панели приходят пропсами,
  * действия уходят колбэками. Раскрыта не больше одной строки.
  *
- * Строки: КОГДА, КОНЕЦ, ПОВТОР, КТО, НАПОМНИТЬ, ОПИСАНИЕ, ПОДЗАДАЧИ. Строку подзадач вызывающий
+ * Строки: КОГДА, КОНЕЦ, ПОВТОР, КТО, ВИДНО (своё дело), НАПОМНИТЬ, ОПИСАНИЕ, ПОДЗАДАЧИ. Строку подзадач вызывающий
  * не передаёт у повторяющегося дела (subtasks undefined) — у серии нет плана.
  */
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, type RefObject } from 'react';
+import type { TextInput } from 'react-native';
 import type { PersonColor } from '@/lib/types';
 import { useTheme } from '@/ui';
 import { EditorScaffold, Notice, type EditorInsets, type EditorNotice } from './components/EditorScaffold';
 import {
   ExpandedPanel,
   FieldDescription,
+  FieldInputRow,
   FieldPeople,
   FieldRow,
   FieldTable,
   FieldValue,
   type EditorPerson,
 } from './components/FieldTable';
+import { NOTE_MAX } from './components/limits';
 import { DatePicker, type DatePickerProps } from './panels/DatePanel';
 import { RemindPanel, type RemindPanelProps } from './panels/RemindPanel';
 import { RepeatPanel, type RepeatPanelProps } from './panels/RepeatPanel';
+import { VisiblePanel, type VisiblePanelProps } from './panels/VisiblePanel';
 import { WhoPanel, type WhoPanelProps } from './panels/WhoPanel';
 
-export type TaskField = 'when' | 'end' | 'repeat' | 'who' | 'remind' | 'note' | 'subtasks';
+export type TaskField = 'when' | 'end' | 'repeat' | 'who' | 'visible' | 'remind' | 'note' | 'subtasks';
 
 /** Выбранный человек в строке «КТО» */
 export type EditorPersonRef = {
@@ -64,12 +68,23 @@ export type TaskEditorScreenProps = {
   repeatPanel?: RepeatPanelProps;
   remindPanel?: RemindPanelProps;
   whoPanel?: WhoPanelProps;
+  /** «ДРУЗЬЯ, СЕМЬЯ» — кому видно; null — «ТОЛЬКО Я»; undefined — строки нет (чужое дело: видимость меняет владелец) */
+  visible?: string | null;
+  visiblePanel?: VisiblePanelProps;
+
+  /** «СОХРАНИТЬ» недоступна: нет названия */
+  saveDisabled?: boolean;
+  /** Поля названия и описания — фокус снаружи (назвать дело перед «Сделать планом», открыть план сразу на описании) */
+  titleRef?: RefObject<TextInput | null>;
+  noteRef?: RefObject<TextInput | null>;
 
   insets?: EditorInsets;
   onBack?: () => void;
   onMore?: () => void;
-  /** Тап по заголовку — переименовать (необязательный: без него заголовок только текст) */
-  onEditTitle?: () => void;
+  /** Название правится прямо в заголовке (без колбэка заголовок только текст) */
+  onChangeTitle?: (title: string) => void;
+  /** Описание правится прямо в строке «ОПИСАНИЕ» (без колбэка строка открывает onField('note')) */
+  onChangeNote?: (note: string) => void;
   /** Тап по строке: раскрыть/свернуть (или открыть отдельное окно — описание, подзадачи) */
   onField?: (field: TaskField) => void;
   onClearEnd?: () => void;
@@ -90,9 +105,11 @@ export const TaskEditorScreen = memo(function TaskEditorScreen(props: TaskEditor
       title={props.title}
       colors={stripColors}
       insets={props.insets}
+      saveDisabled={props.saveDisabled}
+      titleRef={props.titleRef}
       onBack={props.onBack}
       onMore={props.onMore}
-      onEditTitle={props.onEditTitle}
+      onChangeTitle={props.onChangeTitle}
       onDelete={props.onDelete}
       onSave={props.onSave}
     >
@@ -134,6 +151,17 @@ export const TaskEditorScreen = memo(function TaskEditorScreen(props: TaskEditor
           </ExpandedPanel>
         ) : null}
 
+        {props.visible !== undefined ? (
+          <FieldRow label="ВИДНО" expanded={expanded === 'visible'} onPress={tap('visible')}>
+            <FieldValue text={props.visible ?? 'ТОЛЬКО Я'} muted={props.visible === null} />
+          </FieldRow>
+        ) : null}
+        {expanded === 'visible' && props.visiblePanel ? (
+          <ExpandedPanel>
+            <VisiblePanel {...props.visiblePanel} />
+          </ExpandedPanel>
+        ) : null}
+
         <FieldRow label="НАПОМНИТЬ" expanded={expanded === 'remind'} onPress={tap('remind')}>
           <FieldValue text={props.remind ?? 'НЕ НАПОМИНАТЬ'} muted={!props.remind} />
         </FieldRow>
@@ -143,9 +171,20 @@ export const TaskEditorScreen = memo(function TaskEditorScreen(props: TaskEditor
           </ExpandedPanel>
         ) : null}
 
-        <FieldRow label="ОПИСАНИЕ" onPress={tap('note')}>
-          {props.note ? <FieldDescription text={props.note} /> : <FieldValue text="+ ОПИСАНИЕ" muted />}
-        </FieldRow>
+        {props.onChangeNote ? (
+          <FieldInputRow
+            label="ОПИСАНИЕ"
+            value={props.note}
+            empty="+ ОПИСАНИЕ"
+            maxLength={NOTE_MAX}
+            inputRef={props.noteRef}
+            onChangeText={props.onChangeNote}
+          />
+        ) : (
+          <FieldRow label="ОПИСАНИЕ" onPress={tap('note')}>
+            {props.note ? <FieldDescription text={props.note} /> : <FieldValue text="+ ОПИСАНИЕ" muted />}
+          </FieldRow>
+        )}
 
         {props.subtasks !== undefined ? (
           <FieldRow label="ПОДЗАДАЧИ" onPress={tap('subtasks')}>

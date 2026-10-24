@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Превью в списке виджетов: виджет добавляется самым маленьким — кнопкой REC -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@android:id/background"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:clipToOutline="true">
+  <ImageView
+    android:id="@+id/kstati_bg"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no"
+    android:scaleType="fitXY"
+    android:src="@drawable/kstati_card"
+    android:tint="#F4F3EF" />
+  <FrameLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="10dp">
+    <include
+      layout="@layout/kstati_rec"
+      android:layout_width="wrap_content"
+      android:layout_height="30dp"
+      android:layout_gravity="center" />
+  </FrameLayout>
+</FrameLayout>

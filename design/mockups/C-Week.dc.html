@@ -25,13 +25,13 @@ body{margin:0}
 <button aria-label="Настройки" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.s}}; color: {{t.sInk}}; font-family: 'Geist Mono', monospace; font-size: 15px; font-weight: 600">С</button>
 </div>
 
-<div style="position: absolute; left: 16px; right: 16px; top: 68px; height: 28px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr))">
+<div style="position: absolute; left: 16px; right: 16px; top: 116px; height: 28px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr))">
 <sc-for list="{{t.views}}" as="v" hint-placeholder-count="4">
 <button style="border: 1.5px solid {{t.border}}; margin-left: {{v.ml}}; background: {{v.bg}}; color: {{v.color}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: {{v.weight}}; letter-spacing: 0.08em">{{v.label}}</button>
 </sc-for>
 </div>
 
-<div style="position: absolute; left: 16px; right: 16px; top: 104px; height: 40px; display: flex; align-items: center; gap: 6px">
+<div style="position: absolute; left: 16px; right: 16px; top: 68px; height: 40px; display: flex; align-items: center; gap: 6px">
 <span style="font-size: 34px; font-weight: 700; letter-spacing: -0.05em; line-height: 36px">05—11</span>
 <span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: {{t.muted}}; margin-left: 4px; line-height: 13px">ОКТ<br>2026</span>
 <button aria-label="Предыдущая неделя" style="margin-left: auto; width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg></button>
@@ -68,7 +68,7 @@ body{margin:0}
 <path d="{{e.d}}" fill="url(#{{e.fid}})"></path>
 <path d="{{e.edgeD}}" fill="none" stroke="url(#{{e.tid}})" stroke-width="4" clip-path="url(#{{e.cid}})"></path>
 </svg>
-<div style="position: absolute; left: {{e.x}}px; top: {{e.y}}px; width: {{e.w}}px; height: {{e.h}}px; box-sizing: border-box; clip-path: {{e.clip}}; padding: {{e.pt}}px 1px 0 {{e.pl}}px; overflow: hidden; display: flex; flex-direction: column; gap: 1px">
+<div data-room="{{e.room}}" style="position: absolute; left: {{e.x}}px; top: {{e.y}}px; width: {{e.w}}px; height: {{e.h}}px; box-sizing: border-box; clip-path: {{e.clip}}; padding: {{e.pt}}px 1px 0 {{e.pl}}px; overflow: hidden; display: flex; flex-direction: column; gap: 1px">
 <span style="font-size: 8px; font-weight: 600; line-height: 9.5px; letter-spacing: -0.01em; text-decoration: {{e.deco}}">{{e.title}}</span>
 <span style="font-family: 'Geist Mono', monospace; font-size: 7px; line-height: 8.5px; letter-spacing: -0.02em">{{e.time}}</span>
 <span style="font-family: 'Geist Mono', monospace; font-size: 7px; line-height: 8.5px; letter-spacing: -0.02em; color: {{t.muted}}">{{e.who}}</span>
@@ -94,6 +94,27 @@ body{margin:0}
 </div>
 </sc-for>
 </div>
+<script>
+// Текст дела — только целыми строками (как fitTextLines в приложении): строка, которой не хватает высоты
+// (до низа блока или до верха гостя, data-room), не рисуется, и всё ниже неё тоже
+Promise.all([...document.fonts].map((f) => f.load().catch(() => null))).then(() => document.fonts.ready).then(() => {
+  document.querySelectorAll('[data-room]').forEach((box) => {
+    const room = Number(box.dataset.room);
+    let y = 0, any = false, stop = false;
+    [...box.children].forEach((span) => {
+      const lh = parseFloat(getComputedStyle(span).lineHeight);
+      const n = Math.max(1, Math.round(span.getBoundingClientRect().height / lh));
+      const gap = any ? 1 : 0;
+      const fit = stop ? 0 : Math.min(n, Math.floor((room - y - gap + 0.01) / lh));
+      if (fit <= 0) { stop = true; span.style.display = 'none'; return; }
+      y += gap + fit * lh;
+      any = true;
+      if (fit < n) stop = true;
+    });
+    box.style.height = parseFloat(box.style.paddingTop) + y + 'px';
+  });
+});
+</script>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":820,"height":844}}'>
 class Component extends DCLogic {
@@ -220,10 +241,14 @@ class Component extends DCLogic {
       const d = rounded(poly, true, h);
       let j = 0;
       while (j < L.length - 1 && L[j + 1][0] < L[j][0] - 0.01) j++;
+      const pt = (j ? L[j][1] : 0) + 3;
+      // Место под текст: от pt вниз, пока блок шире своей полосы WN (ниже строку срезал бы верх гостя)
+      let yb = pt;
+      while (yb < h && rightAt(e, tAt(yb)) - leftAt(e, tAt(yb)) > WN + 0.01) yb += 0.25;
       return {
         x: GX + e.d * COL + 1, y, w: Wr, h,
         d, clip: "path('" + d + "')", edgeD: rounded(Ls, false, h),
-        pt: (j ? L[j][1] : 0) + 3, pl: L[j][0] + 6,
+        pt, pl: L[j][0] + 6, room: Math.min(yb, h) - pt,
       };
     });
     const fmt = (h) => String(Math.floor(h) % 24).padStart(2, '0') + ':' + String(Math.round((h % 1) * 60)).padStart(2, '0');
@@ -255,9 +280,10 @@ class Component extends DCLogic {
         }),
         nowY: GY + (NOW - H0) * H, nowDot: GY + (NOW - H0) * H - 3,
         tabs: [
-          { name: 'Я', y: 280, w: 26, bg: p.s, ink: p.sInk },
-          { name: 'КАРИНА', y: 368, w: 26, bg: p.k, ink: p.kInk },
-          { name: 'ОЛЕГ', y: 456, w: 26, bg: p.o, ink: p.oInk },
+          // Вкладки закреплены на одном месте в дне и неделе (как в C-Day): не зависят от числа полос
+          { name: 'Я', y: 212, w: 26, bg: p.s, ink: p.sInk },
+          { name: 'КАРИНА', y: 300, w: 26, bg: p.k, ink: p.kInk },
+          { name: 'ОЛЕГ', y: 388, w: 26, bg: p.o, ink: p.oInk },
         ],
       };
     });

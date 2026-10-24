@@ -6,6 +6,7 @@ import { dayNo, isoOf, type IsoDate } from '@/lib/calendarLayout';
 import { instance, nextOpen, weekdayOf } from '@/lib/recur';
 import { daysBetween, hhmm, peopleOf, shiftIso, toMin } from '@/lib/span';
 import type { ChangePatch, ID, Task } from '@/lib/types';
+import { canEditTask } from '@/lib/visibility';
 import type { QuickSheetData, QuickTile } from '@/screens/quick/types';
 import { isDone, shiftDay } from '../calendar/events';
 import { kidsOf } from '../common/tasks';
@@ -86,6 +87,28 @@ export const quickTaskView = (s: QuickSnapshot, colors: ColorMap, env: QuickEnv,
         : undefined;
 
   const done = isDone(shown);
+  const moves = movePatches(shown, env.today);
+  const card = { title: task.title, tag, meta: `${periodText(shown)} · ${namesText(s, people)}`, colors: colorsOf(s, colors, people) };
+  // Чужое дело без прав админа (C-TaskView): только отметить, свои напоминания и копия себе
+  if (!canEditTask(task, s.groups, s.me.id)) {
+    return {
+      kind: 'task',
+      task,
+      occ,
+      shown,
+      planId,
+      moves,
+      sheet: {
+        card,
+        tiles: [
+          { key: 'done', label: done ? 'ВЕРНУТЬ' : 'ГОТОВО', primary: true },
+          { key: 'remind', label: 'НАПОМНИТЬ' },
+          { key: 'copy', label: 'КОПИЯ', ...off(kids.length > 0) },
+        ],
+        deletable: false,
+      },
+    };
+  }
   const tiles: QuickTile[] = [
     { key: 'done', label: done ? 'ВЕРНУТЬ' : 'ГОТОВО', primary: true },
     { key: 'edit', label: 'ИЗМЕНИТЬ' },
@@ -95,7 +118,6 @@ export const quickTaskView = (s: QuickSnapshot, colors: ColorMap, env: QuickEnv,
     { key: 'copy', label: 'КОПИЯ', ...off(kids.length > 0) },
   ];
 
-  const moves = movePatches(shown, env.today);
   return {
     kind: 'task',
     task,
@@ -104,7 +126,7 @@ export const quickTaskView = (s: QuickSnapshot, colors: ColorMap, env: QuickEnv,
     planId,
     moves,
     sheet: {
-      card: { title: task.title, tag, meta: `${periodText(shown)} · ${namesText(s, people)}`, colors: colorsOf(s, colors, people) },
+      card,
       tiles,
       section: {
         label: 'ПЕРЕНЕСТИ',

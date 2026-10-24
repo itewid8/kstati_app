@@ -8,7 +8,7 @@ import type { ID } from '@/lib/types';
 import { WEEKDAYS, hhmm, weekday } from '@/screens/calendar/format';
 import type { Clock, Snapshot } from '../snapshot';
 import { FREE_OPTS, busyEvents } from '../common/busy';
-import { instancesIn } from '../common/tasks';
+import { ALL_TASKS, instancesIn } from '../common/tasks';
 
 const DAY = 1440;
 
@@ -28,7 +28,7 @@ export function freeWindowsOf(s: Pick<Snapshot, 'tasks' | 'groups'>, personId: I
   // Дело, начатое вчера вечером, может занимать утро первого дня
   const instances = instancesIn(
     s.tasks,
-    s.groups.map((g) => g.id),
+    ALL_TASKS,
     isoOf(dayNo(from) - 1),
     to,
   );

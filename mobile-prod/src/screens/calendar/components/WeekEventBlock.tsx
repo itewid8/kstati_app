@@ -7,13 +7,17 @@
  * в окне overflow: hidden со сдвигом на верх полосы, так что вместе полосы показывают один непрерывный столбец
  * текста, обрезанный по ступенькам (без скруглений углов 4px). Каждая полоса — своя зона нажатия:
  * узкий хвост основы под гостем остаётся у основы.
+ *
+ * По высоте рисуются только строки, которые влезают в блок целиком (fitTextLines): у короткого дела нет
+ * обрезанного по высоте куска текста, а если не влезает и строка названия — блок без текста.
  */
 import { memo } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { ClipPath, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
-import { COLUMN, type ColumnBlock } from '@/lib/calendarLayout';
+import { COLUMN, fitTextLines, textRoom, type ColumnBlock } from '@/lib/calendarLayout';
 import { LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { hardStops, useSvgId } from './PeopleColor';
+import { useTextLines } from './useTextLines';
 
 /** Обводка края 4px, половина обрезается контуром — видимая полоса 2px */
 const EDGE_STROKE = 4;
@@ -25,6 +29,10 @@ const TITLE_SIZE = 8;
 const TITLE_TRACKING = -0.08;
 const WORD_GAP = TITLE_SIZE * 0.236 + TITLE_TRACKING;
 const SPACES = / +/;
+/** Строки: название 9.5, время и кто 8.5, зазор 1 */
+const LINE = { title: 9.5, mono: 8.5 } as const;
+const LINE_HEIGHTS = [LINE.title, LINE.mono, LINE.mono] as const;
+const GAP = 1;
 /** react-native-web не знает ellipsizeMode и ставит многоточие — на вебе (стенд сверки) обрезаем так же, как на телефоне */
 const WORD = Platform.OS === 'web' ? { flexShrink: 1, textOverflow: 'clip' } : { flexShrink: 1 };
 
@@ -33,10 +41,12 @@ const WORD = Platform.OS === 'web' ? { flexShrink: 1, textOverflow: 'clip' } : {
  * (CSS без переноса внутри слова, overflow: hidden). Обычный Text на телефоне ломал бы такое слово по буквам.
  * Слова — строки одной строкой в ряду с переносом: зазор колонок (columnGap) — ширина пробела, на краю строки его нет
  */
-const TitleWords = memo(function TitleWords({ title, color, done }: { title: string; color: string; done?: boolean }) {
+type TitleWordsProps = { title: string; color: string; done?: boolean; onLayout?: (e: LayoutChangeEvent) => void };
+
+const TitleWords = memo(function TitleWords({ title, color, done, onLayout }: TitleWordsProps) {
   const words = title.split(SPACES).filter(Boolean);
   return (
-    <View style={styles.words}>
+    <View onLayout={onLayout} style={styles.words}>
       {words.map((w, i) => (
         <Text key={i} numberOfLines={1} ellipsizeMode="clip" style={[styles.title, WORD, { color }, done && styles.done]}>
           {w}
@@ -77,11 +87,27 @@ export const WeekEventBlock = memo(function WeekEventBlock(props: Props) {
   const multi = colors.length > 1;
   const textWidth = Math.max(0, w - textInsetLeft - TEXT_RIGHT);
 
-  const text = (
-    <View style={[styles.text, { width: textWidth }]}>
-      <TitleWords title={title} color={c.text} done={done} />
-      <Text style={[styles.mono, { color: c.text }]}>{time}</Text>
-      <Text style={[styles.mono, { color: c.muted }]}>{who}</Text>
+  const [lines, measure] = useTextLines(LINE_HEIGHTS);
+  const fit = fitTextLines(textRoom(bands, textInsetTop, COLUMN.STRIP), [
+    { lineHeight: LINE.title, lines: lines[0] },
+    { lineHeight: LINE.mono, lines: time ? lines[1] : 0, gapBefore: GAP },
+    { lineHeight: LINE.mono, lines: who ? lines[2] : 0, gapBefore: GAP },
+  ]);
+  /** Текст рисуется в каждой широкой полосе; меряется только в первой */
+  const firstText = bands.findIndex((b) => b.right - b.left > COLUMN.STRIP + EPS);
+  const text = (measured: boolean) => (
+    <View style={[styles.text, { width: textWidth, height: fit.height }]}>
+      <TitleWords title={title} color={c.text} done={done} onLayout={measured ? measure[0] : undefined} />
+      {fit.lines[1] ? (
+        <Text onLayout={measured ? measure[1] : undefined} style={[styles.mono, { color: c.text }]}>
+          {time}
+        </Text>
+      ) : null}
+      {fit.lines[2] ? (
+        <Text onLayout={measured ? measure[2] : undefined} style={[styles.mono, { color: c.muted }]}>
+          {who}
+        </Text>
+      ) : null}
     </View>
   );
 
@@ -130,8 +156,8 @@ export const WeekEventBlock = memo(function WeekEventBlock(props: Props) {
             delayLongPress={LONG_PRESS_MS}
             style={[styles.band, { left: b.left, top: b.y0, width: bw, height: b.y1 - b.y0 }]}
           >
-            {bw > COLUMN.STRIP + EPS ? (
-              <View style={[styles.shift, { left: textInsetLeft - b.left, top: textInsetTop - b.y0 }]}>{text}</View>
+            {fit.height > 0 && bw > COLUMN.STRIP + EPS ? (
+              <View style={[styles.shift, { left: textInsetLeft - b.left, top: textInsetTop - b.y0 }]}>{text(i === firstText)}</View>
             ) : null}
           </Pressable>
         );
@@ -144,9 +170,10 @@ const styles = StyleSheet.create({
   block: { position: 'absolute' },
   band: { position: 'absolute', overflow: 'hidden' },
   shift: { position: 'absolute' },
-  text: { gap: 1 },
-  words: { flexDirection: 'row', flexWrap: 'wrap', columnGap: WORD_GAP },
-  title: { fontFamily: fonts.sans600, fontSize: TITLE_SIZE, lineHeight: 9.5, letterSpacing: TITLE_TRACKING },
+  /** Окно текста высотой в целые строки: что ниже — не видно */
+  text: { overflow: 'hidden', gap: GAP },
+  words: { flexShrink: 0, flexDirection: 'row', flexWrap: 'wrap', columnGap: WORD_GAP },
+  title: { fontFamily: fonts.sans600, fontSize: TITLE_SIZE, lineHeight: LINE.title, letterSpacing: TITLE_TRACKING },
   done: { textDecorationLine: 'line-through' },
-  mono: { fontFamily: fonts.mono400, fontSize: 7, lineHeight: 8.5, letterSpacing: -0.14 },
+  mono: { flexShrink: 0, fontFamily: fonts.mono400, fontSize: 7, lineHeight: LINE.mono, letterSpacing: -0.14 },
 });
