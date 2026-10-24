@@ -102,6 +102,7 @@ const WeekEvent = memo(function WeekEvent({
       time={timeRange(event)}
       who={who}
       done={event.done}
+      hidden={event.hidden}
       colors={colors}
       onPress={onOpenEvent ? open : undefined}
       onLongPress={hold}
@@ -138,6 +139,7 @@ const WeekBar = memo(function WeekBar({
       title={bar.title}
       meta={bar.meta}
       colors={colors}
+      hidden={bar.hidden}
       onPress={onOpenBar ? open : undefined}
       onLongPress={hold}
     />

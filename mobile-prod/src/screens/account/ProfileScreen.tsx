@@ -6,8 +6,7 @@
 import { memo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CATEGORY_LABEL, type Gender, type GroupCategory, type ID, type PaletteKey, type PersonColor } from '@/lib/types';
-import { Marquee, SectionBox, fonts, size as S, space, useTheme } from '@/ui';
-import { AccountHeader } from './components/AccountHeader';
+import { IconButton, Marquee, SectionBox, fonts, size as S, space, useTheme } from '@/ui';
 import { EditIcon } from './components/AccountIcons';
 import { AccountRow } from './components/AccountRow';
 import { ColorSwatches } from './components/ColorSwatches';
@@ -90,9 +89,9 @@ export const ProfileScreen = memo(function ProfileScreen(props: ProfileScreenPro
       contentContainerStyle={[styles.content, { paddingTop: insets.top + S.topBarTop, paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
     >
-      <AccountHeader caption="НАСТРОЙКИ" onBack={onBack} />
-
+      {/* «Назад» — в одной строке с иконкой и именем: отдельная строка ради одной кнопки не нужна */}
       <View style={styles.identity}>
+        <IconButton icon="back" accessibilityLabel="Назад" onPress={onBack} iconSize={S.iconSmall} />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Цвет и символ"
@@ -152,7 +151,7 @@ export const ProfileScreen = memo(function ProfileScreen(props: ProfileScreenPro
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: space.side },
-  identity: { marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: {
     width: 64,
     height: 64,

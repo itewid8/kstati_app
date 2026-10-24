@@ -11,6 +11,7 @@ import type { PersonColor } from '@/lib/types';
 import { BottomSheet, Icon, Marquee, ScreenTitle, SectionBox, TopBar, fonts, pad2, size as S, space, type as T, useTheme } from '@/ui';
 import { Segmented, type SegmentItem } from '../editors/components/Segmented';
 import { ET } from '../editors/components/text';
+import { AccountHeader } from './components/AccountHeader';
 
 export type ShareTask = {
   /** id дела */
@@ -40,18 +41,20 @@ export type ShareScreenProps = {
   /** «ГРУППА · МЫ С КАРИНОЙ», «ВЫ В ГРУППЕ · ДРУЗЬЯ» */
   caption: string;
   title: string;
-  /** Мой цвет — полоса у заголовка (group) */
-  color?: PersonColor;
   selectOnly: boolean;
   visible: number;
   total: number;
   tasks: readonly ShareTask[];
+  /** «ВСЕ ДЕЛА»: отмечены все, ни одного или часть (чёрточка) — без дел «Только я» */
+  all: 'all' | 'none' | 'some';
   ask?: ShareAsk | null;
   insets?: { top: number; bottom: number };
   onBack?: () => void;
   onMore?: () => void;
   onMode?: (selectOnly: boolean) => void;
   onToggle?: (key: string) => void;
+  /** «ВСЕ ДЕЛА»: все отмечены — снять все, иначе отметить все */
+  onToggleAll?: () => void;
   onDone?: () => void;
   onAskCancel?: () => void;
   onAskConfirm?: () => void;
@@ -102,6 +105,27 @@ const Row = memo(function Row({ t, first, onToggle }: { t: ShareTask; first: boo
   );
 });
 
+/** «ВСЕ ДЕЛА»: отметить или снять все дела разом */
+const AllRow = memo(function AllRow({ all, onPress }: { all: ShareScreenProps['all']; onPress?: () => void }) {
+  const { c } = useTheme();
+  const on = all === 'all';
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: all === 'some' ? 'mixed' : on }}
+      accessibilityLabel="Все дела"
+      onPress={onPress}
+      style={[styles.allRow, { backgroundColor: c.panel, borderTopColor: c.hair }]}
+    >
+      <Text style={[styles.allText, { color: c.text }]}>ВСЕ ДЕЛА</Text>
+      <View style={[styles.check, { borderColor: on ? c.text : c.border, backgroundColor: on ? c.text : c.bg }]}>
+        {on ? <Icon name="check" size={11} color={c.bg} /> : null}
+        {all === 'some' ? <View style={[styles.dash, { backgroundColor: c.text }]} /> : null}
+      </View>
+    </Pressable>
+  );
+});
+
 const AskSheet = memo(function AskSheet({ ask, bottom, onCancel, onConfirm }: { ask: ShareAsk; bottom: number; onCancel?: () => void; onConfirm?: () => void }) {
   const { c } = useTheme();
   return (
@@ -126,28 +150,20 @@ const AskSheet = memo(function AskSheet({ ask, bottom, onCancel, onConfirm }: { 
 });
 
 export const ShareScreen = memo(function ShareScreen(props: ShareScreenProps) {
-  const { variant, caption, title, color, selectOnly, visible, total, tasks, ask, insets = NO_INSETS } = props;
-  const { c, person } = useTheme();
+  const { variant, caption, title, selectOnly, visible, total, tasks, ask, insets = NO_INSETS } = props;
+  const { c } = useTheme();
   const join = variant === 'join';
-  const top = insets.top + (join ? 128 : 120);
+  const top = insets.top + (join ? 128 : 72);
   const barHeight = join ? insets.bottom + BAR + S.hairline : 0;
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
-      <TopBar
-        lead={join ? { kind: 'caption', text: caption } : { kind: 'back', label: caption, onBack: props.onBack }}
-        actions={join ? [] : [{ key: 'more', icon: 'dots', accessibilityLabel: 'Ещё', onPress: props.onMore }]}
-        iconSize={S.iconSmall}
-        style={[styles.side, { top: insets.top + S.topBarTop }]}
-      />
       {join ? (
-        <ScreenTitle title={title} style={[styles.side, { top: insets.top + 74 }]} />
+        <>
+          <TopBar lead={{ kind: 'caption', text: caption }} style={[styles.side, { top: insets.top + S.topBarTop }]} />
+          <ScreenTitle title={title} style={[styles.side, { top: insets.top + 74 }]} />
+        </>
       ) : (
-        <View style={[styles.side, styles.titleBox, { top: insets.top + S.titleTop, borderBottomColor: c.border }]}>
-          <View style={[styles.titleStrip, { backgroundColor: color ? person(color) : c.text }]} />
-          <Text accessibilityRole="header" style={[ET.editorTitle, { color: c.text }]}>
-            {title}
-          </Text>
-        </View>
+        <AccountHeader caption={caption} title={title} onBack={props.onBack} style={[styles.side, { top: insets.top + S.topBarTop }]} />
       )}
       <ScrollView
         style={[styles.scroll, { top, bottom: barHeight }]}
@@ -156,6 +172,7 @@ export const ShareScreen = memo(function ShareScreen(props: ShareScreenProps) {
       >
         <Segmented items={MODES} value={selectOnly ? 'selected' : 'all'} onChange={props.onMode ? (k) => props.onMode?.(k === 'selected') : undefined} />
         <SectionBox title="ГРУППЕ ВИДНО" count={`${pad2(visible)} / ${pad2(total)}`}>
+          <AllRow all={props.all} onPress={props.onToggleAll} />
           {tasks.map((t, i) => (
             <Row key={t.key} t={t} first={i === 0} onToggle={props.onToggle} />
           ))}
@@ -181,13 +198,15 @@ export const ShareScreen = memo(function ShareScreen(props: ShareScreenProps) {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   side: { position: 'absolute', left: space.side, right: space.side },
-  titleBox: { paddingLeft: 12, paddingBottom: 8, borderBottomWidth: S.border },
-  titleStrip: { position: 'absolute', left: 0, top: 2, bottom: 10, width: S.strip },
   scroll: { position: 'absolute', left: 0, right: 0, ...WEB_SCROLL },
   content: { paddingHorizontal: space.side, gap: 8 },
   /** Кнопка 44 вместе с разделителем (border-box) */
   row: { height: S.row, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 12, paddingRight: 10, borderTopWidth: S.hairline },
   firstRow: {},
+  /** «ВСЕ ДЕЛА» — 36 вместе с разделителем */
+  allRow: { height: 36, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 12, paddingRight: 10, borderTopWidth: S.hairline },
+  allText: { flex: 1, fontFamily: fonts.mono600, fontSize: 9, letterSpacing: 0.72 },
+  dash: { width: 8, height: S.border },
   strip: { position: 'absolute', left: 0, top: 0, bottom: 0, width: S.strip },
   stripPart: { flex: 1 },
   text: { flex: 1, minWidth: 0, gap: 1 },

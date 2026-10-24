@@ -2,7 +2,7 @@
  * Виджет на рабочем столе — точная копия раскладок Android-виджета (макеты C-WidgetHome, C-WidgetLarge):
  * превью в настройках рисуется этими же компонентами, а KstatiWidget.kt / res/layout повторяют те же размеры.
  *
- *   1×1 — квадрат REC;  2×1 — ближайшее дело и REC;  2×2 — шапка с кружком REC и три дела (день и время под названием);
+ *   1×1 — квадрат REC;  2×1 — ближайшее дело и REC;  2×2 — шапка с кружком REC и дела строкой (день справа);
  *   4×2, 4×4 — шапка с кружком REC и дела по дням (подпись дня, строка: полоса людей, название, время).
  * Внешние углы — системное скругление 22, всё внутри квадратное. Одна поверхность, без рамки в рамке.
  */
@@ -13,11 +13,12 @@ import { fonts } from '@/ui';
 export const WIDGET = {
   radius: 22,
   pad: 10,
-  /** Высоты как в макете (CSS content-box: рамка 1 сверху/снизу — сверх высоты) */
+  /** Высоты как в макете (шапка — content-box: линия 1 снизу сверх 40). Дело — одна строка без разделителей */
   header: 41,
-  day: 22,
-  row: 31,
-  row2: 41,
+  day: 20,
+  row: 26,
+  /** Отступ под шапкой 2×2 */
+  stackGap: 4,
   strip: 2,
 } as const;
 
@@ -113,29 +114,19 @@ const DayLabel = memo(function DayLabel({ label, c }: { label: string; c: FaceCo
   );
 });
 
-const Row = memo(function Row({ r, c }: { r: FaceRow; c: FaceColors }) {
+/** Дело — одна строка: полоса людей, название, справа время (small — 2×2: день мельче и приглушённо) */
+const Row = memo(function Row({ r, c, small = false }: { r: FaceRow; c: FaceColors; small?: boolean }) {
   return (
-    <View style={[styles.row, { borderTopColor: c.hair }]}>
+    <View style={styles.row}>
       <Strip colors={r.strip} inset={5} />
       <Text
         numberOfLines={1}
+        ellipsizeMode="clip"
         style={[styles.title, { color: r.done ? c.muted : c.text }, r.done ? styles.done : null]}
       >
         {r.title}
       </Text>
-      <Text style={[styles.time, { color: c.time }]}>{r.time}</Text>
-    </View>
-  );
-});
-
-const Row2 = memo(function Row2({ r, c }: { r: FaceItem; c: FaceColors }) {
-  return (
-    <View style={[styles.row2, { borderTopColor: c.hair }]}>
-      <Strip colors={r.strip} inset={6} />
-      <Text numberOfLines={1} style={[styles.title2, { color: c.text }]}>
-        {r.title}
-      </Text>
-      <Text style={[styles.when, { color: c.day }]}>{r.when}</Text>
+      <Text style={[small ? styles.timeSmall : styles.time, { color: small ? c.day : c.time }]}>{r.time}</Text>
     </View>
   );
 });
@@ -185,7 +176,7 @@ const Fade = memo(function Fade({ c }: { c: FaceColors }) {
   );
 });
 
-/** 2×2: шапка и три дела */
+/** 2×2: шапка и дела строкой (сколько влезет) */
 export const FaceStack = memo(function FaceStack(props: {
   width: number;
   height: number;
@@ -198,8 +189,9 @@ export const FaceStack = memo(function FaceStack(props: {
   return (
     <FaceSurface width={width} height={height} c={c} style={style}>
       <Header h={header} c={c} />
+      <View style={styles.stackGap} />
       {items.map((r) => (
-        <Row2 key={r.key} r={r} c={c} />
+        <Row key={r.key} r={{ key: r.key, title: r.title, time: r.when, strip: r.strip }} c={c} small />
       ))}
     </FaceSurface>
   );
@@ -271,14 +263,14 @@ const styles = StyleSheet.create({
   recLabel: { fontFamily: fonts.mono600, letterSpacing: 1.02 },
   day: { height: WIDGET.day, justifyContent: 'flex-end', paddingBottom: 3 },
   dayText: { fontFamily: fonts.mono600, fontSize: 8.5, letterSpacing: 0.68 },
-  row: { height: WIDGET.row, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 9, borderTopWidth: 1 },
-  row2: { height: WIDGET.row2, justifyContent: 'center', gap: 2, paddingLeft: 9, borderTopWidth: 1 },
+  row: { height: WIDGET.row, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 9 },
+  stackGap: { height: WIDGET.stackGap },
   strip: { position: 'absolute', left: 0, width: WIDGET.strip },
   stripPart: { flex: 1 },
   title: { flex: 1, minWidth: 0, fontFamily: fonts.sans500, fontSize: 13 },
   done: { textDecorationLine: 'line-through' },
-  time: { fontFamily: fonts.mono600, fontSize: 12 },
-  title2: { fontFamily: fonts.sans500, fontSize: 12.5 },
+  time: { fontFamily: fonts.mono600, fontSize: 12, letterSpacing: 0.24 },
+  timeSmall: { fontFamily: fonts.mono600, fontSize: 10, letterSpacing: 0.2 },
   when: { fontFamily: fonts.mono600, fontSize: 9, letterSpacing: 0.36 },
   empty: { height: 120, justifyContent: 'center', paddingLeft: 2 },
   emptyText: { fontFamily: fonts.sans500, fontSize: 13 },

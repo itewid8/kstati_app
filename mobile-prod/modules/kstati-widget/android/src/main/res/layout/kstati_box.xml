@@ -34,7 +34,7 @@
         android:includeFontPadding="false"
         android:letterSpacing="0.08"
         android:maxLines="1"
-        android:textSize="9sp" />
+        android:textSize="9dp" />
       <TextView
         android:id="@+id/kstati_header_weekday"
         android:layout_width="wrap_content"
@@ -45,7 +45,7 @@
         android:includeFontPadding="false"
         android:letterSpacing="0.08"
         android:maxLines="1"
-        android:textSize="9sp" />
+        android:textSize="9dp" />
       <TextView
         android:id="@+id/kstati_header_day"
         android:layout_width="wrap_content"
@@ -58,7 +58,7 @@
         android:minHeight="16dp"
         android:paddingStart="3dp"
         android:paddingEnd="3dp"
-        android:textSize="9.5sp" />
+        android:textSize="9.5dp" />
     </LinearLayout>
     <LinearLayout
       android:id="@+id/kstati_list"

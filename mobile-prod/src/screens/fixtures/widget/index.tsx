@@ -48,8 +48,10 @@ export const items2x2 = (t: Scheme): FaceItem[] => {
   const st = strips(t);
   return [
     { key: 'a', title: 'Аренда Воронеж', when: 'ЗАВТРА', strip: st.k },
-    { key: 'f', title: 'Футбол', when: 'СР 28 · 18:00', strip: st.k },
+    { key: 'f', title: 'Футбол', when: 'СР 28', strip: st.k },
+    { key: 'd', title: 'Стоматолог', when: 'ЧТ 29', strip: st.s },
     { key: 'b', title: 'Купить билет в Врн', when: '1 НОЯ', strip: st.s },
+    { key: 'm', title: 'Купить билет обратно в Мск', when: '4 НОЯ', strip: st.s },
   ];
 };
 

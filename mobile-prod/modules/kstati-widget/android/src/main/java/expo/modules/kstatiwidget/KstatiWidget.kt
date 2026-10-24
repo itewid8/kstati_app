@@ -11,6 +11,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.TypedValue
 import android.util.Log
 import android.util.SizeF
 import android.view.View
@@ -147,9 +148,10 @@ object KstatiWidget {
 
   /** Высоты (dp) из макета: шапка 40 + линия 1, подпись дня 22, строка 30 + линия 1, строка 2×2 40 + линия 1 */
   private const val HEAD_H = 41f
-  private const val DAY_H = 22f
-  private const val ROW_H = 31f
-  private const val ROW2_H = 41f
+  private const val DAY_H = 20f
+  /** Строка дела — 26 без разделителей (2×2, 4×2, 4×4); под шапкой 2×2 — отступ 4 */
+  private const val ROW_H = 26f
+  private const val STACK_GAP = 4f
 
   private val WD = arrayOf("ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС")
   private val MON = arrayOf("ЯНВ", "ФЕВ", "МАР", "АПР", "МАЙ", "ИЮН", "ИЮЛ", "АВГ", "СЕН", "ОКТ", "НОЯ", "ДЕК")
@@ -294,10 +296,11 @@ object KstatiWidget {
     v.setViewVisibility(R.id.kstati_rec_label, if (label) View.VISIBLE else View.GONE)
     v.ink(R.id.kstati_rec_label, "setTextColor", c.recInk, night)
     val d = context.resources.displayMetrics.density
+    // Рамка точки 15 (со свечением) — поле слева на 3 меньше, чем в макете при точке 9 (7/8/10 → 4/5/7)
     val (pl, pr) = when {
-      !label -> 7 to 7
-      small -> 8 to 9
-      else -> 10 to 11
+      !label -> 4 to 4
+      small -> 5 to 9
+      else -> 7 to 11
     }
     v.setViewPadding(R.id.kstati_rec_content, (pl * d).roundToInt(), 0, (pr * d).roundToInt(), 0)
     v.setOnClickPendingIntent(R.id.kstati_rec, open(context, "$SCHEME://record", REQ_REC))
@@ -313,8 +316,13 @@ object KstatiWidget {
     c: Colors,
     night: Boolean,
   ) {
-    if (c.headBg != null) v.ink(R.id.kstati_header, "setBackgroundColor", c.headBg, night)
-    else v.setInt(R.id.kstati_header, "setBackgroundColor", Color.TRANSPARENT)
+    // Подложка — картинка со скруглёнными верхними углами (kstati_head_bg), а не фон строки
+    if (c.headBg != null) {
+      v.setViewVisibility(R.id.kstati_header_bg, View.VISIBLE)
+      v.ink(R.id.kstati_header_bg, "setColorFilter", c.headBg, night)
+    } else {
+      v.setViewVisibility(R.id.kstati_header_bg, View.GONE)
+    }
     val label = if (chosen.isEmpty()) "ВСЕ ГРУППЫ" else chosen.mapNotNull { groups[it] }.joinToString(" · ").uppercase(Locale("ru", "RU"))
     v.setTextViewText(R.id.kstati_header_label, label)
     v.ink(R.id.kstati_header_label, "setTextColor", c.headInk, night)
@@ -348,9 +356,9 @@ object KstatiWidget {
     night: Boolean,
   ) {
     v.removeAllViews(R.id.kstati_list)
-    val scale = maxOf(1f, context.resources.configuration.fontScale)
+    // Шрифты виджета в dp — от системного масштаба шрифта строки не растут
     // Высоту знаем со слов рабочего стола (бывает больше настоящей на несколько процентов) — считаем с запасом
-    var room = size.height * 0.96f - HEAD_H
+    var room = size.height * 0.96f - HEAD_H - (if (kind == Kind.STACK) STACK_GAP else 0f)
     val rows = visible(items, now, 40, chosen)
     if (rows.isEmpty()) {
       val empty = RemoteViews(context.packageName, R.layout.kstati_row_empty)
@@ -359,11 +367,12 @@ object KstatiWidget {
       v.setViewVisibility(R.id.kstati_fade, View.GONE)
       return
     }
+    if (kind == Kind.STACK) v.addView(R.id.kstati_list, RemoteViews(context.packageName, R.layout.kstati_gap))
     var shown = 0
     var lastDate: String? = null
     for ((i, x) in rows.withIndex()) {
       val newDay = kind == Kind.DAYS && x.date != lastDate
-      val need = (if (kind == Kind.DAYS) ROW_H else ROW2_H) * scale + (if (newDay) DAY_H * scale else 0f)
+      val need = ROW_H + (if (newDay) DAY_H else 0f)
       if (need > room) break
       if (newDay) {
         val d = RemoteViews(context.packageName, R.layout.kstati_day)
@@ -372,7 +381,8 @@ object KstatiWidget {
         v.addView(R.id.kstati_list, d)
         lastDate = x.date
       }
-      val row = RemoteViews(context.packageName, if (kind == Kind.DAYS) R.layout.kstati_row_inline else R.layout.kstati_row_stacked)
+      // Одна строка на дело: 2×2 — справа день (сегодня — время) 10 приглушённо, по дням — время 12
+      val row = RemoteViews(context.packageName, R.layout.kstati_row_inline)
       row.ink(R.id.kstati_divider, "setBackgroundColor", c.hair, night)
       strip(row, x, night)
       row.setTextViewText(R.id.kstati_title, x.title)
@@ -382,14 +392,14 @@ object KstatiWidget {
         row.setTextViewText(R.id.kstati_time, x.time ?: "—")
         row.ink(R.id.kstati_time, "setTextColor", c.time, night)
       } else {
-        row.setTextViewText(R.id.kstati_when, faceWhen(x.date, x.time, today))
-        row.ink(R.id.kstati_when, "setTextColor", c.day, night)
+        row.setTextViewText(R.id.kstati_time, faceWhen(x.date, x.time, today, short = true))
+        row.setTextViewTextSize(R.id.kstati_time, TypedValue.COMPLEX_UNIT_DIP, 10f)
+        row.ink(R.id.kstati_time, "setTextColor", c.day, night)
       }
       row.setOnClickPendingIntent(R.id.kstati_row, open(context, itemUri(x), REQ_ITEM + i))
       v.addView(R.id.kstati_list, row)
       room -= need
       shown++
-      if (kind == Kind.STACK && shown == 3) break
     }
     val more = shown < rows.size && kind == Kind.DAYS
     v.setViewVisibility(R.id.kstati_fade, if (more) View.VISIBLE else View.GONE)
@@ -552,7 +562,7 @@ object KstatiWidget {
   }
 
   /** Подпись под названием (2×2, 2×1) — как faceWhen в widgetData.ts: «18:00», «ЗАВТРА · 10:00», «СР 28 · 18:00», «1 НОЯ» */
-  private fun faceWhen(date: String, time: String?, today: String): String {
+  private fun faceWhen(date: String, time: String?, today: String, short: Boolean = false): String {
     val diff = dayNo(date) - dayNo(today)
     val d = date.substring(8, 10).toInt()
     val m = date.substring(5, 7).toInt()
@@ -563,7 +573,8 @@ object KstatiWidget {
       else -> "$d ${MON[m - 1]}"
     }
     if (day == null) return time ?: "СЕГОДНЯ"
-    return if (time != null) "$day · $time" else day
+    // short — строка 2×2: на другие дни только день
+    return if (time != null && !short) "$day · $time" else day
   }
 
   /** Подпись дня (4×2, 4×4) — как faceDayLabel: «СБ 24 · СЕГОДНЯ», «ВС 25 · ЗАВТРА», «СР 28», «ВС 1 НОЯ» */

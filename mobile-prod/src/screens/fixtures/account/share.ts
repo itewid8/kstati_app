@@ -15,11 +15,11 @@ const MINE = tasks([
 ]);
 
 export function shareJoinFixture(): ShareScreenProps {
-  return { variant: 'join', caption: 'ВЫ В ГРУППЕ · ДРУЗЬЯ', title: 'Мои дела', selectOnly: false, visible: 40, total: 42, tasks: MINE };
+  return { variant: 'join', caption: 'ВЫ В ГРУППЕ · ДРУЗЬЯ', title: 'Мои дела', selectOnly: false, visible: 40, total: 42, tasks: MINE, all: 'some' };
 }
 
 export function shareMineFixture(): ShareScreenProps {
-  return { variant: 'group', caption: 'ГРУППА · МЫ С КАРИНОЙ', title: 'Мои дела в группе', color: 'blue', selectOnly: false, visible: 40, total: 42, tasks: MINE };
+  return { variant: 'group', caption: 'ГРУППА · МЫ С КАРИНОЙ', title: 'Мои дела в группе', selectOnly: false, visible: 40, total: 42, tasks: MINE, all: 'some' };
 }
 
 export function shareAskFixture(): ShareScreenProps {

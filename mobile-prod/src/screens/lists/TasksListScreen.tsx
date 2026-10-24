@@ -21,6 +21,8 @@ export type TaskItem = {
   time: string;
   owners: Owners;
   done: boolean;
+  /** Моё дело, скрытое от этой группы, — заштриховано */
+  hidden?: boolean;
 };
 
 export type PlanStep = {
@@ -101,6 +103,7 @@ const TaskEntry = memo(function TaskEntry({ task, onToggleTask, onOpenTask, onLo
       time={task.time}
       strip={b ? [person(a), person(b)] : person(a)}
       done={task.done}
+      hidden={task.hidden}
       onToggle={onToggleTask ? () => onToggleTask(task.id, !task.done) : undefined}
       onPress={onOpenTask ? () => onOpenTask(task.id) : undefined}
       onLongPress={onLongPressTask ? (lift) => onLongPressTask(task.id, lift) : undefined}

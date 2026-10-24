@@ -6,7 +6,7 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fitTextLines } from '@/lib/calendarLayout';
-import { LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { Hatch, LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { PeopleFill, PeopleTip } from './PeopleColor';
 import { useTextLines } from './useTextLines';
 
@@ -29,6 +29,8 @@ type Props = {
   who: string;
   done?: boolean;
   colors: readonly string[];
+  /** Моё дело, скрытое от этой группы, — заштриховано */
+  hidden?: boolean;
   onPress?: () => void;
   /** Удержание: блок отдаёт своё место в окне и копию (быстрые действия) */
   onLongPress?: LiftHandler;
@@ -55,6 +57,7 @@ export const DayEventBlock = memo(function DayEventBlock(props: Props) {
       style={[styles.block, { left: x, top: y, width, height }]}
     >
       <PeopleFill colors={colors} alpha={c.tintAlpha} />
+      {props.hidden ? <Hatch /> : null}
       <PeopleTip colors={colors} width={TIP} />
       {fit.height > 0 ? (
         <View style={[styles.text, { height: fit.height }]}>

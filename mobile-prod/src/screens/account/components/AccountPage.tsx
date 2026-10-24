@@ -33,7 +33,8 @@ type Props = {
 };
 
 /**
- * Страница аккаунта: «Назад» и подпись (top 20), заголовок 40/42 (через 14), разделы через 8,
+ * Страница аккаунта: «Назад» и название с подписью одной строкой (top 20; без «Назад» — подпись и заголовок 40/42),
+ * разделы через 8,
  * снизу — плашка ОТМЕНА / СОХРАНИТЬ. Клавиатура поднимает плашку вместе со страницей
  */
 export const AccountPage = memo(function AccountPage(props: Props) {
@@ -48,8 +49,14 @@ export const AccountPage = memo(function AccountPage(props: Props) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <AccountHeader caption={caption} back={back} onBack={onBack} right={headerRight} />
-        <ScreenTitle title={title} style={styles.title} />
+        {back ? (
+          <AccountHeader caption={caption} title={title} onBack={onBack} right={headerRight} />
+        ) : (
+          <>
+            <AccountHeader caption={caption} back={false} right={headerRight} />
+            <ScreenTitle title={title} style={styles.title} />
+          </>
+        )}
         <View style={styles.body}>{children}</View>
         {footer ? <View style={styles.footer}>{footer}</View> : null}
       </ScrollView>

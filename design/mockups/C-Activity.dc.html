@@ -17,17 +17,12 @@ body{margin:0}
 <sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
 <div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}">
 
-<div style="position: absolute; left: 16px; right: 16px; top: 20px; height: 40px; display: flex; align-items: center; gap: 8px">
+<div style="position: absolute; left: 16px; right: 16px; top: 20px; height: 40px; display: flex; align-items: center; gap: 10px">
 <button aria-label="Назад" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg></button>
-<span style="flex: 1; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: {{t.muted}}">ВСЕ ГРУППЫ · 30 ДНЕЙ</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px"><span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.08em; line-height: 11px; color: {{t.muted}}; white-space: nowrap; overflow: hidden">ВСЕ ГРУППЫ · 30 ДНЕЙ</span><span style="font-size: 22px; font-weight: 700; letter-spacing: -0.04em; line-height: 24px; white-space: nowrap; overflow: hidden">Лента</span></div><span style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em"><span style="width: 7px; height: 7px; border-radius: 4px; background: {{t.red}}; box-shadow: 0 0 6px {{t.glow}}"></span>3 НОВЫХ</span>
 </div>
 
-<div style="position: absolute; left: 16px; right: 16px; top: 70px; height: 42px; display: flex; align-items: flex-end; justify-content: space-between">
-<span style="font-size: 40px; font-weight: 700; letter-spacing: -0.05em; line-height: 42px">Лента</span>
-<span style="display: flex; align-items: center; gap: 6px; padding-bottom: 8px; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em"><span style="width: 7px; height: 7px; border-radius: 4px; background: {{t.red}}; box-shadow: 0 0 6px {{t.glow}}"></span>3 НОВЫХ</span>
-</div>
-
-<div style="position: absolute; left: 16px; right: 16px; top: 122px; display: flex; flex-direction: column; gap: 10px">
+<div style="position: absolute; left: 16px; right: 16px; top: 72px; display: flex; flex-direction: column; gap: 10px">
 <sc-for list="{{t.days}}" as="d" hint-placeholder-count="3">
 <div style="border: 1.5px solid {{t.border}}">
 <div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>{{d.label}}</span><span>{{d.date}}</span></div>

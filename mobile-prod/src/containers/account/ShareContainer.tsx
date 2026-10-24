@@ -56,6 +56,20 @@ export const ShareContainer = signedInOnly(function Share({ id, join }: ShareCon
     },
     [id],
   );
+  const onToggleAll = useCallback(() => {
+    const st = useStore.getState();
+    const g = st.groups.find((x) => x.id === id);
+    const me = st.me;
+    if (!g || !me) return;
+    // Как в списке: несделанные мои, кроме «Только я»
+    const mine = st.tasks.filter((t) => t.createdBy === me.id && !t.doneAt && !t.only);
+    const allOn = mine.length > 0 && mine.every((t) => visibleIn(t, g));
+    st.setTaskShare(
+      mine.map((t) => t.id),
+      id,
+      !allOn,
+    );
+  }, [id]);
   const onDone = useCallback(() => {
     if (join === 'onboarding') resetTo('/tasks');
     else backToProfile();
@@ -70,6 +84,7 @@ export const ShareContainer = signedInOnly(function Share({ id, join }: ShareCon
       onBack={back}
       onMode={onMode}
       onToggle={onToggle}
+      onToggleAll={onToggleAll}
       onDone={onDone}
       onAskCancel={onAskCancel}
       onAskConfirm={onAskConfirm}

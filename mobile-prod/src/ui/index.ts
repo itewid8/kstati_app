@@ -10,6 +10,7 @@ export { Checkbox } from './Checkbox';
 export { ListRow, RowLinkButton } from './ListRow';
 export { DoneRow } from './DoneRow';
 export { Marquee } from './Marquee';
+export { HATCH, Hatch, HatchPattern, useHatchId } from './Hatch';
 export { PersonTag } from './PersonTag';
 export { BottomNav, RecButtonContext, type NavTab, type RecButtonHandlers } from './BottomNav';
 export { BottomSheet } from './BottomSheet';

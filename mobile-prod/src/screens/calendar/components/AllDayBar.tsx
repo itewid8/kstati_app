@@ -6,7 +6,7 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { fitTextLines } from '@/lib/calendarLayout';
-import { LONG_PRESS_MS, Marquee, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { Hatch, LONG_PRESS_MS, Marquee, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { PeopleFill, PeopleTip } from './PeopleColor';
 
 export type AllDayBarSize = {
@@ -34,6 +34,8 @@ type Props = {
   /** Подпись сразу за названием вместе с разделителем: « · 8–10 окт» */
   meta?: string;
   colors: readonly string[];
+  /** Моё дело, скрытое от этой группы, — заштриховано */
+  hidden?: boolean;
   onPress?: () => void;
   /** Удержание: полоса отдаёт своё место в окне и копию (быстрые действия) */
   onLongPress?: LiftHandler;
@@ -56,6 +58,7 @@ export const AllDayBar = memo(function AllDayBar(props: Props) {
       style={[styles.bar, { left: x, top: y, width, height, paddingLeft }]}
     >
       <PeopleFill colors={colors} alpha={c.tintAlpha} />
+      {props.hidden ? <Hatch /> : null}
       <PeopleTip colors={colors} width={TIP} />
       {fits ? (
         <Marquee style={[styles.title, { fontSize, letterSpacing, lineHeight: height, color: c.text }]}>

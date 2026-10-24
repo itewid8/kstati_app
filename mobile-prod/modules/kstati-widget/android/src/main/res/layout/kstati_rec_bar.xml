@@ -43,7 +43,7 @@
       android:letterSpacing="0.12"
       android:maxLines="1"
       android:text="@string/kstati_widget_rec"
-      android:textSize="10sp" />
+      android:textSize="10dp" />
   </LinearLayout>
   <ImageView
     android:id="@+id/kstati_rec_stroke"

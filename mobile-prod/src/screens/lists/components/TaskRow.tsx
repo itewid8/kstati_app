@@ -8,7 +8,7 @@
  */
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { LONG_PRESS_MS, Marquee, fonts, size as S, useLift, useTheme, type LiftHandler } from '@/ui';
+import { Hatch, LONG_PRESS_MS, Marquee, fonts, size as S, useLift, useTheme, type LiftHandler } from '@/ui';
 
 export type TaskRowKind = 'task' | 'plan' | 'step';
 
@@ -22,6 +22,8 @@ type Props = {
   /** Заливка строки (план и его шаги); по умолчанию panel */
   fill?: string;
   done: boolean;
+  /** Моё дело, скрытое от этой группы, — заштриховано */
+  hidden?: boolean;
   onToggle?: () => void;
   onPress?: () => void;
   /** Удержание: строка отдаёт своё место в окне и копию (быстрые действия) */
@@ -34,7 +36,7 @@ const STEP_HEIGHT = 36;
 const LIFTED: ViewStyle = { borderTopWidth: 0 };
 
 export const TaskRow = memo(function TaskRow(props: Props) {
-  const { kind, title, time, strip, fill, done, onToggle, onPress, onLongPress, style } = props;
+  const { kind, title, time, strip, fill, done, hidden, onToggle, onPress, onLongPress, style } = props;
   const { c } = useTheme();
   const step = kind === 'step';
   const ink = done ? c.muted : c.text;
@@ -53,6 +55,7 @@ export const TaskRow = memo(function TaskRow(props: Props) {
         style,
       ]}
     >
+      {hidden ? <Hatch /> : null}
       {typeof strip === 'string' ? (
         <View style={[styles.strip, { backgroundColor: strip }]} />
       ) : (

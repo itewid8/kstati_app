@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FRIENDS, US, snapshot, task } from '../common/fixture';
 import { colorMap } from '../common/people';
-import { shareAsk, shareProps } from './share';
+import { allState, shareAsk, shareProps } from './share';
 
 describe('shareProps (C-ShareMine, C-ShareJoin)', () => {
   const tasks = [
@@ -35,5 +35,12 @@ describe('shareProps (C-ShareMine, C-ShareJoin)', () => {
     const g = { ...FRIENDS, selectOnly: ['s'] };
     const a = shareAsk(snapshot({ tasks, groups: [US, g] }), g);
     assert.deepEqual(a, { group: 'Друзья', now: 0, next: 3, total: 4 });
+  });
+  test('«ВСЕ ДЕЛА»: все / ни одного / часть; «Только я» не в счёт', () => {
+    const t = (visible: boolean, onlyMe = false) => ({ key: 'x', title: 'x', meta: '', colors: [], visible, onlyMe });
+    assert.equal(allState([t(true), t(false, true)]), 'all');
+    assert.equal(allState([t(false), t(false)]), 'none');
+    assert.equal(allState([t(true), t(false)]), 'some');
+    assert.equal(shareProps(s, colorMap(s), 'g1', 'group')?.all, 'some');
   });
 });

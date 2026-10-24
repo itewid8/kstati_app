@@ -33,14 +33,34 @@ export function taskGroups(t: Pick<Task, 'createdBy' | 'groupId' | 'only' | 'sha
   return (t.in ?? [t.groupId]).filter((id) => known.has(id));
 }
 
-/** Вид (группа или личный календарь): какие дела в нём показывать */
-export type TaskScope = { viewId: ID | null; groups: readonly ModeGroup[]; meId: ID | undefined };
+/**
+ * Вид (группа или личный календарь): какие дела в нём показывать.
+ * groupOnly — только то, что видит сама группа (счётчики группы); иначе в группе мне видны и мои скрытые от неё дела
+ */
+export type TaskScope = { viewId: ID | null; groups: readonly ModeGroup[]; meId: ID | undefined; groupOnly?: boolean };
 
-/** Личное — мои дела и те, где я занят; группа — дела, видные ей */
+/** Личное — мои дела и те, где я занят; группа — дела, видные ей, и мои (скрытые от неё — заштрихованы, hiddenIn) */
 export function inScope(t: Task, s: TaskScope): boolean {
   if (!s.viewId) return false;
   if (s.viewId === PERSONAL) return !!s.meId && (t.createdBy === s.meId || !!t.people?.includes(s.meId));
+  if (!s.groupOnly && t.createdBy === s.meId && s.groups.some((g) => g.id === s.viewId)) return true;
   return taskGroups(t, s.groups, s.meId).includes(s.viewId);
+}
+
+/** Моё дело, которое группа viewId не видит: в её виде оно у меня заштриховано */
+export function hiddenIn(t: Task, s: TaskScope): boolean {
+  if (!s.viewId || s.viewId === PERSONAL || t.createdBy !== s.meId) return false;
+  return !taskGroups(t, s.groups, s.meId).includes(s.viewId);
+}
+
+/** Дела вида с пометкой hidden у моих скрытых от группы */
+export function scopeTasks(tasks: readonly Task[], s: TaskScope): Task[] {
+  const out: Task[] = [];
+  for (const t of tasks) {
+    if (!inScope(t, s)) continue;
+    out.push(hiddenIn(t, s) ? { ...t, hidden: true } : t);
+  }
+  return out;
 }
 
 /** Предикат для списков: (t) => видно ли в виде */
