@@ -22,7 +22,7 @@ const orderOn = (t: Task, day: IsoDate) => minutesOn(t, day)?.[0] ?? -1;
 
 const byOrder = (day: IsoDate) => (a: Task, b: Task) => orderOn(a, day) - orderOn(b, day);
 
-const itemOf = (t: Task): MonthItem => ({ id: taskKey(t), title: t.title, people: peopleOf(t) });
+const itemOf = (t: Task): MonthItem => ({ id: taskKey(t), title: t.title, people: peopleOf(t), ...(t.hidden && { hidden: true }) });
 
 export function monthProps(s: CalendarSnapshot, clock: Pick<Clock, 'today'>, colors: ColorMap, { date }: MonthOptions): CalendarData<MonthScreenProps> {
   const { y, m } = parts(date);

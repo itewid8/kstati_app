@@ -17,14 +17,13 @@ body{margin:0}
 <sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
 <div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}; box-sizing: border-box; padding: 20px 16px 0; display: flex; flex-direction: column">
 
-<div style="height: 40px; display: flex; align-items: center; gap: 8px">
+<div style="height: 40px; display: flex; align-items: center; gap: 10px">
 <button aria-label="Назад" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg></button>
-<span style="font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: {{t.muted}}">ГРУППА · ВЫ СОЗДАТЕЛЬ</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px"><span style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.08em; line-height: 11px; color: {{t.muted}}; white-space: nowrap; overflow: hidden">ГРУППА · ВЫ СОЗДАТЕЛЬ</span><span style="font-size: 22px; font-weight: 700; letter-spacing: -0.04em; line-height: 24px; white-space: nowrap; overflow: hidden">Мы с Кариной</span></div>
 </div>
 
-<div style="margin-top: 14px; font-size: 40px; font-weight: 700; letter-spacing: -0.05em; line-height: 42px">Мы с Кариной</div>
 
-<div style="margin-top: 8px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr))">
+<div style="margin-top: 12px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr))">
 <sc-for list="{{t.cats}}" as="c" hint-placeholder-count="5">
 <button style="height: 32px; margin-left: {{c.ml}}; border: 1.5px solid {{t.border}}; background: {{c.bg}}; color: {{c.color}}; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: {{c.weight}}; letter-spacing: 0.04em; padding: 0">{{c.label}}</button>
 </sc-for>

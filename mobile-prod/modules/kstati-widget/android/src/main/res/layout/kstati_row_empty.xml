@@ -10,4 +10,4 @@
   android:maxLines="1"
   android:paddingStart="2dp"
   android:text="@string/kstati_widget_empty"
-  android:textSize="13sp" />
+  android:textSize="13dp" />

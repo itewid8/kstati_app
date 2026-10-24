@@ -15,7 +15,7 @@ import { memo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { ClipPath, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { COLUMN, fitTextLines, textRoom, type ColumnBlock } from '@/lib/calendarLayout';
-import { LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { useHatchId, HatchPattern, LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { hardStops, useSvgId } from './PeopleColor';
 import { useTextLines } from './useTextLines';
 
@@ -68,6 +68,8 @@ type Props = {
   who: string;
   done?: boolean;
   colors: readonly string[];
+  /** Моё дело, скрытое от этой группы, — заштриховано */
+  hidden?: boolean;
   onPress?: () => void;
   /** Удержание: блок отдаёт своё место в окне и копию (быстрые действия) */
   onLongPress?: LiftHandler;
@@ -83,6 +85,7 @@ export const WeekEventBlock = memo(function WeekEventBlock(props: Props) {
   const fid = useSvgId('wf');
   const tid = useSvgId('wt');
   const cid = useSvgId('wc');
+  const hid = useHatchId();
   const { x, y, w, h, bands, path, edgePath, textInsetTop, textInsetLeft } = block;
   const multi = colors.length > 1;
   const textWidth = Math.max(0, w - textInsetLeft - TEXT_RIGHT);
@@ -133,8 +136,10 @@ export const WeekEventBlock = memo(function WeekEventBlock(props: Props) {
           <ClipPath id={cid}>
             <Path d={path} />
           </ClipPath>
+          {props.hidden ? <HatchPattern id={hid} color={c.text} /> : null}
         </Defs>
         <Path d={path} fill={multi ? `url(#${fid})` : colors[0]} fillOpacity={multi ? 1 : c.tintAlpha} />
+        {props.hidden ? <Path d={path} fill={`url(#${hid})`} /> : null}
         <Path
           d={edgePath}
           fill="none"

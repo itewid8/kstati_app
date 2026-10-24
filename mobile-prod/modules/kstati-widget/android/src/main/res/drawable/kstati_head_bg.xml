@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Подложка шапки виджета: верхние углы как у карточки (22), цвет — setColorFilter -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+  <solid android:color="#FFFFFF" />
+  <corners android:topLeftRadius="22dp" android:topRightRadius="22dp" android:bottomLeftRadius="0dp" android:bottomRightRadius="0dp" />
+</shape>

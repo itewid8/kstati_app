@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { plural } from '@/lib/plans';
 import { CATEGORIES, type GroupCategory, type ID, type PersonColor } from '@/lib/types';
-import { ScreenTitle, SectionBox, fonts, pad2, size as S, space, useTheme } from '@/ui';
+import { SectionBox, fonts, pad2, size as S, space, useTheme } from '@/ui';
 import { AccountHeader } from './components/AccountHeader';
 import { CopyIcon, ShareIcon } from './components/AccountIcons';
 import { AccountRow } from './components/AccountRow';
@@ -207,18 +207,7 @@ export const GroupScreen = memo(function GroupScreen(props: GroupScreenProps) {
         contentContainerStyle={[styles.content, { paddingTop: insets.top + S.topBarTop, paddingBottom: dirty ? 24 : insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <AccountHeader caption={`ГРУППА · ВЫ ${ROLE_LABEL[myRole]}`} onBack={onBack} />
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Название группы: ${name}`}
-          accessibilityState={{ disabled: !onRename }}
-          disabled={!onRename}
-          onPress={onRename}
-          style={styles.title}
-        >
-          <ScreenTitle title={name} />
-        </Pressable>
+        <AccountHeader caption={`ГРУППА · ВЫ ${ROLE_LABEL[myRole]}`} title={name} onPressTitle={onRename} onBack={onBack} />
 
         <CategoryPicker value={category} onChange={onChangeCategory} />
 
@@ -278,9 +267,8 @@ export const GroupScreen = memo(function GroupScreen(props: GroupScreenProps) {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingHorizontal: space.side },
-  title: { marginTop: 14 },
 
-  categories: { marginTop: 8, flexDirection: 'row' },
+  categories: { marginTop: 12, flexDirection: 'row' },
   categoryCell: { width: gridColumn(CATEGORIES.length) },
   category: { height: S.tab, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
   /** Рамка ложится на рамку соседа слева, как margin-left: −1.5px в макете */

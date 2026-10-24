@@ -2,7 +2,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FRIENDS, US, task } from '@/adapters/common/fixture';
-import { canEditTask, inScope, newTaskShare, PERSONAL, taskGroups, visibleCount, visibleIn } from './visibility';
+import { canEditTask, hiddenIn, inScope, newTaskShare, PERSONAL, scopeTasks, taskGroups, visibleCount, visibleIn } from './visibility';
 
 const SEL = { ...FRIENDS, selectOnly: ['s'] };
 
@@ -51,5 +51,18 @@ describe('taskGroups, inScope, canEditTask', () => {
   test('счётчик: сколько моих дел видно группе', () => {
     const tasks = [task('a', null, null, 'a', ['s']), task('b', null, null, 'b', ['s'], { share: { g1: false } }), task('c', null, null, 'c', ['k'])];
     assert.deepEqual(visibleCount(tasks, US, 's'), { visible: 1, total: 2 });
+  });
+});
+
+describe('мои скрытые дела в группе', () => {
+  test('видны мне в виде группы с пометкой hidden; группа (groupOnly) их не считает', () => {
+    const mine = task('a', null, null, 'Подарок', ['s'], { share: { g1: false } });
+    const only = task('b', null, null, 'Психолог', ['s'], { only: true });
+    const open = task('c', null, null, 'Футбол', ['s']);
+    const scope = { viewId: 'g1', groups: [US, FRIENDS], meId: 's' };
+    assert.deepEqual(scopeTasks([mine, only, open], scope).map((t) => [t.id, !!t.hidden]), [['a', true], ['b', true], ['c', false]]);
+    assert.equal(inScope(mine, { ...scope, groupOnly: true }), false);
+    assert.equal(hiddenIn(open, scope), false);
+    assert.equal(hiddenIn(mine, { ...scope, viewId: PERSONAL }), false, 'в личном — без штриховки');
   });
 });

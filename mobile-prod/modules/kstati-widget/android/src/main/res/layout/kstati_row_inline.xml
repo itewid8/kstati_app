@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Строка 4×2 / 4×4: линия 1 сверху, 30: полоса 2 (поля 5), название 13, время 12 моно справа -->
+<!-- Строка дела (2×2, 4×2, 4×4): 26 без линий — полоса 2 (поля 5), название 13, справа время 12 моно (2×2 — день 10) -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
   android:id="@+id/kstati_row"
   android:layout_width="match_parent"
@@ -9,10 +9,11 @@
     android:id="@+id/kstati_divider"
     android:layout_width="match_parent"
     android:layout_height="1dp"
-    android:importantForAccessibility="no" />
+    android:importantForAccessibility="no"
+    android:visibility="gone" />
   <LinearLayout
     android:layout_width="match_parent"
-    android:layout_height="30dp"
+    android:layout_height="26dp"
     android:orientation="horizontal">
     <LinearLayout
         android:layout_width="2dp"
@@ -45,7 +46,8 @@
       android:gravity="center_vertical"
       android:includeFontPadding="false"
       android:maxLines="1"
-      android:textSize="13sp" />
+      android:singleLine="true"
+      android:textSize="13dp" />
     <TextView
       android:id="@+id/kstati_time"
       android:layout_width="wrap_content"
@@ -55,6 +57,6 @@
       android:gravity="center_vertical"
       android:includeFontPadding="false"
       android:maxLines="1"
-      android:textSize="12sp" />
+      android:textSize="12dp" />
   </LinearLayout>
 </LinearLayout>

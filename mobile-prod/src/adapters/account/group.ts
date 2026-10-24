@@ -25,7 +25,7 @@ export type GroupSnapshot = Pick<Snapshot, 'me' | 'users' | 'groups' | 'tasks' |
 
 /** Счётчики «ОБЩИХ СПИСКОВ»: открытые дела, хотелки участников без отметки, фильмы в очереди, идеи открытых группе тем */
 export function sharedLists(s: GroupSnapshot, group: Group, clock: Pick<Clock, 'today'>): SharedListSummary[] {
-  const tasks = s.tasks.filter(scopeFilter({ viewId: group.id, groups: s.groups, meId: s.me.id }));
+  const tasks = s.tasks.filter(scopeFilter({ viewId: group.id, groups: s.groups, meId: s.me.id, groupOnly: true }));
   const plans = planIds(tasks);
   const members = new Set(group.memberIds);
   const topics = new Set(s.topics.filter((t) => t.groupIds.includes(group.id)).map((t) => t.id));

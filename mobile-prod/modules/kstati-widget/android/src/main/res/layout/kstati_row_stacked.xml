@@ -48,7 +48,7 @@
         android:fontFamily="@font/kstati_geist_medium"
         android:includeFontPadding="false"
         android:maxLines="1"
-        android:textSize="12.5sp" />
+        android:textSize="12.5dp" />
       <TextView
         android:id="@+id/kstati_when"
         android:layout_width="wrap_content"
@@ -58,7 +58,7 @@
         android:includeFontPadding="false"
         android:letterSpacing="0.04"
         android:maxLines="1"
-        android:textSize="9sp" />
+        android:textSize="9dp" />
     </LinearLayout>
   </LinearLayout>
 </LinearLayout>

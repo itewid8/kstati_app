@@ -69,24 +69,28 @@ describe('weekProps (C-Week)', () => {
     assert.deepEqual(w.events['2026-10-06'], [{ id: 'night', title: 'Ночной поезд', start: 0, end: 360, people: ['o'], fromPrevDay: true }]);
   });
 
-  test('чужая группа и дела без даты не попадают', () => {
-    // В «Друзьях» мой режим — «Только выбранные»: мои дела из «Мы с Кариной» им не видны, чужие — тем более
+  test('чужая группа: дела Карины не видны, мои скрытые от группы — видны мне заштрихованными, без даты — нет', () => {
+    // В «Друзьях» мой режим — «Только выбранные»: группа моих дел не видит, а я вижу их со штриховкой
     const groups = [US, { ...FRIENDS, selectOnly: ['s'] }];
     const w = weekProps(calendarSnapshot(WEEK_TASKS, { currentGroupId: 'g2', groups }), CLOCK, colors, { date: '2026-10-05', hidden: [] });
-    assert.deepEqual(w.bars, []);
-    assert.deepEqual(w.events, {});
+    const all = [...w.bars, ...Object.values(w.events).flat()];
+    assert.ok(all.length > 0);
+    assert.ok(all.every((e) => e.hidden), 'всё — моё и скрытое');
+    assert.ok(!all.some((e) => e.id.startsWith('yoga')), 'дело Карины «Друзьям» не видно');
+    assert.ok(!all.some((e) => e.id === 'none'));
     assert.deepEqual(
       w.people.map((p) => p.tabLabel),
       ['Я', 'ДИМА', 'ЛЕНА'],
     );
   });
 
-  test('режим «Все, кроме скрытых»: мои дела видны и другой группе, скрытые — нет', () => {
+  test('режим «Все, кроме скрытых»: мои дела видны и другой группе; скрытое — заштриховано', () => {
     const tasks = WEEK_TASKS.map((t) => (t.id === 'gift' ? { ...t, share: { g2: false } } : t));
     const w = weekProps(calendarSnapshot(tasks, { currentGroupId: 'g2' }), CLOCK, colors, { date: '2026-10-05', hidden: [] });
-    const ids = [...w.bars.map((b) => b.id), ...Object.values(w.events).flatMap((d) => d.map((e) => e.id))];
-    assert.ok(ids.includes('mom'), 'моё дело из другой группы');
-    assert.ok(!ids.includes('gift'), 'скрытое от «Друзей»');
-    assert.ok(!ids.some((id) => id.startsWith('yoga')), 'дело Карины «Друзьям» не видно');
+    const all = [...w.bars, ...Object.values(w.events).flat()];
+    assert.equal(all.find((e) => e.id === 'mom')?.hidden, undefined, 'видно группе');
+    assert.equal(all.find((e) => e.id === 'gift')?.hidden, true, 'скрыто от «Друзей»');
+    assert.ok(!all.some((e) => e.id.startsWith('yoga')), 'дело Карины «Друзьям» не видно');
   });
+
 });

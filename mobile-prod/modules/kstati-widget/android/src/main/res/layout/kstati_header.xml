@@ -4,6 +4,19 @@
   android:layout_width="match_parent"
   android:layout_height="wrap_content"
   android:orientation="vertical">
+  <!-- Подложка шапки (цвет «Плашка»): картинка со скруглёнными верхними углами 22, как у карточки.
+       Цвет фоном самой строки заливал бы углы карточки квадратом -->
+  <FrameLayout
+    android:layout_width="match_parent"
+    android:layout_height="40dp">
+  <ImageView
+    android:id="@+id/kstati_header_bg"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no"
+    android:scaleType="fitXY"
+    android:src="@drawable/kstati_head_bg"
+    android:visibility="gone" />
   <LinearLayout
     android:id="@+id/kstati_header"
     android:layout_width="match_parent"
@@ -20,7 +33,11 @@
       android:includeFontPadding="false"
       android:letterSpacing="0.08"
       android:maxLines="1"
-      android:textSize="9sp" />
+      android:singleLine="true"
+      android:ellipsize="end"
+      android:hyphenationFrequency="none"
+      android:breakStrategy="simple"
+      android:textSize="9dp" />
     <TextView
       android:id="@+id/kstati_header_weekday"
       android:layout_width="wrap_content"
@@ -30,7 +47,7 @@
       android:includeFontPadding="false"
       android:letterSpacing="0.08"
       android:maxLines="1"
-      android:textSize="9sp" />
+      android:textSize="9dp" />
     <TextView
       android:id="@+id/kstati_header_day"
       android:layout_width="wrap_content"
@@ -44,7 +61,7 @@
       android:paddingEnd="4dp"
       android:paddingBottom="2dp"
       android:textColor="#FFFFFF"
-      android:textSize="9.5sp" />
+      android:textSize="9.5dp" />
     <!-- Без REC — поле 12 справа. Только FrameLayout: голый View в RemoteViews запрещён, виджет не добавится -->
     <FrameLayout
       android:id="@+id/kstati_header_end"
@@ -61,6 +78,7 @@
       <include layout="@layout/kstati_rec_small" />
     </FrameLayout>
   </LinearLayout>
+  </FrameLayout>
   <ImageView
     android:id="@+id/kstati_header_line"
     android:layout_width="match_parent"

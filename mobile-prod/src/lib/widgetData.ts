@@ -403,12 +403,13 @@ export function faceDayLabel(date: string, today: string): string {
 }
 
 /** Подпись под названием в 2×2 / 2×1: «18:00», «ЗАВТРА», «ЗАВТРА · 10:00», «СР 28 · 18:00», «1 НОЯ» */
-export function faceWhen(date: string, time: string | null, today: string): string {
+export function faceWhen(date: string, time: string | null, today: string, short = false): string {
   const diff = dayNo(date) - dayNo(today);
   const day =
     diff <= 0 ? null : diff === 1 ? 'ЗАВТРА' : diff <= 6 ? `${WD[weekdayOf(date) - 1] ?? ''} ${pad2s(Number(date.slice(8, 10)))}` : `${Number(date.slice(8, 10))} ${MON[Number(date.slice(5, 7)) - 1] ?? ''}`;
   if (!day) return time ?? 'СЕГОДНЯ';
-  return time ? `${day} · ${time}` : day;
+  // short — строка 2×2: на другие дни только день (время сегодня — как есть)
+  return time && !short ? `${day} · ${time}` : day;
 }
 
 const pad2s = (n: number) => String(n).padStart(2, '0');

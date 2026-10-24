@@ -28,4 +28,5 @@ declare module 'react-native-svg' {
   export const ClipPath: ComponentType<{ id: string; children?: ReactNode }>;
   export const LinearGradient: ComponentType<Loose & { id: string; x1?: NumberProp; y1?: NumberProp; x2?: NumberProp; y2?: NumberProp; children?: ReactNode }>;
   export const Stop: ComponentType<Loose & { offset?: NumberProp; stopColor?: string; stopOpacity?: NumberProp }>;
+  export const Pattern: ComponentType<Loose & { id: string; patternUnits?: string; width?: NumberProp; height?: NumberProp; patternTransform?: string; children?: ReactNode }>;
 }

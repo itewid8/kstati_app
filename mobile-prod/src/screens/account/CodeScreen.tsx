@@ -5,7 +5,7 @@
  */
 import { memo } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Marquee, ScreenTitle, fonts, size as S, space, useTheme } from '@/ui';
+import { Marquee, fonts, size as S, space, useTheme } from '@/ui';
 import { AccountHeader } from './components/AccountHeader';
 import { BrandTile } from './components/AccountIcons';
 import { CodeCells } from './components/CodeCells';
@@ -67,9 +67,7 @@ export const CodeScreen = memo(function CodeScreen(props: CodeScreenProps) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={[styles.screen, { backgroundColor: c.bg, paddingTop: insets.top + S.topBarTop, paddingBottom: insets.bottom + 18 }]}
     >
-      <AccountHeader onBack={onBack} right={<BrandTile />} />
-
-      <ScreenTitle title="Код" style={styles.title} />
+      <AccountHeader title="Код" onBack={onBack} right={<BrandTile />} />
       <View style={styles.sentTo}>
         <Text style={[styles.sentText, { color: c.muted }]}>ИЗ ПИСЬМА →</Text>
         <Marquee style={[styles.sentText, styles.email, { color: c.text }]}>
@@ -109,8 +107,7 @@ export const CodeScreen = memo(function CodeScreen(props: CodeScreenProps) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, paddingHorizontal: space.side },
-  title: { marginTop: 36 },
-  sentTo: { marginTop: 8, flexDirection: 'row', gap: 8 },
+  sentTo: { marginTop: 14, flexDirection: 'row', gap: 8 },
   sentText: { fontFamily: fonts.mono400, fontSize: 9.5, letterSpacing: 0.57 },
   email: { flexShrink: 1 },
   code: { marginTop: 22 },

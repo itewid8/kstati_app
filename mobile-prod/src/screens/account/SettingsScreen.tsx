@@ -7,7 +7,7 @@
 import { memo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { MicMode, ThemePref } from '@/lib/types';
-import { ScreenTitle, SectionBox, fonts, pad2, size as S, space, useTheme } from '@/ui';
+import { SectionBox, fonts, pad2, size as S, space, useTheme } from '@/ui';
 import { AccountHeader } from './components/AccountHeader';
 import { AccountRow } from './components/AccountRow';
 import { OptionGrid, type Option } from './components/OptionGrid';
@@ -152,8 +152,7 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
         contentContainerStyle={[styles.content, { paddingTop: insets.top + S.topBarTop }]}
         showsVerticalScrollIndicator={false}
       >
-        <AccountHeader caption="НАСТРОЙКИ" onBack={onBack} />
-        <ScreenTitle title="Приложение" style={styles.title} />
+        <AccountHeader caption="НАСТРОЙКИ" title="Приложение" onBack={onBack} />
 
         <View style={styles.sections}>
           <SectionBox title="ТЕМА">
@@ -213,7 +212,6 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingHorizontal: space.side, paddingBottom: 24 },
-  title: { marginTop: 14 },
   sections: { marginTop: 12, gap: 8 },
   switchRow: {
     height: S.row,

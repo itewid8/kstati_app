@@ -11,7 +11,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MONTH_GRID, dayNo, fitRows, monthCellItems, monthLayout, type IsoDate } from '@/lib/calendarLayout';
 import type { ID, PersonColor } from '@/lib/types';
-import { LONG_PRESS_MS, Marquee, SectionBox, fonts, size as S, space, tint, useLift, useTheme, type LiftTarget } from '@/ui';
+import { Hatch, LONG_PRESS_MS, Marquee, SectionBox, fonts, size as S, space, tint, useLift, useTheme, type LiftTarget } from '@/ui';
 import { CalendarScaffold, NO_INSETS, frameOf, useScreenSize } from './components/CalendarScaffold';
 import { PeopleFill, PeopleTip, usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { useLongPressId } from './components/longPress';
@@ -37,6 +37,8 @@ export type MonthItem = {
   id: ID;
   title: string;
   people: readonly ID[];
+  /** Моё дело, скрытое от этой группы, — заштриховано */
+  hidden?: boolean;
 };
 
 /** План (дело с подзадачами) — подсветка его дней */
@@ -112,6 +114,7 @@ const CellItem = memo(function CellItem({ item, byId, onPress, onLongPressEvent 
   const body = (
     <>
       <PeopleFill colors={colors} alpha={c.tintAlpha} />
+      {item.hidden ? <Hatch /> : null}
       <PeopleTip colors={colors} width={1} />
       <Marquee ellipsis={false} style={[styles.itemText, { color: c.text }]}>
         {item.title}

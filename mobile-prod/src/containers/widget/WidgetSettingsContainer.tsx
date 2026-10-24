@@ -56,7 +56,7 @@ export function WidgetSettingsContainer({ widgetId }: Props) {
         label: d.label,
         rows: d.items.map((x) => ({ key: `${x.id}@${x.occ ?? ''}`, title: x.title, time: x.time ?? '—', strip: strip(x), done: x.d === true })),
       })),
-      items: items.slice(0, 3).map((x) => ({ key: `${x.id}@${x.occ ?? ''}`, title: x.title, when: faceWhen(x.date, x.time, today), strip: strip(x) })),
+      items: items.slice(0, 5).map((x) => ({ key: `${x.id}@${x.occ ?? ''}`, title: x.title, when: faceWhen(x.date, x.time, today, true), strip: strip(x) })),
       dark,
     };
   }, [file, prefs.groups, scheme]);

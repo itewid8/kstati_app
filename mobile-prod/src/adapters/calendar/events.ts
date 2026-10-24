@@ -4,14 +4,14 @@
  * (сам план в сетке не рисуется); сетка — minutesOn(task, day); parentTitle — название плана у подзадачи.
  * Скрытые люди (calendarHidden): дело скрывается, если скрыты все его люди.
  */
-import { scopeFilter } from '@/lib/visibility';
+import { scopeTasks } from '@/lib/visibility';
 import { dayNo, isoOf, type DayMinute, type IsoDate } from '@/lib/calendarLayout';
 import { taskKey } from '@/lib/recur';
 import { isLong, isMulti, lastDay, minutesOn, peopleOf } from '@/lib/span';
 import type { ID, Task } from '@/lib/types';
 import { pad2, parts, weekday } from '@/screens/calendar/format';
 import type { CalendarBar, TimedEvent } from '@/screens/calendar/types';
-import { instancesIn, planIds } from '../common/tasks';
+import { ALL_TASKS, instancesIn, planIds } from '../common/tasks';
 import type { DataOf, Snapshot } from '../snapshot';
 
 /** Срез хранилища для календаря: без хотелок, идей и ленты — экран не перерисовывается из-за них */
@@ -50,7 +50,7 @@ export function visibleFor(hidden: readonly ID[]): (t: Pick<Task, 'people' | 'cr
 /** Разы дел текущей группы в периоде (по началу); hidden — скрытые люди */
 export function groupInstances(s: Pick<CalendarSnapshot, 'tasks' | 'currentGroupId' | 'groups' | 'me'>, from: IsoDate, to: IsoDate, hidden: readonly ID[] = NO_IDS): Task[] {
   if (!s.currentGroupId) return [];
-  return instancesIn(s.tasks, scopeFilter({ viewId: s.currentGroupId, groups: s.groups, meId: s.me.id }), from, to).filter(visibleFor(hidden));
+  return instancesIn(scopeTasks(s.tasks, { viewId: s.currentGroupId, groups: s.groups, meId: s.me.id }), ALL_TASKS, from, to).filter(visibleFor(hidden));
 }
 
 /** Что нужно знать о планах, чтобы разложить дела: id планов и их названия (для подписи подзадач) */
@@ -105,6 +105,7 @@ export function toBar(t: Task): CalendarBar | null {
     startDate: t.date,
     endDate: lastDay(t) ?? t.date,
     people: peopleOf(t),
+    ...(t.hidden && { hidden: true }),
   };
 }
 
@@ -127,6 +128,7 @@ export function toTimed(t: Task, day: IsoDate, plans: PlanIndex): TimedEvent | n
     ...(parentTitle ? { parentTitle } : {}),
     ...(fromPrevDay ? { fromPrevDay } : {}),
     ...(toNextDay ? { toNextDay } : {}),
+    ...(t.hidden && { hidden: true }),
   };
 }
 

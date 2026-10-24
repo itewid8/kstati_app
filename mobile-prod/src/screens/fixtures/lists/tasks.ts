@@ -13,7 +13,7 @@ export const taskSections: TaskSection[] = [
       { kind: 'task', id: 't1', title: 'Стоматолог', time: '09:30', owners: ['blue'], done: true },
       { kind: 'task', id: 't2', title: 'Забрать посылку', time: '—', owners: ['pink'], done: true },
       { kind: 'task', id: 't3', title: 'Йога', time: '19:00', owners: ['pink'], done: false },
-      { kind: 'task', id: 't4', title: 'Подарок Лене', time: '—', owners: ['blue'], done: false },
+      { kind: 'task', id: 't4', title: 'Подарок Лене', time: '—', owners: ['blue'], done: false, hidden: true },
     ],
   },
   {

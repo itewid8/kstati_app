@@ -1,11 +1,12 @@
 /**
  * «Лента» (C-Activity): что сделали другие во всех группах, по дням. Без нижней навигации,
- * назад — кнопкой в верхней панели. Дни идут от top 122 и прокручиваются до низа экрана.
+ * назад — кнопкой в верхней панели. Дни идут от top 72 и прокручиваются до низа экрана.
  */
 import { memo, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { ID, PersonColor } from '@/lib/types';
-import { IconButton, Marquee, ScreenTitle, SectionBox, size as S, space, type as T, useTheme } from '@/ui';
+import { SectionBox, size as S, space, type as T, useTheme } from '@/ui';
+import { AccountHeader } from '../account/components/AccountHeader';
 import { FeedRow, NewDot } from './components/FeedRow';
 
 export type FeedPerson = {
@@ -52,7 +53,7 @@ export type ActivityScreenProps = {
 
 const NO_INSETS = { top: 0, bottom: 0 };
 /** Дни начинаются сразу под заголовком */
-const DAYS_TOP = 122;
+const DAYS_TOP = 72;
 
 /** «1 НОВОЕ», «3 НОВЫХ» */
 const newLabel = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'НОВОЕ' : 'НОВЫХ'}`;
@@ -101,13 +102,7 @@ export const ActivityScreen = memo(function ActivityScreen({
 
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
-      <View style={[styles.abs, styles.bar, { top: insets.top + S.topBarTop }]}>
-        <IconButton icon="back" accessibilityLabel="Назад" onPress={onBack} iconSize={S.iconSmall} />
-        <Marquee style={[T.caption, styles.caption, { color: c.muted }]}>
-          {caption}
-        </Marquee>
-      </View>
-      <ScreenTitle title="Лента" right={badge} style={[styles.abs, { top: insets.top + S.titleTop }]} />
+      <AccountHeader caption={caption} title="Лента" onBack={onBack} right={badge} style={[styles.abs, { top: insets.top + S.topBarTop }]} />
 
       <ScrollView
         // Непрозрачный фон: на web прозрачный слой прокрутки выключает субпиксельное сглаживание текста
