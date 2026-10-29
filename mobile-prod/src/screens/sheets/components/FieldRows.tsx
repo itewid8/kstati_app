@@ -4,7 +4,7 @@
  */
 import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Icon, Marquee, PersonTag, fonts, size as S, useTheme } from '@/ui';
+import { Icon, Marquee, PersonTag, fonts, size as S, useInputColors, useTheme } from '@/ui';
 import type { RecognizedField } from '../../voice/VoiceCreateSheet';
 
 export const FieldBox = memo(function FieldBox({ children, faded }: { children: ReactNode; faded?: boolean }) {
@@ -58,6 +58,7 @@ type InputProps = {
 /** Поле ввода в строке таблицы: без своей рамки, во всю ячейку */
 export const FieldInput = memo(function FieldInput({ value, onChangeText, accessibilityLabel, keyboardType = 'default', maxLength, autoFocus, mono }: InputProps) {
   const { c } = useTheme();
+  const ic = useInputColors();
   const plain = keyboardType !== 'default';
   return (
     <TextInput
@@ -69,8 +70,8 @@ export const FieldInput = memo(function FieldInput({ value, onChangeText, access
       autoFocus={autoFocus}
       autoCapitalize={plain ? 'none' : 'sentences'}
       autoCorrect={!plain}
-      selectionColor={c.text}
-      cursorColor={c.text}
+      selectionColor={ic.selectionColor}
+      cursorColor={ic.cursorColor}
       style={[styles.input, mono ? styles.inputMono : styles.inputSans, { color: c.text }]}
     />
   );

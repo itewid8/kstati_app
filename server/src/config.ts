@@ -38,6 +38,10 @@ export const config = {
 
   /** Почта через Yandex Cloud Postbox: адрес на подтверждённом домене. Пусто — письма пишутся в консоль */
   mailFrom: env('MAIL_FROM'),
+  /** Куда пересылать «Сообщить об ошибке / предложить»; пусто — отзывы только сохраняются на сервере */
+  feedbackEmail: env('FEEDBACK_EMAIL'),
+  /** Сколько отзывов в сутки на человека */
+  feedbackDailyLimit: Number(env('FEEDBACK_DAILY_LIMIT', '20')),
 
   /** VK ID: ID приложения из id.vk.com */
   vkClientId: env('VK_CLIENT_ID'),

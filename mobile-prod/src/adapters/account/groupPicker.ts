@@ -8,7 +8,7 @@ import type { Snapshot } from '../snapshot';
 /** Первой строкой — личный календарь (мои дела, lib/visibility.ts), дальше группы */
 export function groupPickerRows(s: Pick<Snapshot, 'groups' | 'currentGroupId'>): PickerGroup[] {
   return [
-    { id: PERSONAL, name: PERSONAL_NAME, meta: 'МОИ ДЕЛА', current: s.currentGroupId === PERSONAL },
+    { id: PERSONAL, name: PERSONAL_NAME, meta: 'ВСЕ МОИ ДЕЛА', current: s.currentGroupId === PERSONAL },
     ...s.groups.map((g) => ({
       id: g.id,
       name: g.name,

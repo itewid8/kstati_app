@@ -32,7 +32,7 @@ import kotlin.math.roundToInt
  *
  * Данные пишет приложение (src/lib/widgetSync.ts, формат — src/lib/widgetData.ts) в папку приложения:
  *   widget.json        — { v: 2, at, dark, groups: [{ id, name }], items: [{ id, occ, g, title, date, time, until, c }] }
- *   widget-prefs.json  — { "default": настройки, "<id виджета>": настройки } — { mic, micTone, bg, opacity, text, time, head, groups }
+ *   widget-prefs.json  — { "default": настройки, "<id виджета>": настройки } — { mic, micTone, bg, opacity, text, time, head, headOpacity, groups }
  * Подписи времени и цвета считаются так же, как whenParts / widgetColors в widgetData.ts — менять вместе.
  * Прошедшие дела виджет отбрасывает сам и перерисовывается к началу ближайшего дела и в полночь.
  */
@@ -45,7 +45,7 @@ object KstatiWidget {
   private const val SCHEME = "kstatiapp"
   private const val DAY_MS = 86_400_000L
   /** Наименьшая непрозрачность поверхности (прозрачность в настройках — до 80%) */
-  private const val OPACITY_MIN = 0.2
+  private const val OPACITY_MIN = 0.0
 
   // Коды PendingIntent: открыть дела, запись, строки дел (у каждой строки свой адрес)
   private const val REQ_OPEN = 1
@@ -81,6 +81,8 @@ object KstatiWidget {
     val text: String,
     val time: String,
     val head: String,
+    /** Непрозрачность заливки шапки 0…1; null — у «авто» нет заливки, у светлой / тёмной — сплошная */
+    val headOpacity: Double?,
     /** Группы, дела которых показывать; пусто — все мои */
     val groups: List<String>,
   )
@@ -99,6 +101,7 @@ object KstatiWidget {
     val time: Ink,
     val day: Ink,
     val headBg: Ink?,
+    val headAlpha: Int,
     val headInk: Ink,
     val headMuted: Ink,
     val recFill: Ink,
@@ -146,11 +149,11 @@ object KstatiWidget {
     Layout(Kind.DAYS, w = 250f, h = 110f),
   )
 
-  /** Высоты (dp) из макета: шапка 40 + линия 1, подпись дня 22, строка 30 + линия 1, строка 2×2 40 + линия 1 */
-  private const val HEAD_H = 41f
-  private const val DAY_H = 20f
-  /** Строка дела — 26 без разделителей (2×2, 4×2, 4×4); под шапкой 2×2 — отступ 4 */
-  private const val ROW_H = 26f
+  /** Высоты (dp) из макета: шапка 40 без линии снизу, подпись дня 16 */
+  private const val HEAD_H = 40f
+  private const val DAY_H = 16f
+  /** Строка дела — 20 без разделителей (2×2, 4×2, 4×4); под шапкой 2×2 — отступ 4 */
+  private const val ROW_H = 20f
   private const val STACK_GAP = 4f
 
   private val WD = arrayOf("ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС")
@@ -320,6 +323,7 @@ object KstatiWidget {
     if (c.headBg != null) {
       v.setViewVisibility(R.id.kstati_header_bg, View.VISIBLE)
       v.ink(R.id.kstati_header_bg, "setColorFilter", c.headBg, night)
+      v.setInt(R.id.kstati_header_bg, "setImageAlpha", c.headAlpha)
     } else {
       v.setViewVisibility(R.id.kstati_header_bg, View.GONE)
     }
@@ -330,7 +334,6 @@ object KstatiWidget {
     v.ink(R.id.kstati_header_weekday, "setTextColor", c.headMuted, night)
     v.setTextViewText(R.id.kstati_header_day, today.substring(8, 10))
     v.ink(R.id.kstati_header_day, "setBackgroundColor", c.today, night)
-    v.ink(R.id.kstati_header_line, "setBackgroundColor", c.hair, night)
     // REC в шапке — капсула D без подписи, только кружок (макет C-WidgetRec)
     if (c.showMic) {
       v.setViewVisibility(R.id.kstati_header_rec, View.VISIBLE)
@@ -393,7 +396,7 @@ object KstatiWidget {
         row.ink(R.id.kstati_time, "setTextColor", c.time, night)
       } else {
         row.setTextViewText(R.id.kstati_time, faceWhen(x.date, x.time, today, short = true))
-        row.setTextViewTextSize(R.id.kstati_time, TypedValue.COMPLEX_UNIT_DIP, 10f)
+        row.setTextViewTextSize(R.id.kstati_time, TypedValue.COMPLEX_UNIT_DIP, 8.5f)
         row.ink(R.id.kstati_time, "setTextColor", c.day, night)
       }
       row.setOnClickPendingIntent(R.id.kstati_row, open(context, itemUri(x), REQ_ITEM + i))
@@ -501,6 +504,7 @@ object KstatiWidget {
     val rec = look(p.micTone)
     val time = ink(p.time)
     val head = if (p.head == "auto") null else look(p.head)
+    val headFill = (p.headOpacity ?: if (head == null) 0.0 else 1.0).coerceIn(0.0, 1.0)
     fun of(set: Pair<Palette, Palette>, f: (Palette) -> Int) = Ink(f(set.first), f(set.second))
     val recDark = p.micTone == "dark" || (p.micTone == "auto" && dark == true)
     return Colors(
@@ -512,7 +516,8 @@ object KstatiWidget {
       today = of(bg) { it.red },
       time = of(time) { it.text },
       day = if (p.time == "auto") of(bg) { it.muted } else of(time) { it.text },
-      headBg = head?.let { h -> of(h) { it.panel } },
+      headBg = if (headFill > 0.0) of(head ?: bg) { it.panel } else null,
+      headAlpha = (headFill * 255).roundToInt(),
       headInk = if (head != null) of(head) { it.text } else of(ink(p.text)) { it.text },
       headMuted = if (head != null) of(head) { it.muted } else of(bg) { it.muted },
       recFill = of(rec) { it.panel },
@@ -724,6 +729,7 @@ object KstatiWidget {
       text = tone("text"),
       time = tone("time"),
       head = tone("head"),
+      headOpacity = p?.takeIf { it.has("headOpacity") && !it.isNull("headOpacity") }?.optDouble("headOpacity")?.takeIf { !it.isNaN() }?.coerceIn(0.0, 1.0),
       groups = run {
         val arr = p?.optJSONArray("groups")
         if (arr != null) (0 until arr.length()).mapNotNull { arr.optString(it).takeIf { s -> s.isNotEmpty() } }

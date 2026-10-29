@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, Tex
 import { BottomSheet } from './BottomSheet';
 import { size as S, fonts, type as T } from './tokens';
 import { useTheme } from './useTheme';
+import { useInputColors } from './inputColors';
 
 type Props = {
   visible: boolean;
@@ -24,6 +25,7 @@ type Props = {
  */
 export const InputSheet = memo(function InputSheet({ visible, value, multiline = false, maxLength, bottomInset = 0, onSubmit, onClose }: Props) {
   const { c } = useTheme();
+  const ic = useInputColors();
   const [text, setText] = useState(value);
   // Каждое открытие начинается с переданного текста
   useEffect(() => {
@@ -50,8 +52,8 @@ export const InputSheet = memo(function InputSheet({ visible, value, multiline =
             returnKeyType={multiline ? 'default' : 'done'}
             submitBehavior={multiline ? 'newline' : 'submit'}
             onSubmitEditing={multiline ? undefined : save}
-            selectionColor={c.text}
-            cursorColor={c.text}
+            selectionColor={ic.selectionColor}
+            cursorColor={ic.cursorColor}
             accessibilityLabel="Текст"
             style={[styles.input, multiline && styles.multiline, { borderColor: c.border, backgroundColor: c.panel, color: c.text }]}
           />
@@ -94,5 +96,5 @@ const styles = StyleSheet.create({
   multiline: { minHeight: 112, maxHeight: 240 },
   actions: { flexDirection: 'row', gap: 8, height: 44 },
   button: { flex: 1, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
-  primary: { flex: 1.3 },
+  primary: { flex: 1 },
 });

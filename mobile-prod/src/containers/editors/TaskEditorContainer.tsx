@@ -17,7 +17,7 @@ import type { IsoDate } from '@/lib/calendarLayout';
 import { shortDate } from '@/lib/dates';
 import { nextOpen } from '@/lib/recur';
 import { useStore, type MenuAction } from '@/lib/store';
-import type { ID, Task } from '@/lib/types';
+import type { ID, Task, TaskKind } from '@/lib/types';
 import { canEditTask } from '@/lib/visibility';
 import type { CustomReminder } from '@/screens/editors/panels/RemindPanel';
 import { TaskEditorScreen, type TaskEditorScreenProps, type TaskField } from '@/screens/editors/TaskEditorScreen';
@@ -210,6 +210,9 @@ function TaskEditor({ start }: { start: EditorState }) {
   }, [dispatch, latest, makePlan, openPlan]);
 
   const onClearEnd = useCallback(() => dispatch({ type: 'clearEnd' }), [dispatch]);
+  const onKind = useCallback((kind: TaskKind) => dispatch({ type: 'kind', kind }), [dispatch]);
+  const onCelebrantName = useCallback((name: string) => dispatch({ type: 'celebrantName', name }), [dispatch]);
+  const onCelebrantPick = useCallback((id: ID, name: string) => dispatch({ type: 'celebrantPick', id, name }), [dispatch]);
   const onChangeTitle = useCallback((title: string) => dispatch({ type: 'title', title }), [dispatch]);
   const onChangeNote = useCallback((note: string) => dispatch({ type: 'note', note }), [dispatch]);
   const onUntil = useCallback((until: string) => dispatch({ type: 'repeatEdit', edit: { kind: 'until', until } }), [dispatch]);
@@ -239,6 +242,9 @@ function TaskEditor({ start }: { start: EditorState }) {
       onChangeNote,
       onField,
       onClearEnd,
+      onKind,
+      onCelebrantName,
+      onCelebrantPick,
       onDelete,
       onSave,
       ...(!editable && {
@@ -248,9 +254,12 @@ function TaskEditor({ start }: { start: EditorState }) {
         onMore: undefined,
         onDelete: undefined,
         onClearEnd: undefined,
+        onKind: undefined,
+        onCelebrantName: undefined,
+        onCelebrantPick: undefined,
       }),
     }),
-    [data, handlers, insets, onMore, onChangeTitle, onChangeNote, onField, onClearEnd, onDelete, onSave, editable, remindOnly],
+    [data, handlers, insets, onMore, onChangeTitle, onChangeNote, onField, onClearEnd, onKind, onCelebrantName, onCelebrantPick, onDelete, onSave, editable, remindOnly],
   );
 
   const color = colorOf(colors, draft.people[0] ?? draft.createdBy);

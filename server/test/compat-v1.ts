@@ -642,6 +642,17 @@ async function scenario(name: string, store: Store) {
   assert.ok((await sync1(T3, PE)).notes[SA].ideas.some((i: any) => i.id === 'i3'));
   await ops2(T1, { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи для приложения', groupIds: ['g1'], archivedAt: null } });
 
+  /* ---------- Тема — сама заметка: текст темы (body) ---------- */
+  await ops2(T1, { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи для приложения', groupIds: ['g1'], body: '- [ ] Погода в виджете\n- [x] Тёмная тема\n\n' } });
+  assert.equal((await sync1(T3, PE)).notes[SA].topics.find((t: any) => t.id === 'tp1').body, '- [ ] Погода в виджете\n- [x] Тёмная тема', 'участник группы видит текст темы, хвост пустых строк срезан');
+  // Старое приложение переименовывает тему — текст не стирается
+  await ops1(T1, oldTopicOp({ ...oldLocalTopic((await sync1(T1, SA)).notes[SA].topics.find((t: any) => t.id === 'tp1')), title: 'Приложение' }));
+  const tpBody = (await sync2(T1)).notes[SA].topics.find((t: any) => t.id === 'tp1');
+  assert.deepEqual([tpBody.title, tpBody.body], ['Приложение', '- [ ] Погода в виджете\n- [x] Тёмная тема']);
+  // Очистили текст — поле уходит
+  await ops2(T1, { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи для приложения', groupIds: ['g1'], body: '' } });
+  assert.equal((await sync2(T1)).notes[SA].topics.find((t: any) => t.id === 'tp1').body, undefined);
+
   /* ---------- S3: новое приложение правит один раз повтора ---------- */
   // «Только этот раз»: удалить 10 октября; перенести 17-е на 18-е = skipDates + новое дело; новое приложение
   // может держать у развёрнутого раза поле occ — сервер не должен пропустить его к старому клиенту
@@ -681,7 +692,7 @@ async function scenario(name: string, store: Store) {
   const items = await say('добавь всё');
   assert.deepEqual(items.items.map((i: any) => i.type), ['task', 'wish', 'watch', 'idea', 'topic']);
   assert.deepEqual(items.items[2].data.genres, ['scifi'], 'незнакомый жанр не уходит');
-  assert.equal(items.items[3].data.topicId, 'tp1');
+  assert.equal(items.items[3].data.topicId, null, 'тема не прозвучала во фразе — «Без темы»');
   const qw = await say('что посмотреть');
   assert.deepEqual(qw.filters, { kind: ['movie'], genre: ['comedy'], origin: [], fresh: ['new'] });
   assert.equal((await say('что хочет маша')).personId, MA);

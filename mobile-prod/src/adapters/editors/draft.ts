@@ -11,7 +11,7 @@
 import { dayNo, isoOf, type IsoDate } from '@/lib/calendarLayout';
 import { shiftRepeat, weekdayOf } from '@/lib/recur';
 import { hhmm, normalizeEnd, peopleOf, toMin } from '@/lib/span';
-import type { DraftItem, ID, ReminderSpec, Repeat, Task, TaskDraft } from '@/lib/types';
+import type { Celebrant, DraftItem, ID, ReminderSpec, Repeat, Task, TaskDraft, TaskKind } from '@/lib/types';
 import type { DateView } from '@/screens/editors/panels/DatePanel';
 import type { PeriodEdge } from '@/screens/editors/panels/PeriodPanel';
 import type { RemindScope } from '@/screens/editors/panels/RemindPanel';
@@ -44,6 +44,10 @@ export type EditorDraft = {
   /** Общие напоминания группы (null — у каждого свои по умолчанию) */
   shared: ReminderSpec[] | null;
   parentId: ID | null;
+  /** Тип дела (новое — обычное) */
+  kind: TaskKind;
+  /** Именинник (у дня рождения); null — не указан */
+  celebrant: Celebrant | null;
   /** «Только я» и отметки по группам (строка «ВИДНО», lib/visibility.ts) */
   only: boolean;
   share: Record<ID, boolean>;
@@ -93,6 +97,8 @@ export function emptyDraft(
     note: '',
     mine: undefined,
     shared: null,
+    kind: 'task',
+    celebrant: null,
     occ: null,
     seriesDate: null,
     lastTime: time ?? DEFAULT_TIME,
@@ -120,6 +126,8 @@ export function draftFromTask(task: Task, s: Pick<Snapshot, 'overrides'>, occ?: 
     mine: s.overrides[task.id],
     shared: task.reminders ?? null,
     parentId: task.parentId ?? null,
+    kind: task.kind ?? 'task',
+    celebrant: task.celebrant ?? null,
     only: !!task.only,
     share: task.share ?? {},
     occ: series && occ ? occ : null,
@@ -150,6 +158,7 @@ export function draftFromSeed(seed: SeedDraft, s: Pick<Snapshot, 'me' | 'tasks' 
     ...(seed.note !== undefined && { note: seed.note }),
     ...(seed.mine !== undefined && { mine: seed.mine }),
     ...(seed.shared !== undefined && { shared: seed.shared }),
+    ...(seed.kind !== undefined && { kind: seed.kind }),
   });
 }
 
@@ -323,10 +332,14 @@ export type DraftAction =
   | { type: 'periodDay'; edge: PeriodEdge; date: IsoDate }
   | { type: 'periodTime'; edge: PeriodEdge; time: string }
   | { type: 'periodNoTime'; edge: PeriodEdge }
-  /** Строка «ВИДНО»: «Только я», показать / скрыть группе, сброс к режимам групп */
+  /** Строка «ВИДНО»: «Только я», показать / скрыть группе */
+  /** Тип дела: день рождения — на весь день и каждый год (повтор, если его не было) */
+  | { type: 'kind'; kind: TaskKind }
+  /** Именинник: имя вписали (id участника сбрасывается) или выбрали участника (повторно — снять) */
+  | { type: 'celebrantName'; name: string }
+  | { type: 'celebrantPick'; id: ID; name: string }
   | { type: 'onlyMe' }
-  | { type: 'shareGroup'; id: ID; visible: boolean }
-  | { type: 'shareReset' };
+  | { type: 'shareGroup'; id: ID; visible: boolean };
 
 /**
  * Название правится прямо в заголовке окна: одна строка (перевод строки из вставки — пробел).
@@ -343,6 +356,15 @@ export const canSaveDraft = (d: Pick<EditorDraft, 'title'>): boolean => d.title.
  */
 export const noteValue = (d: Pick<EditorDraft, 'note'>): string | null => (d.note.trim() ? d.note : null);
 
+/** Название дня рождения по имениннику: «ДР Маши» — как сказали; пусто — «ДР» */
+const birthdayTitle = (c: Celebrant | null) => (c?.name.trim() ? `ДР ${c.name.trim()}` : '');
+
+/** Именинник меняется — название «ДР <имя>» вслед за ним, если его не переписали руками */
+function withCelebrant(d: EditorDraft, celebrant: Celebrant | null): EditorDraft {
+  const auto = !d.title.trim() || d.title.trim() === birthdayTitle(d.celebrant);
+  return { ...d, celebrant, ...(auto && { title: birthdayTitle(celebrant) }) };
+}
+
 export function reduceDraft(d: EditorDraft, a: DraftAction): EditorDraft {
   switch (a.type) {
     case 'title': {
@@ -351,13 +373,20 @@ export function reduceDraft(d: EditorDraft, a: DraftAction): EditorDraft {
     }
     case 'note':
       return a.note === d.note ? d : { ...d, note: a.note };
+    case 'kind': {
+      if (a.kind !== 'birthday') return { ...d, kind: a.kind };
+      const allDay = { ...d, kind: a.kind, time: null, endTime: null, endDate: null, lastTime: d.time ?? d.lastTime };
+      return allDay.date && !allDay.repeat ? { ...allDay, repeat: { freq: 'year', every: 1 } } : allDay;
+    }
+    case 'celebrantName':
+      return withCelebrant(d, a.name.trim() ? { name: titleInput(a.name) } : null);
+    case 'celebrantPick':
+      return withCelebrant(d, d.celebrant?.id === a.id ? null : { id: a.id, name: a.name });
     case 'onlyMe':
       return { ...d, only: !d.only };
     case 'shareGroup':
       // Отметили группу — дело уже не «только моё»
       return { ...d, only: a.visible ? false : d.only, share: { ...d.share, [a.id]: a.visible } };
-    case 'shareReset':
-      return { ...d, only: false, share: {} };
     case 'day':
       return moveStartTo(d, { date: a.date, time: d.date ? d.time : null });
     case 'clearDate':
@@ -586,6 +615,8 @@ export function draftToItem(d: EditorDraft): Extract<DraftItem, { type: 'task' }
     endTime: d.endTime,
     people: draftPeople(d),
     parentId: d.parentId,
+    kind: d.kind,
+    celebrant: d.kind === 'birthday' && d.celebrant?.name.trim() ? { ...d.celebrant, name: d.celebrant.name.trim() } : null,
     only: d.only,
     share: d.share,
   };

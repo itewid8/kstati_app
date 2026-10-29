@@ -11,7 +11,7 @@ import { StyleSheet, View, useWindowDimensions, type LayoutChangeEvent } from 'r
 import { GRID, type ViewFrame } from '@/lib/calendarLayout';
 import { BottomNav, TopBar, size as S, space, useTheme, type TopBarAction } from '@/ui';
 import type { CalendarChromeProps, CalendarView } from '../types';
-import { ViewSwitch } from './ViewSwitch';
+import { ViewSwitch, type TasksSwitchValue } from './ViewSwitch';
 
 /** Вертикальная сетка экрана календаря (макеты C-Day/Week/Month/Year) */
 export const CAL = {
@@ -86,7 +86,6 @@ export const CalendarScaffold = memo(function CalendarScaffold(props: Props) {
 
   const actions = useMemo<TopBarAction[]>(
     () => [
-      { key: 'list', icon: 'list', accessibilityLabel: 'Список', onPress: onOpenList },
       { key: 'add', icon: 'plus', accessibilityLabel: 'Добавить', onPress: onAdd },
       { key: 'feed', icon: 'bell', accessibilityLabel: 'Лента', onPress: onOpenFeed, badge: hasNews },
       {
@@ -98,16 +97,20 @@ export const CalendarScaffold = memo(function CalendarScaffold(props: Props) {
         onPress: onOpenSettings,
       },
     ],
-    [onOpenList, onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
+    [onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
   );
   const lead = useMemo(() => ({ kind: 'group' as const, label: groupLabel, onPress: onOpenGroup }), [groupLabel, onOpenGroup]);
+  const changeView = useCallback(
+    (v: TasksSwitchValue) => (v === 'list' ? onOpenList?.() : onChangeView?.(v)),
+    [onOpenList, onChangeView],
+  );
 
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]} onLayout={onLayout}>
       {Wrap ? <Wrap>{children}</Wrap> : children}
       {overlay}
       <TopBar lead={lead} actions={actions} style={[styles.side, { top: insets.top + S.topBarTop }]} />
-      <ViewSwitch value={view} onChange={onChangeView} style={[styles.side, { top: insets.top + CAL.viewTop }]} />
+      <ViewSwitch value={view} onChange={changeView} style={[styles.side, { top: insets.top + CAL.viewTop }]} />
       <View style={[styles.side, styles.period, { top: insets.top + CAL.periodTop }]}>{period}</View>
       <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} style={[styles.side, { bottom: insets.bottom + S.navBottom }]} />
     </View>

@@ -1,23 +1,28 @@
 /**
- * Тема идей (src/screens/sheets/TopicScreen). Своя — добавлять, править, удалять смахиванием, открывать группам, меню «⋯»;
- * чужая открытая — только читать (нажатие и удержание — быстрые действия: в дела, копия к себе).
- * Пока экран открыт, голосовая идея без названной темы ложится сюда. Потянуть вниз — обновить.
+ * Тема заметок (C-Topic, src/screens/sheets/TopicScreen). Тема — сама заметка: своя пишется сразу (название в заголовке,
+ * текст — строками заметки, useNoteEditor), сохраняется сама. Новая тема (id NEW_NOTE) появляется с первым словом
+ * названия или текста; нет названия — берётся первая строка текста. «+» — заметка внутри темы (C-Note),
+ * своя тема — удалять заметки смахиванием, открывать группам, меню «⋯». Чужая открытая тема — только читать.
+ * Пока экран открыт, голосовая заметка без названной темы ложится сюда. Потянуть вниз — обновить.
  */
+import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Keyboard, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { topicProps, type TopicSnapshot } from '@/adapters/lists/topic';
 import { PullScreen, PullScrollView } from '@/components/PullRefresh';
 import { TopicShareSheet } from '@/components/TopicShareSheet';
-import { editIdea, topicMenu } from '@/lib/ideas';
+import { topicMenu } from '@/lib/ideas';
 import { uid } from '@/lib/ids';
+import { notePlain, parseNote, plainLine } from '@/lib/note';
 import { useStore } from '@/lib/store';
 import { INBOX, type ID } from '@/lib/types';
 import { TopicScreen } from '@/screens/sheets';
 import type { LiftTarget } from '@/ui';
-import { NO_ME, nav, signedInOnly, useChrome, useInsets, usePersonColors, type StoreState } from '../common';
+import { NEW_NOTE, NO_ME, nav, signedInOnly, useChrome, useInsets, usePersonColors, type StoreState } from '../common';
 import { holdIdea } from '../quick/quickStore';
+import { useNoteEditor } from './useNoteEditor';
 
 const pickTopic = (s: StoreState): TopicSnapshot & { groups: StoreState['groups'] } => ({
   me: s.me ?? NO_ME,
@@ -31,7 +36,13 @@ const back = () => (router.canGoBack() ? router.back() : router.navigate(nav.tab
 const deleteIdea = (id: ID) => useStore.getState().deleteIdea(id);
 const hold = (id: ID, lift: LiftTarget) => holdIdea(id, lift);
 
-export const TopicContainer = signedInOnly(function Topic({ id }: { id: ID }) {
+/** Название новой темы без названия — первая строка текста */
+const titleOf = (title: string, body: string) => title.trim() || (parseNote(body).map((b) => plainLine(b.text)).find(Boolean) ?? '').slice(0, 80);
+
+export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id: ID }) {
+  const isNew = routeId === NEW_NOTE;
+  // Новая тема получает id сразу: с первым словом она уже в списке
+  const [id] = useState(() => (isNew ? uid() : routeId));
   const s = useStore(useShallow(pickTopic));
   const insets = useInsets();
   const { onNavigate, onRec } = useChrome('ideas');
@@ -40,9 +51,38 @@ export const TopicContainer = signedInOnly(function Topic({ id }: { id: ID }) {
   const topic = useMemo(() => s.topics.find((t) => t.id === id), [s.topics, id]);
   const [sharing, setSharing] = useState(false);
   const inbox = id === INBOX;
-  const { own, exists } = data;
+  // Новая — своя, даже пока её нет в хранилище
+  const own = data.own || isNew;
+  const exists = data.exists || isNew;
+  const editable = own && !inbox;
 
-  // Голос, начатый на этом экране, кладёт идеи в эту тему
+  const [title, setTitle] = useState(() => topic?.title ?? '');
+  const titleRef = useRef(title);
+  const bodyRef = useRef(topic?.body ?? '');
+  const saveTopic = useCallback(() => {
+    if (!editable) return;
+    const name = titleOf(titleRef.current, bodyRef.current);
+    if (name) useStore.getState().putTopic(id, name, bodyRef.current);
+  }, [editable, id]);
+  const saveBody = useCallback(
+    (text: string) => {
+      bodyRef.current = text;
+      saveTopic();
+    },
+    [saveTopic],
+  );
+  const ed = useNoteEditor(data.bodyText ?? '', saveBody);
+  const onChangeTitle = useCallback(
+    (t: string) => {
+      const one = t.replace(/\s*\n\s*/g, ' ');
+      titleRef.current = one;
+      setTitle(one);
+      saveTopic();
+    },
+    [saveTopic],
+  );
+
+  // Голос, начатый на этом экране, кладёт заметки в эту тему
   const voiceTopic = own && !inbox && topic ? topic.id : null;
   useFocusEffect(
     useCallback(() => {
@@ -53,40 +93,64 @@ export const TopicContainer = signedInOnly(function Topic({ id }: { id: ID }) {
 
   const share = useCallback(() => setSharing(true), []);
   const closeShare = useCallback(() => setSharing(false), []);
-  const add = useCallback(
-    () =>
-      useStore.getState().setCard({
-        source: 'manual',
-        editing: true,
-        items: [{ key: uid(), type: 'idea', data: { title: '', topicId: inbox ? null : (topic?.id ?? null), newTopic: null } }],
-      }),
-    [inbox, topic?.id],
-  );
+  // Заметка внутри: новой темы ещё может не быть — сохраняем (без названия — «Новая тема»)
+  const add = useCallback(() => {
+    if (inbox) return router.push(nav.note(NEW_NOTE, null));
+    ed.flush();
+    if (!useStore.getState().topics.some((t) => t.id === id)) {
+      if (!titleRef.current.trim() && !titleOf('', bodyRef.current)) titleRef.current = 'Новая тема';
+      saveTopic();
+    }
+    router.push(nav.note(NEW_NOTE, id));
+  }, [inbox, id, ed, saveTopic]);
   const more = useCallback(() => {
+    Keyboard.dismiss();
     if (topic) topicMenu(topic, share);
   }, [topic, share]);
-  // Своя — правка; чужая — быстрые действия (в дела, копия к себе)
-  const open = useCallback(
-    (ideaId: ID) => {
-      const idea = useStore.getState().ideas.find((x) => x.id === ideaId);
-      if (!idea) return;
-      if (own) editIdea(idea);
-      else holdIdea(idea.id);
-    },
-    [own],
-  );
+  const open = useCallback((ideaId: ID) => router.push(nav.note(ideaId)), []);
+  const copy = useCallback(() => {
+    ed.flush();
+    const name = titleOf(titleRef.current, bodyRef.current);
+    const text = notePlain([name, bodyRef.current].filter((x) => x.trim()).join('\n'));
+    if (!text) return;
+    Clipboard.setStringAsync(text)
+      .then(() => useStore.getState().notice('Скопировано'))
+      .catch(() => useStore.getState().notice('Не скопировалось'));
+  }, [ed]);
+  // Название показываем своё (правится), пока темы нет — пустое
+  const shownTitle = editable ? title : data.title;
 
   return (
     <PullScreen>
       <View style={styles.fill}>
         <TopicScreen
           {...data}
+          title={shownTitle}
+          caption={isNew && !topic ? 'ТЕМА' : data.caption}
+          onChangeTitle={editable ? onChangeTitle : undefined}
+          focusTitle={isNew}
+          body={
+            data.bodyText !== null || isNew
+              ? {
+                  blocks: ed.blocks,
+                  editable,
+                  active: ed.active,
+                  caret: ed.caret,
+                  onChangeText: ed.onChangeText,
+                  onBackspace: ed.onBackspace,
+                  onToggleCheck: ed.onToggleCheck,
+                  onFocus: ed.onFocus,
+                  onTool: ed.onTool,
+                }
+              : undefined
+          }
           insets={insets}
           Scroll={PullScrollView}
           onBack={back}
           onShare={own && topic ? share : undefined}
           onAdd={own && exists ? add : undefined}
           onMore={own && topic ? more : undefined}
+          onCopy={data.bodyText !== null || isNew ? copy : undefined}
           onOpenIdea={open}
           onHoldIdea={hold}
           onDeleteIdea={own ? deleteIdea : undefined}

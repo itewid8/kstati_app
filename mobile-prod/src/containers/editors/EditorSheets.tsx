@@ -251,7 +251,7 @@ export const CustomRemindSheet = memo(function CustomRemindSheet({ kind, bottomI
 const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8, height: S.row },
   button: { flex: 1, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
-  primary: { flex: 1.3 },
+  primary: { flex: 1 },
   value: { height: 36, borderWidth: S.border, paddingHorizontal: 10, justifyContent: 'center' },
   days: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   flex: { flex: 1, minWidth: 0 },

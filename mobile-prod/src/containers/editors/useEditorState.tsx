@@ -78,7 +78,7 @@ export type PanelHandlers = {
   repeat: Pick<RepeatPanelProps, 'onPreset' | 'onEvery' | 'onUnit' | 'onToggleWeekday' | 'onEnd' | 'onPickUntil' | 'onCount'>;
   remind: Pick<RemindPanelProps, 'onScope' | 'onRemove' | 'onAdd' | 'onCustom'>;
   who: Pick<WhoPanelProps, 'onMode' | 'onToggleMember'>;
-  visible: Pick<VisiblePanelProps, 'onToggleOnly' | 'onToggleGroup' | 'onReset'>;
+  visible: Pick<VisiblePanelProps, 'onToggleOnly' | 'onToggleGroup'>;
   /** Своё напоминание из окна CustomRemindSheet */
   addReminder: (spec: ReminderSpec) => void;
 };
@@ -159,7 +159,6 @@ export function usePanelHandlers({ dispatch, latest, ctx, onPickUntil, onCustom 
           const g = visibleGroups(latest.current.draft, ctx.current.snapshot).find((x) => x.id === id);
           if (g) dispatch({ type: 'shareGroup', id, visible: !g.visible });
         },
-        onReset: () => dispatch({ type: 'shareReset' }),
       },
       addReminder,
     };

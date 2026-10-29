@@ -105,6 +105,13 @@ export type Repeat = {
   count?: number | null;
 };
 
+/** Тип дела: обычное, день рождения, важный день, путешествие (сервер: TASK_KINDS) */
+export const TASK_KINDS = ['task', 'birthday', 'important', 'trip'] as const;
+export type TaskKind = (typeof TASK_KINDS)[number];
+
+/** Именинник дня рождения: участник группы (id и имя) или просто имя */
+export type Celebrant = { id?: ID; name: string };
+
 export type Task = {
   id: ID;
   /**
@@ -135,6 +142,10 @@ export type Task = {
   people?: ID[];
   /** Подзадача: id большого дела (плана) в той же группе */
   parentId?: ID | null;
+  /** Тип (мини-иконка): день рождения, важный день, путешествие; нет — обычное дело */
+  kind?: TaskKind;
+  /** Именинник (у дня рождения): участник группы (id) или просто имя */
+  celebrant?: Celebrant | null;
   /** «Только я»: не видно ни одной группе (только у своих дел) */
   only?: boolean;
   /** Отметки по группам: true — показать, false — скрыть; нет — по режиму группы (только у своих дел) */
@@ -180,6 +191,8 @@ export type Topic = {
   createdAt: string;
   /** В архиве с этого времени (API 2). null — только что вернули из архива: так поле уйдёт на сервер */
   archivedAt?: string | null;
+  /** Тема — сама заметка: её текст (строки с разметкой, lib/note.ts); нет — пустая */
+  body?: string;
 };
 
 export type Idea = {
@@ -314,6 +327,10 @@ export type TaskDraft = {
   endTime?: string | null;
   people?: ID[];
   parentId?: ID | null;
+  /** Тип дела; нет — как было (новое — обычное) */
+  kind?: TaskKind;
+  /** Именинник; null — убрать; нет — как было */
+  celebrant?: Celebrant | null;
   /** Видимость (окно дела, строка «ВИДНО»): нет — как было / по месту создания */
   only?: boolean;
   share?: Record<ID, boolean>;
@@ -329,7 +346,8 @@ export type WatchDraft = {
 
 /** Идея в карточке: title — её текст; тема — существующая (topicId) или новая (newTopic); обе null — «Без темы» */
 export type IdeaDraft = { title: string; topicId: ID | null; newTopic: string | null };
-export type TopicDraft = { title: string };
+/** Тема (она же заметка). body — текст: список, продиктованный или поправленный голосом; changes — что поменялось, только для карточки */
+export type TopicDraft = { title: string; body?: string; changes?: string[] };
 
 export type DraftItem =
   | { key: string; type: 'task'; id?: ID; force?: boolean; data: TaskDraft }

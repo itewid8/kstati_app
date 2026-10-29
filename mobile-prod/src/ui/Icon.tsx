@@ -16,7 +16,19 @@ const ICONS = {
   forward: { d: 'm9 18 6-6-6-6', strokeWidth: 2 },
   plus: { d: 'M12 5v14M5 12h14', strokeWidth: 2 },
   bell: { d: 'M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0', strokeWidth: 2 },
-  list: { d: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', strokeWidth: 2 },
+  list: { d: 'M5.5 6h13M5.5 12h13M5.5 18h13', strokeWidth: 2 },
+  calendar: { d: 'M4 5h16v15H4zM4 10h16M9 3v4M15 3v4', strokeWidth: 2 },
+  /** Скопировать и перенести в тему (заметка) */
+  copy: { d: 'M9 9h11v11H9zM5 15H4V4h11v1', strokeWidth: 2 },
+  folder: { d: 'M3 6h7l2 2h9v11H3z', strokeWidth: 2 },
+  /** Типы дел (мини-иконки): дело, день рождения, важный день, путешествие */
+  kindTask: { d: 'M5 5h14v14H5zM9 12l2 2 4-4', strokeWidth: 2 },
+  kindBirthday: { d: 'M4 20h16M6 20v-7h12v7M6 16c2 1.2 4 1.2 6 0s4-1.2 6 0M12 13V9M12 4.5c-1 1.2-1 2.6 0 3 1-.4 1-1.8 0-3', strokeWidth: 2 },
+  kindImportant: { d: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z', strokeWidth: 2 },
+  kindTrip: { d: 'M4 8h16v11H4zM9 8V5h6v3M4 13h16', strokeWidth: 2 },
+  /** Панель заметки: чек-лист и маркированный список */
+  checklist: { d: 'M4 4h16v16H4zM8 12l3 3 5-6', strokeWidth: 2 },
+  bullets: { d: 'M10 6h11M10 12h11M10 18h11M4 6h2M4 12h2M4 18h2', strokeWidth: 2.4 },
   chevronUp: { d: 'm6 15 6-6 6 6', strokeWidth: 3 },
   chevronDown: { d: 'm6 9 6 6 6-6', strokeWidth: 3 },
   chevronRight: { d: 'm9 18 6-6-6-6', strokeWidth: 2.2 },

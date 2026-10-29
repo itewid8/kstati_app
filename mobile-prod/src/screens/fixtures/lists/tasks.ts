@@ -5,6 +5,7 @@
 import type { TaskSection, TasksListScreenProps } from '../../lists/TasksListScreen';
 
 export const taskSections: TaskSection[] = [
+  { id: 'past', label: 'ПРОШЛО', date: '02', collapsed: true, items: [] },
   {
     id: 'today',
     label: 'СЕГОДНЯ',
@@ -47,6 +48,7 @@ export const taskSections: TaskSection[] = [
       { kind: 'task', id: 't8', title: 'Закупка на неделю', time: 'ВС 12', owners: ['blue', 'pink'], done: false },
     ],
   },
+  { id: 'done', label: 'СДЕЛАНО', date: '05', collapsed: true, items: [] },
 ];
 
 export function tasksListFixture(): TasksListScreenProps {
@@ -54,5 +56,6 @@ export function tasksListFixture(): TasksListScreenProps {
     groupLabel: 'МЫ С КАРИНОЙ',
     me: { letter: 'С', color: 'blue' },
     sections: taskSections,
+    onToggleSection: () => {},
   };
 }

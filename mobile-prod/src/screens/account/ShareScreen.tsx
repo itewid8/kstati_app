@@ -222,5 +222,5 @@ const styles = StyleSheet.create({
   askNum: { fontFamily: fonts.mono600, fontSize: 13 },
   askButtons: { flexDirection: 'row', gap: 8 },
   cancel: { flexGrow: 1, flexShrink: 1, flexBasis: 15 },
-  confirm: { flexGrow: 1.3, flexShrink: 1, flexBasis: 15 },
+  confirm: { flexGrow: 1, flexShrink: 1, flexBasis: 15 },
 });

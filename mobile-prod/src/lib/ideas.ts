@@ -32,14 +32,13 @@ export function editIdea(idea: Idea) {
   });
 }
 
-/** Меню своей темы: переименовать, открыть группам, в архив (сервер API 2), удалить */
+/** Меню своей темы (название правится прямо в заголовке темы): открыть группам, в архив (сервер API 2), удалить */
 export function topicMenu(t: Topic, onShare: () => void) {
   const s = useStore.getState();
   const archive = DEMO || (s.serverApi ?? 0) >= 2;
   openMenu({
     title: t.title,
     actions: [
-      { label: 'Переименовать', onPress: () => s.setCard({ source: 'edit', editing: true, items: [{ key: t.id, id: t.id, type: 'topic', data: { title: t.title } }] }) },
       { label: 'Открыть группам', onPress: () => setTimeout(onShare, 250) },
       ...(archive ? [{ label: t.archivedAt ? 'Вернуть из архива' : 'В архив', onPress: () => s.archiveTopic(t.id, !t.archivedAt) }] : []),
       {
@@ -50,6 +49,27 @@ export function topicMenu(t: Topic, onShare: () => void) {
           toTab('ideas');
         },
       },
+    ],
+  });
+}
+
+/** «В тему» у заметки: все мои темы (не в архиве, свежие сверху) и «Без темы»; текущая не показывается */
+export function moveNoteMenu(idea: Idea) {
+  const s = useStore.getState();
+  const me = s.me?.id;
+  const mine = sortTopics(
+    s.topics.filter((t) => t.ownerId === me && !t.archivedAt && t.id !== idea.topicId),
+    s.ideas,
+  );
+  const move = (topicId: ID | null, title: string) => {
+    useStore.getState().saveItems([{ key: idea.id, id: idea.id, type: 'idea', data: { title: idea.text, topicId, newTopic: null } }]);
+    useStore.getState().notice(`Перенесено в «${title}»`);
+  };
+  openMenu({
+    title: 'В тему',
+    actions: [
+      ...mine.map((t) => ({ label: t.title, onPress: () => move(t.id, t.title) })),
+      ...(idea.topicId ? [{ label: 'Без темы', onPress: () => move(null, 'Без темы') }] : []),
     ],
   });
 }

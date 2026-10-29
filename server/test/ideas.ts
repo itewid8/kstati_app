@@ -34,9 +34,33 @@ assert.equal(findTopic('в приложение', topics)?.id, 'tp1');
 assert.equal(findTopic('мысли', topics)?.id, 'tp3');
 assert.equal(findTopic('рецепты', topics), null);
 
-// Тема подобрана моделью по смыслу — в неё
+// Тема подобрана моделью по смыслу, во фразе не звучала — «Без темы»: угаданная тема часто чужая
 let it = one(normalize([{ intent: 'add', type: 'idea', text: 'показывать погоду в виджете', topic: 'Идеи для приложения' }], ctx(), 'запиши идею показывать погоду в виджете'));
-assert.deepEqual(it, { key: it.key, type: 'idea', data: { title: 'Показывать погоду в виджете', topicId: 'tp1', newTopic: null } });
+assert.deepEqual(it, { key: it.key, type: 'idea', data: { title: 'Показывать погоду в виджете', topicId: null, newTopic: null } });
+// …а названная — в неё
+it = one(normalize([{ intent: 'add', type: 'idea', text: 'Погода в виджете.', topic: 'Идеи для приложения' }], ctx(), 'запиши в идеи для приложения погода в виджете'));
+assert.equal(it.type === 'idea' && it.data.topicId, 'tp1');
+
+// Продиктованный перечень — заметка-список (тема с чек-листом), а не текст через запятую в чужой теме
+const said = 'запиши в заметки список продуктов молоко яйца хлеб крупа макароны и что нибудь сладенькое';
+it = one(normalize([{ intent: 'add', type: 'idea', title: 'Список продуктов', items: ['Молоко', 'Яйца', 'Хлеб', 'Крупа', 'Макароны', 'Что-нибудь сладенькое'], topic: 'Идеи для приложения' }], ctx(), said));
+assert.deepEqual(it.type === 'topic' && [it.id, it.data.title, it.data.body], [undefined, 'Список продуктов', '- [ ] Молоко\n- [ ] Яйца\n- [ ] Хлеб\n- [ ] Крупа\n- [ ] Макароны\n- [ ] Что-нибудь сладенькое']);
+// Модель вернула текст через запятую — тоже список
+it = one(normalize([{ intent: 'add', type: 'idea', text: 'Список продуктов: молоко, яйца, хлеб и что-нибудь сладенькое.', topic: null }], ctx(), said));
+assert.equal(it.type === 'topic' && it.data.body, '- [ ] Молоко\n- [ ] Яйца\n- [ ] Хлеб\n- [ ] Что-нибудь сладенькое');
+// Такой список уже есть — пункты дописываются в него, повторы пропускаются
+const lists = [...topics, { id: 'tp4', title: 'Список продуктов', body: '- [ ] Молоко\n- [x] Хлеб' }];
+it = one(normalize([{ intent: 'add', type: 'idea', title: 'Список продуктов', items: ['молоко', 'сыр'] }], ctx({ topics: lists }), 'запиши в список продуктов молоко и сыр'));
+assert.deepEqual(it.type === 'topic' && [it.id, it.data.body, it.data.changes], ['tp4', '- [ ] Молоко\n- [x] Хлеб\n- [ ] Сыр', ['+ Сыр']]);
+// Правка списка голосом
+it = one(normalize([{ intent: 'list_edit', topic: 'список продуктов', add: ['Кефир'], remove: ['хлеб'], replace: [{ from: 'молоко', to: 'Овсяное молоко' }] }], ctx({ topics: lists }), 'добавь в список продуктов кефир убери хлеб замени молоко на овсяное'));
+assert.deepEqual(it.type === 'topic' && [it.id, it.data.body], ['tp4', '- [ ] Овсяное молоко\n- [ ] Кефир']);
+// Открыта тема — правка без названия идёт в неё
+it = one(normalize([{ intent: 'list_edit', topic: null, check: ['молоко'] }], ctx({ topics: lists, currentTopicId: 'tp4' }), 'отметь молоко'));
+assert.equal(it.type === 'topic' && it.data.body, '- [x] Молоко\n- [x] Хлеб');
+// Перечень в названную тему — заметка в ней с заголовком и чек-листом
+it = one(normalize([{ intent: 'add', type: 'idea', title: 'Взять с собой', items: ['Палатка', 'Термос'], topic: 'Мысли' }], ctx(), 'в мысли взять с собой палатку и термос'));
+assert.deepEqual(it.type === 'idea' && [it.data.topicId, it.data.title], ['tp3', '# Взять с собой\n- [ ] Палатка\n- [ ] Термос']);
 
 // Названа новая тема — создастся при сохранении
 it = one(normalize([{ intent: 'add', type: 'idea', text: 'Стих про кролика.', topic: 'Поздравления с Новым годом' }], ctx(), 'добавь в поздравления с новым годом стих про кролика'));

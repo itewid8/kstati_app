@@ -3,12 +3,14 @@
  *  task — дело 44px, название 13/500;
  *  plan — шапка плана 44px, 13/600, заливка цветом плана;
  *  step — шаг плана 36px, отступ 26, 12/500, та же заливка.
- * Галочка без знака: отмеченное — квадрат, залитый цветом текста (как в макете).
- * Кандидаты в src/ui: Checkbox с mark={false} и emptyFill="none"; полоса из двух цветов уже есть в ListRow.
+ * Отметка — общий Checkbox: залитый квадрат с галочкой, «щёлкает» при нажатии; строка на миг подсвечивается,
+ * название зачёркивается — дело остаётся на месте (полоса из двух цветов есть и в ListRow).
  */
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Hatch, LONG_PRESS_MS, Marquee, fonts, size as S, useLift, useTheme, type LiftHandler } from '@/ui';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import type { TaskKind } from '@/lib/types';
+import { Checkbox, Hatch, Icon, KIND_ICON, LONG_PRESS_MS, Marquee, fonts, size as S, useLift, useTheme, type LiftHandler } from '@/ui';
 
 export type TaskRowKind = 'task' | 'plan' | 'step';
 
@@ -24,6 +26,8 @@ type Props = {
   done: boolean;
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
+  /** Тип дела — мини-иконка перед названием */
+  taskType?: TaskKind;
   onToggle?: () => void;
   onPress?: () => void;
   /** Удержание: строка отдаёт своё место в окне и копию (быстрые действия) */
@@ -34,12 +38,32 @@ type Props = {
 const STEP_HEIGHT = 36;
 /** Копия поднятой строки: без разделителя сверху (вокруг — рамка) */
 const LIFTED: ViewStyle = { borderTopWidth: 0 };
+/** Подсветка строки после отметки: вспышка цветом текста и затухание */
+const FLASH = 0.12;
+const FLASH_MS = 700;
+
+/** Вспышка при отметке «сделано» (не при первом показе и не при снятии) */
+function useDoneFlash(done: boolean) {
+  const flash = useSharedValue(0);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (!done) return;
+    flash.value = FLASH;
+    flash.value = withTiming(0, { duration: FLASH_MS });
+  }, [done, flash]);
+  return useAnimatedStyle(() => ({ opacity: flash.value }));
+}
 
 export const TaskRow = memo(function TaskRow(props: Props) {
   const { kind, title, time, strip, fill, done, hidden, onToggle, onPress, onLongPress, style } = props;
-  const { c } = useTheme();
+  const { c, person } = useTheme();
   const step = kind === 'step';
   const ink = done ? c.muted : c.text;
+  const flash = useDoneFlash(done);
   const lift = useLift(onLongPress, 'row', () => <TaskRow {...props} onToggle={undefined} onPress={undefined} onLongPress={undefined} style={[style, LIFTED]} />);
   return (
     <Pressable
@@ -56,6 +80,7 @@ export const TaskRow = memo(function TaskRow(props: Props) {
       ]}
     >
       {hidden ? <Hatch /> : null}
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.text }, flash]} />
       {typeof strip === 'string' ? (
         <View style={[styles.strip, { backgroundColor: strip }]} />
       ) : (
@@ -64,16 +89,8 @@ export const TaskRow = memo(function TaskRow(props: Props) {
           <View style={[styles.half, { backgroundColor: strip[1] }]} />
         </View>
       )}
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: done }}
-        accessibilityLabel="Готово"
-        onPress={onToggle}
-        hitSlop={4}
-        style={styles.tap}
-      >
-        <View style={[styles.box, { borderColor: c.border, backgroundColor: done ? c.text : 'transparent' }]} />
-      </Pressable>
+      <Checkbox checked={done} onPress={onToggle} accessibilityLabel="Готово" emptyFill="none" checkedFill={person('green')} />
+      {props.taskType ? <Icon name={KIND_ICON[props.taskType]} size={step ? 11 : 12} color={ink} /> : null}
       <Marquee
         style={[
           step ? styles.stepTitle : styles.title,
@@ -101,8 +118,6 @@ const styles = StyleSheet.create({
   stepRow: { height: STEP_HEIGHT, paddingLeft: 26 },
   strip: { position: 'absolute', left: 0, top: 0, bottom: 0, width: S.strip },
   half: { flex: 1 },
-  tap: { width: S.checkTap, height: S.checkTap, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
-  box: { width: S.checkbox, height: S.checkbox, borderWidth: S.border },
   title: { flex: 1, minWidth: 0, fontFamily: fonts.sans500, fontSize: 13, lineHeight: 16 },
   planTitle: { fontFamily: fonts.sans600 },
   stepTitle: { flex: 1, minWidth: 0, fontFamily: fonts.sans500, fontSize: 12, lineHeight: 16 },

@@ -13,7 +13,7 @@ const TABS: ReadonlyArray<{ key: NavTab; label: string }> = [
   { key: 'tasks', label: 'ДЕЛА' },
   { key: 'wishes', label: 'ХОЧУ' },
   { key: 'watch', label: 'СМОТРЕТЬ' },
-  { key: 'ideas', label: 'ИДЕИ' },
+  { key: 'ideas', label: 'ЗАМЕТКИ' },
 ];
 
 /**

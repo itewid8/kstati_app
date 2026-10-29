@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Icon, type IconName } from './Icon';
 import { IconButton } from './IconButton';
@@ -27,13 +27,15 @@ type Lead =
 
 type Props = {
   lead: Lead;
+  /** Между подписью (группой) и кнопками — переключатель «список / календарь» */
+  after?: ReactNode;
   actions?: TopBarAction[];
   iconSize?: number;
   style?: StyleProp<ViewStyle>;
 };
 
 /** Верхняя панель: 40px, кнопки 40×40 через 8px */
-export const TopBar = memo(function TopBar({ lead, actions = [], iconSize = S.icon, style }: Props) {
+export const TopBar = memo(function TopBar({ lead, after, actions = [], iconSize = S.icon, style }: Props) {
   const { c } = useTheme();
   return (
     <View style={[styles.bar, style]}>
@@ -55,6 +57,7 @@ export const TopBar = memo(function TopBar({ lead, actions = [], iconSize = S.ic
           {lead.kind === 'caption' ? lead.text : lead.label}
         </Marquee>
       )}
+      {after}
       {actions.map(({ key, ...a }) => (
         <IconButton key={key} {...a} iconSize={iconSize} />
       ))}

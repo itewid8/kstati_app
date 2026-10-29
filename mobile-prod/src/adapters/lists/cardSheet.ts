@@ -18,7 +18,7 @@ export const TYPE_TAG: Record<ItemType, string> = {
   task: 'ДЕЛО',
   wish: 'ХОЧУ',
   watch: 'СМОТРЕТЬ',
-  idea: 'ИДЕЯ',
+  idea: 'ЗАМЕТКА',
   topic: 'ТЕМА',
 };
 

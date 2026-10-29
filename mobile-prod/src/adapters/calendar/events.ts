@@ -106,6 +106,7 @@ export function toBar(t: Task): CalendarBar | null {
     endDate: lastDay(t) ?? t.date,
     people: peopleOf(t),
     ...(t.hidden && { hidden: true }),
+    ...(t.kind && t.kind !== 'task' && { kind: t.kind }),
   };
 }
 
@@ -129,6 +130,7 @@ export function toTimed(t: Task, day: IsoDate, plans: PlanIndex): TimedEvent | n
     ...(fromPrevDay ? { fromPrevDay } : {}),
     ...(toNextDay ? { toNextDay } : {}),
     ...(t.hidden && { hidden: true }),
+    ...(t.kind && t.kind !== 'task' && { kind: t.kind }),
   };
 }
 

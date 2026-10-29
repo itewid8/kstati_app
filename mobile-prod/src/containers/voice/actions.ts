@@ -134,7 +134,7 @@ const ADD_AS: ReadonlyArray<{ type: ItemType; label: string }> = [
   { type: 'task', label: 'Дело' },
   { type: 'wish', label: 'Хотелку' },
   { type: 'watch', label: 'Фильм или сериал' },
-  { type: 'idea', label: 'Идею' },
+  { type: 'idea', label: 'Заметку' },
 ];
 
 /** Новая запись с готовым названием: дело — полный редактор (черновик через editorSeed), остальное — старое окно правки */

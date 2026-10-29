@@ -43,7 +43,7 @@ describe('remindersProps (страница «Напоминания»)', () => {
 describe('groupPickerRows (выбор группы)', () => {
   test('личный календарь первым; категория и число участников, текущая отмечена', () => {
     assert.deepEqual(groupPickerRows({ groups: [US, FRIENDS], currentGroupId: 'g2' }), [
-      { id: '@me', name: 'Личное', meta: 'МОИ ДЕЛА', current: false },
+      { id: '@me', name: 'Я', meta: 'ВСЕ МОИ ДЕЛА', current: false },
       { id: 'g1', name: 'Мы с Кариной', meta: 'ПАРА · 3', current: false },
       { id: 'g2', name: 'Друзья', meta: 'ДРУЗЬЯ · 3', current: true },
     ]);

@@ -2,7 +2,7 @@
  * Ответ на вопрос о планах. ИИ только говорит «чьи» и «на какой период» (PlansQuery),
  * а какие группы и дела показать — решает этот код. Выдумать дело он не может.
  */
-import { PERSONAL, taskGroups } from './visibility';
+import { PERSONAL, PERSONAL_NAME, taskGroups } from './visibility';
 import { addDays, fromISODate, shortDate, sortKey, toISODate } from './dates';
 import { normTitle } from './dupes';
 import { dayNo, instance, isoOf, occurrences, taskKey } from './recur';
@@ -34,7 +34,7 @@ const stem = (w: string) => {
 function resolveGroups(q: PlansQuery, s: State): { groups: Group[] } | { error: string } {
   const mine = s.groups.filter((g) => g.memberIds.includes(s.me.id));
   // Личный календарь — как группа из меня одного (дела, не видные ни одной группе)
-  const personal: Group = { id: PERSONAL, name: 'Личное', category: 'other', inviteCode: '', memberIds: [s.me.id], ownerId: s.me.id, adminIds: [] };
+  const personal: Group = { id: PERSONAL, name: PERSONAL_NAME, category: 'other', inviteCode: '', memberIds: [s.me.id], ownerId: s.me.id, adminIds: [] };
   const current = s.currentGroupId === PERSONAL ? personal : mine.find((g) => g.id === s.currentGroupId);
   const sc = q.scope;
 

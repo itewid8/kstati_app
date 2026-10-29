@@ -3,12 +3,12 @@
  * подписаны вызывающим («СБ 10 ОКТ · 19:00»), раскрытая строка и данные её панели приходят пропсами,
  * действия уходят колбэками. Раскрыта не больше одной строки.
  *
- * Строки: КОГДА, КОНЕЦ, ПОВТОР, КТО, ВИДНО (своё дело), НАПОМНИТЬ, ОПИСАНИЕ, ПОДЗАДАЧИ. Строку подзадач вызывающий
+ * Над строками — тип дела (KindPicker). Строки: КОГДА, КОНЕЦ, ПОВТОР, КТО, ВИДНО (своё дело), НАПОМНИТЬ, ОПИСАНИЕ, ПОДЗАДАЧИ. Строку подзадач вызывающий
  * не передаёт у повторяющегося дела (subtasks undefined) — у серии нет плана.
  */
 import { memo, useCallback, useMemo, type RefObject } from 'react';
 import type { TextInput } from 'react-native';
-import type { PersonColor } from '@/lib/types';
+import type { PersonColor, TaskKind } from '@/lib/types';
 import { useTheme } from '@/ui';
 import { EditorScaffold, Notice, type EditorInsets, type EditorNotice } from './components/EditorScaffold';
 import {
@@ -21,6 +21,8 @@ import {
   FieldValue,
   type EditorPerson,
 } from './components/FieldTable';
+import { CelebrantRow, type CelebrantField } from './components/CelebrantRow';
+import { KindPicker } from './components/KindPicker';
 import { NOTE_MAX } from './components/limits';
 import { DatePicker, type DatePickerProps } from './panels/DatePanel';
 import { RemindPanel, type RemindPanelProps } from './panels/RemindPanel';
@@ -42,6 +44,10 @@ export type TaskEditorScreenProps = {
   /** «ДЕЛО · МЫ С КАРИНОЙ» */
   caption: string;
   title: string;
+  /** Тип дела; нет — плиток типа нет */
+  kind?: TaskKind;
+  /** «ИМЕНИННИК» — только у дня рождения */
+  celebrant?: CelebrantField;
   /** Цвета участников — полоса у заголовка */
   colors: readonly PersonColor[];
   /** «СБ 10 ОКТ · 19:00» */
@@ -88,6 +94,11 @@ export type TaskEditorScreenProps = {
   /** Тап по строке: раскрыть/свернуть (или открыть отдельное окно — описание, подзадачи) */
   onField?: (field: TaskField) => void;
   onClearEnd?: () => void;
+  /** Выбор типа; нет — тип только показан */
+  onKind?: (kind: TaskKind) => void;
+  /** Именинник: вписали имя / выбрали участника */
+  onCelebrantName?: (name: string) => void;
+  onCelebrantPick?: (id: string, name: string) => void;
   onDelete?: () => void;
   onSave?: () => void;
 };
@@ -113,8 +124,12 @@ export const TaskEditorScreen = memo(function TaskEditorScreen(props: TaskEditor
       onDelete={props.onDelete}
       onSave={props.onSave}
     >
+      {props.kind ? <KindPicker value={props.kind} onChange={props.onKind} /> : null}
       <FieldTable>
-        <FieldRow label="КОГДА" first expanded={expanded === 'when'} onPress={tap('when')}>
+        {props.celebrant ? (
+          <CelebrantRow {...props.celebrant} first onChangeName={props.onCelebrantName} onPick={props.onCelebrantPick} />
+        ) : null}
+        <FieldRow label="КОГДА" first={!props.celebrant} expanded={expanded === 'when'} onPress={tap('when')}>
           <FieldValue text={props.when} />
         </FieldRow>
         {expanded === 'when' && props.whenPanel ? (

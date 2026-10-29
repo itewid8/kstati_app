@@ -67,7 +67,7 @@ export const VoiceCreateSheet = memo(function VoiceCreateSheet({
     () => [
       { key: 'cancel', label: 'ОТМЕНА', onPress: onCancel },
       { key: 'edit', label: 'ИЗМЕНИТЬ', onPress: onEdit },
-      { key: 'save', label: 'СОХРАНИТЬ', tone: 'primary', flex: 1.3, onPress: onSave },
+      { key: 'save', label: 'СОХРАНИТЬ', tone: 'primary', onPress: onSave },
     ],
     [onCancel, onEdit, onSave],
   );

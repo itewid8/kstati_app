@@ -16,6 +16,8 @@ export const accountRoutes = {
   /** Мои дела в группе (C-ShareMine); join — сразу после вступления (C-ShareJoin), откуда пришли */
   share: (id: string, join?: GroupFrom): Href => `/group/share?id=${encodeURIComponent(id)}${join ? `&join=${join}` : ''}`,
   /** «Иконка»; color — сразу выбран в черновике (нажали цвет в профиле) */
+  /** Отзыв: ошибка или предложение */
+  feedback: (): Href => '/settings/feedback',
   avatar: (color?: PersonColor): Href => (color ? `/settings/avatar?color=${encodeURIComponent(color)}` : '/settings/avatar'),
 } as const;
 

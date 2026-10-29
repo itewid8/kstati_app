@@ -15,7 +15,7 @@ import { Hatch, LONG_PRESS_MS, Marquee, SectionBox, fonts, size as S, space, tin
 import { CalendarScaffold, NO_INSETS, frameOf, useScreenSize } from './components/CalendarScaffold';
 import { PeopleFill, PeopleTip, usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { useLongPressId } from './components/longPress';
-import { PeriodArrows, PeriodTitle } from './components/PeriodBar';
+import { PeriodArrows, PeriodTitle, TodayButton } from './components/PeriodBar';
 import {
   MONTHS,
   MONTHS_GEN,
@@ -73,6 +73,8 @@ export type MonthScreenProps = CalendarChromeProps & {
 
   onPrev?: () => void;
   onNext?: () => void;
+  /** «СЕГОДНЯ»: к сегодняшнему дню */
+  onToday?: () => void;
   onSelectDate?: (date: IsoDate) => void;
   onOpenEvent?: (id: ID) => void;
   /** Удержание дела в ячейке или в панели дня (быстрые действия): id и нажатый элемент */
@@ -237,6 +239,7 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
     agenda,
     onPrev,
     onNext,
+    onToday,
     onSelectDate,
     onOpenEvent,
     onLongPressEvent,
@@ -289,6 +292,7 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
         {year}
       </Text>
       <PeriodArrows prevLabel="Предыдущий месяц" nextLabel="Следующий месяц" onPrev={onPrev} onNext={onNext} />
+      <TodayButton active={!!today && selectedDate === today} onPress={onToday} />
     </>
   );
 

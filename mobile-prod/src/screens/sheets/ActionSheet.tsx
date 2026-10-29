@@ -35,7 +35,7 @@ export const ActionSheet = memo(function ActionSheet({ title, meta, actions, onA
               key: 'do',
               label: single.label.toLocaleUpperCase('ru-RU'),
               tone: single.danger ? 'danger' : 'primary',
-              flex: 1.3,
+              flex: 1,
               onPress: onAction ? () => onAction(0) : undefined,
             },
           ]

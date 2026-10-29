@@ -27,7 +27,7 @@ export const ProblemSheet = memo(function ProblemSheet({ header, data, bottomIns
     const add: SheetAction[] = data.add && onAdd ? [{ key: 'add', label: 'ДОБАВИТЬ', onPress: onAdd }] : [];
     if (data.action === 'retry') return [close, ...add, { key: 'retry', label: 'ЕЩЁ РАЗ', tone: 'primary', flex: add.length ? 1.3 : 1.6, onPress: onRetry }];
     if (data.action === 'settings') {
-      return [close, { key: 'settings', label: 'ОТКРЫТЬ НАСТРОЙКИ', tone: 'primary', flex: 1.6, onPress: onOpenSettings }];
+      return [close, { key: 'settings', label: 'ОТКРЫТЬ НАСТРОЙКИ', tone: 'primary', onPress: onOpenSettings }];
     }
     return add.length ? [close, ...add] : [{ ...close, tone: 'primary' }];
   }, [data.action, data.add, onClose, onRetry, onOpenSettings, onAdd]);

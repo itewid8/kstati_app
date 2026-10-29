@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Низ большого виджета гаснет в цвет поверхности: прозрачный → белый; цвет — setColorFilter (SRC_ATOP сохраняет альфу) -->
+<!-- Низ большого виджета гаснет в цвет поверхности: прозрачный → белый; цвет — setColorFilter (SRC_ATOP сохраняет альфу).
+     Нижние углы скруглены как у поверхности (22): обрезка по контуру работает не у всех лаунчеров -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+  <corners android:bottomLeftRadius="22dp" android:bottomRightRadius="22dp" android:topLeftRadius="0dp" android:topRightRadius="0dp" />
   <gradient android:angle="270" android:startColor="#00FFFFFF" android:endColor="#FFFFFFFF" />
 </shape>

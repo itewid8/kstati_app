@@ -62,5 +62,5 @@ const styles = StyleSheet.create({
   button: { height: BUTTON, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
   /** 1 : 1.6 от основы 15px — как УДАЛИТЬ / СОХРАНИТЬ в окнах редактирования (EditorScaffold) */
   cancel: { flexGrow: 1, flexShrink: 1, flexBasis: 15 },
-  save: { flexGrow: 1.6, flexShrink: 1, flexBasis: 15 },
+  save: { flexGrow: 1, flexShrink: 1, flexBasis: 15 },
 });

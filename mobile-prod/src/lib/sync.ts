@@ -22,7 +22,7 @@ import { API_LEVEL, ApiError, NetError, request, type Op } from './net';
 import { flushOutbox } from './outbox';
 import { isEmptyPatch, mergePull, parseSync } from './remote';
 import { flushStorage } from './storage';
-import { applyRemote, DEMO, isApplyingRemote, syncHooks, useStore } from './store';
+import { applyRemote, DEMO, isApplyingRemote, syncHooks, undoHoldLeft, useStore } from './store';
 import type { Activity, ID, Idea, ReminderSettings, Task, TaskReminderOverride, Topic, WatchItem, Wish } from './types';
 import { PERSONAL } from './visibility';
 
@@ -65,6 +65,8 @@ const taskOp = (t: Task): Op => ({
     endTime: t.endTime ?? null,
     people: t.people ?? [],
     parentId: t.parentId ?? null,
+    kind: t.kind ?? 'task',
+    celebrant: t.kind === 'birthday' ? (t.celebrant ?? null) : null,
   },
 });
 const watchOp = (w: WatchItem): Op => ({
@@ -75,7 +77,7 @@ const wishOp = (w: Wish): Op => ({ op: 'wish.put', wish: { id: w.id, title: w.ti
 // archivedAt уходит, только если его трогали: старый сервер без поля и чужие правки его не стирают
 const topicOp = (t: Topic): Op => ({
   op: 'topic.put',
-  topic: { id: t.id, title: t.title, groupIds: t.groupIds, ...(t.archivedAt !== undefined && { archivedAt: t.archivedAt }) },
+  topic: { id: t.id, title: t.title, groupIds: t.groupIds, body: t.body ?? '', ...(t.archivedAt !== undefined && { archivedAt: t.archivedAt }) },
 });
 const ideaOp = (i: Idea): Op => ({ op: 'idea.put', idea: { id: i.id, topicId: i.topicId, text: i.text } });
 
@@ -199,6 +201,13 @@ export function syncNow(): Promise<void> {
 async function syncOnce(): Promise<void> {
   const token = useStore.getState().session?.token;
   if (!token) return;
+  // Висит «ВЕРНУТЬ» — ждём её конца: удалённое и отмеченное уходят на сервер, только когда их уже не вернут
+  const hold = undoHoldLeft(useStore.getState().undo);
+  if (hold > 0) {
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = setTimeout(syncNow, hold + 50);
+    return;
+  }
   try {
     await flush(token);
     batchSize = BATCH_MAX;

@@ -2,6 +2,7 @@
  * Записи из быстрых действий: копия дела, дело из хотелки, «Смотреть» и идеи, правка-перенос дела.
  * Чистые функции: id и время приходят снаружи.
  */
+import { plainLine } from '@/lib/note';
 import type { IsoDate } from '@/lib/calendarLayout';
 import { peopleOf } from '@/lib/span';
 import type { ChangeDraft, ChangePatch, ID, Task, TaskDraft } from '@/lib/types';
@@ -48,7 +49,8 @@ const TITLE_MAX = 120;
  * (как «Сделать делом» в старом меню идеи)
  */
 export const splitIdea = (text: string): { title: string; note: string } => {
-  const t = text.trim();
+  // Разметка заметки (заголовок, пункты) в дело не переносится — только слова
+  const t = text.split('\n').map(plainLine).filter(Boolean).join('\n');
   const m = t.match(/[.!?…](\s|$)|\n/);
   let first = m && m.index !== undefined ? t.slice(0, m.index + (m[0].startsWith('\n') ? 0 : 1)) : t;
   first = first.replace(/[.]$/, '').trim();

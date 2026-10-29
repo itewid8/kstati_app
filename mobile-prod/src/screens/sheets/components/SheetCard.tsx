@@ -6,7 +6,7 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import type { PersonColor } from '@/lib/types';
-import { Icon, Marquee, fonts, size as S, useTheme } from '@/ui';
+import { Icon, Marquee, fonts, size as S, useInputColors, useTheme } from '@/ui';
 import { PersonStrip } from '../../voice/components/PersonStrip';
 
 export type CardInput = {
@@ -37,6 +37,7 @@ const NONE: readonly PersonColor[] = [];
 
 export const SheetCard = memo(function SheetCard({ title, tag, meta, colors = NONE, struck, input, onPress, onRemove }: SheetCardProps) {
   const { c } = useTheme();
+  const ic = useInputColors();
   const body = (
     <>
       <PersonStrip colors={colors} />
@@ -50,8 +51,8 @@ export const SheetCard = memo(function SheetCard({ title, tag, meta, colors = NO
             autoFocus={input.autoFocus}
             maxLength={input.maxLength}
             textAlignVertical="top"
-            selectionColor={c.text}
-            cursorColor={c.text}
+            selectionColor={ic.selectionColor}
+            cursorColor={ic.cursorColor}
             style={[styles.title, styles.input, input.multiline && styles.multiline, { color: c.text }]}
           />
         ) : (

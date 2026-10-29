@@ -1,12 +1,13 @@
 /**
  * Настройки виджета (макет C-WidgetSettings). Сверху закреплены «Назад», заголовок, превью на обоях и вкладки
  * размеров 1×1 / 2×1 / 2×2 / 4×2 / 4×4 — превью видно, пока листаешь настройки. Ниже: КНОПКА REC (показывать, цвет),
- * ФОН (цвет, прозрачность полоской до 80%), ЦВЕТА (плашка, названия, время), ГРУППЫ (несколько). Снизу ОТМЕНА / СОХРАНИТЬ.
+ * ФОН (цвет, прозрачность полоской до 100%), ШАПКА (цвет, прозрачность), ЦВЕТА (названия, время), ГРУППЫ (Я и группы, несколько).
+ * Превью — виджет в настоящих размерах, уменьшенный, чтобы целиком влезть в рамку (4×4 заметно выше 4×2). Снизу ОТМЕНА / СОХРАНИТЬ.
  * Презентационный экран: данные — пропсами, действия — колбэками.
  */
-import { memo, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { faceColors, WIDGET_OPACITY_MIN, type WidgetPrefs, type WidgetTone } from '@/lib/widgetData';
+import { memo, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { faceColors, headAlpha, WIDGET_OPACITY_MIN, type WidgetPrefs, type WidgetTone } from '@/lib/widgetData';
 import { fonts, size as S, useTheme } from '@/ui';
 import { Slider } from './components/Slider';
 import { Wallpaper } from './Wallpaper';
@@ -38,9 +39,13 @@ const TONES: ReadonlyArray<{ key: WidgetTone; label: string }> = [
   { key: 'dark', label: 'ТЁМНЫЙ' },
 ];
 
-/** Прозрачность в настройках: 0…80% (непрозрачность не ниже WIDGET_OPACITY_MIN) */
+/** Прозрачность в настройках: 0…100% (непрозрачность не ниже WIDGET_OPACITY_MIN) */
 const MAX_TRANSPARENCY = 1 - WIDGET_OPACITY_MIN;
-const TOP = 330;
+/** Рамка превью: высота и поля внутри; размеры виджетов на рабочем столе (как в C-WidgetHome / C-WidgetLarge) */
+const STAGE = 260;
+const STAGE_PAD = 14;
+const REAL: Record<WidgetSize, readonly [number, number]> = { '1x1': [82, 82], '2x1': [174, 82], '2x2': [174, 182], '4x2': [358, 210], '4x4': [358, 374] };
+const TOP = 72 + STAGE + 8 + 34 + 10;
 const SAVE_BAR = 76;
 
 export const WidgetSettingsScreen = memo(function WidgetSettingsScreen(props: WidgetSettingsScreenProps) {
@@ -50,6 +55,13 @@ export const WidgetSettingsScreen = memo(function WidgetSettingsScreen(props: Wi
   const toggleGroup = (id: string) =>
     set({ groups: prefs.groups.includes(id) ? prefs.groups.filter((g) => g !== id) : [...prefs.groups, id] });
   const transparency = Math.round((1 - prefs.opacity) * 100);
+  const headTransparency = Math.round((1 - headAlpha(prefs)) * 100);
+  // Место внутри рамки превью (без её линии)
+  const [stage, setStage] = useState<{ w: number; h: number } | null>(null);
+  const onStage = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setStage({ w: width, h: height });
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
@@ -87,10 +99,19 @@ export const WidgetSettingsScreen = memo(function WidgetSettingsScreen(props: Wi
             />
           </Labeled>
         </Section>
-        <Section title="ЦВЕТА">
-          <Labeled label="Плашка">
+        <Section title="ШАПКА" count={`${headTransparency}%`}>
+          <Labeled label="Цвет">
             <Segments options={TONES} value={prefs.head} onChange={(head) => set({ head })} />
           </Labeled>
+          <Labeled label="Прозрачность">
+            <Slider
+              value={1 - headAlpha(prefs)}
+              onChange={(t) => set({ headOpacity: Math.round((1 - t) * 100) / 100 })}
+              accessibilityLabel="Прозрачность шапки"
+            />
+          </Labeled>
+        </Section>
+        <Section title="ЦВЕТА">
           <Labeled label="Названия">
             <Segments options={TONES} value={prefs.text} onChange={(text) => set({ text })} />
           </Labeled>
@@ -98,7 +119,7 @@ export const WidgetSettingsScreen = memo(function WidgetSettingsScreen(props: Wi
             <Segments options={TONES} value={prefs.time} onChange={(time) => set({ time })} />
           </Labeled>
         </Section>
-        {groups.length > 1 ? (
+        {groups.length > 0 ? (
           <Section title="ГРУППЫ" count={prefs.groups.length === 0 ? 'ВСЕ' : `${prefs.groups.length} ИЗ ${groups.length}`}>
             {groups.map((g, i) => {
               const on = prefs.groups.includes(g.id);
@@ -137,9 +158,10 @@ export const WidgetSettingsScreen = memo(function WidgetSettingsScreen(props: Wi
         </View>
         <View style={[styles.stage, { top: insets.top + 72, borderColor: c.border }]}>
           <Wallpaper dark={preview.dark} />
-          <Preview size={size} prefs={prefs} data={preview} />
+          <View style={StyleSheet.absoluteFill} onLayout={onStage} pointerEvents="none" />
+          {stage ? <Preview size={size} prefs={prefs} data={preview} box={stage} /> : null}
         </View>
-        <View style={[styles.sizes, { top: insets.top + 286 }]}>
+        <View style={[styles.sizes, { top: insets.top + 72 + STAGE + 8 }]}>
           <Segments
             height={34}
             options={WIDGET_SIZES.map((key) => ({ key, label: key.replace('x', '×') }))}
@@ -162,7 +184,7 @@ export const WidgetSettingsScreen = memo(function WidgetSettingsScreen(props: Wi
             accessibilityRole="button"
             disabled={!canSave}
             onPress={onSave}
-            style={[styles.saveBtn, { flexGrow: 1.6, flexBasis: 14, borderColor: c.border, backgroundColor: c.text, opacity: canSave ? 1 : 0.4 }]}
+            style={[styles.saveBtn, { flexGrow: 1, flexBasis: 14, borderColor: c.border, backgroundColor: c.text, opacity: canSave ? 1 : 0.4 }]}
           >
             <Text style={[styles.saveText, { color: c.bg }]}>СОХРАНИТЬ</Text>
           </Pressable>
@@ -172,32 +194,21 @@ export const WidgetSettingsScreen = memo(function WidgetSettingsScreen(props: Wi
   );
 });
 
-/** Превью нужного размера на обоях: 4×2 и 4×4 — от левого верхнего угла (14, 14), остальные — по центру */
-const Preview = memo(function Preview({ size, prefs, data }: { size: WidgetSize; prefs: WidgetPrefs; data: WidgetPreviewData }) {
+/** Превью: виджет в настоящем размере по центру рамки, уменьшенный, если не влезает */
+const Preview = memo(function Preview({ size, prefs, data, box }: { size: WidgetSize; prefs: WidgetPrefs; data: WidgetPreviewData; box: { w: number; h: number } }) {
   const fc = faceColors(prefs, data.dark ? 'dark' : 'light');
+  const [w, h] = REAL[size];
+  const scale = Math.min(1, (box.w - 2 * STAGE_PAD) / w, (box.h - 2 * STAGE_PAD) / h);
+  const place = { position: 'absolute' as const, left: (box.w - w) / 2, top: (box.h - h) / 2, transform: [{ scale }] };
   switch (size) {
     case '1x1':
-      return (
-        <View style={styles.centered}>
-          <FaceRec size={82} c={fc} />
-        </View>
-      );
+      return <FaceRec size={w} c={fc} style={place} />;
     case '2x1':
-      return (
-        <View style={styles.centered}>
-          <FaceNext width={174} height={82} c={fc} item={data.items[0] ?? null} />
-        </View>
-      );
+      return <FaceNext width={w} height={h} c={fc} item={data.items[0] ?? null} style={place} />;
     case '2x2':
-      return (
-        <View style={styles.centered}>
-          <FaceStack width={174} height={176} c={fc} header={data.header} items={data.items} />
-        </View>
-      );
-    case '4x4':
-      return <FaceDays style={styles.wide} width={324} height={176} c={fc} header={data.header} days={data.days} fade />;
+      return <FaceStack width={w} height={h} c={fc} header={data.header} items={data.items} style={place} />;
     default:
-      return <FaceDays style={styles.wide} width={324} height={176} c={fc} header={data.header} days={data.days} />;
+      return <FaceDays width={w} height={h} c={fc} header={data.header} days={data.days} style={place} />;
   }
 });
 
@@ -274,9 +285,7 @@ const styles = StyleSheet.create({
   back: { width: 40, height: 40, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
   backText: { fontFamily: fonts.sans400, fontSize: 16 },
   title: { fontFamily: fonts.sans700, fontSize: 26, letterSpacing: -1.04 },
-  stage: { position: 'absolute', left: 16, right: 16, height: 208, borderWidth: S.border, overflow: 'hidden' },
-  wide: { position: 'absolute', left: 14, top: 14 },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  stage: { position: 'absolute', left: 16, right: 16, height: STAGE, borderWidth: S.border, overflow: 'hidden' },
   sizes: { position: 'absolute', left: 16, right: 16 },
   form: { paddingHorizontal: 16, gap: 8 },
   section: { borderWidth: S.border },
@@ -298,8 +307,8 @@ const styles = StyleSheet.create({
   toggleKnob: { width: 18, height: 18 },
   labeled: { paddingVertical: 6, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1 },
   label: { fontFamily: fonts.sans500, fontSize: 13 },
-  // Подпись — колонка 84; длинное слово («Прозрачность») выходит за неё, как в макете, не переносясь
-  labelCol: { width: 84, alignSelf: 'stretch', justifyContent: 'center', overflow: 'visible' },
+  // Подпись — колонка 100: «Прозрачность» помещается целиком
+  labelCol: { width: 100, alignSelf: 'stretch', justifyContent: 'center', overflow: 'visible' },
   labelText: { width: 120 },
   segments: { flexDirection: 'row' },
   // Как grid с margin-left −1.5 в макете: первая ячейка — дорожка, остальные шире на 1.5

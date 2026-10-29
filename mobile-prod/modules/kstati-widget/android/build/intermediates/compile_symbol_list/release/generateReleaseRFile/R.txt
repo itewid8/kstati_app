@@ -18,6 +18,7 @@ int drawable kstati_dot 0x0
 int drawable kstati_fade 0x0
 int drawable kstati_fill 0x0
 int drawable kstati_glow 0x0
+int drawable kstati_head_bg 0x0
 int drawable kstati_stroke 0x0
 int font kstati_geist_medium 0x0
 int font kstati_geist_mono 0x0
@@ -32,6 +33,7 @@ int id kstati_divider 0x0
 int id kstati_empty 0x0
 int id kstati_fade 0x0
 int id kstati_header 0x0
+int id kstati_header_bg 0x0
 int id kstati_header_day 0x0
 int id kstati_header_end 0x0
 int id kstati_header_label 0x0
@@ -55,6 +57,7 @@ int id kstati_title 0x0
 int id kstati_when 0x0
 int layout kstati_box 0x0
 int layout kstati_day 0x0
+int layout kstati_gap 0x0
 int layout kstati_header 0x0
 int layout kstati_rec 0x0
 int layout kstati_rec_bar 0x0

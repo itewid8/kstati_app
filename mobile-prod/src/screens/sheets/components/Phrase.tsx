@@ -4,7 +4,7 @@
  */
 import { memo, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { fonts, size as S, type as T, useTheme } from '@/ui';
+import { fonts, size as S, type as T, useInputColors, useTheme } from '@/ui';
 
 type Props = {
   text: string;
@@ -14,6 +14,7 @@ type Props = {
 
 export const Phrase = memo(function Phrase({ text, onReparse }: Props) {
   const { c } = useTheme();
+  const ic = useInputColors();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(text);
   useEffect(() => {
@@ -37,8 +38,8 @@ export const Phrase = memo(function Phrase({ text, onReparse }: Props) {
         autoFocus
         multiline
         accessibilityLabel="Фраза"
-        selectionColor={c.text}
-        cursorColor={c.text}
+        selectionColor={ic.selectionColor}
+        cursorColor={ic.cursorColor}
         style={[styles.input, { borderColor: c.border, backgroundColor: c.panel, color: c.text }]}
       />
       {changed ? (

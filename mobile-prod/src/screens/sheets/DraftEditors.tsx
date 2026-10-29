@@ -151,7 +151,7 @@ export const IdeaDraftEditor = memo(function IdeaDraftEditor({ head, value, topi
         input={{
           value: value.title,
           onChangeText: (title) => set({ title }),
-          accessibilityLabel: 'Идея',
+          accessibilityLabel: 'Заметка',
           multiline: true,
           autoFocus: head.autoFocus,
           maxLength: NOTE_MAX,

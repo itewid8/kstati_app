@@ -29,20 +29,26 @@ export type TaskDraft = {
   endTime?: string | null;
   people?: string[];
   parentId?: string | null;
+  /** Тип: день рождения, важный день, путешествие; нет — обычное дело */
+  kind?: 'birthday' | 'important' | 'trip';
 };
 export type WishDraft = { title: string; note: string; link: string };
 export type WatchDraft = { title: string; kind: Kind | null; genres: Genre[]; origin: Origin | null; year: number | null };
 
 /** Идея: title — её текст; тема — существующая (topicId) или новая (newTopic, создастся при сохранении); обе null — «Без темы» */
 export type IdeaDraft = { title: string; topicId: string | null; newTopic: string | null };
-export type TopicDraft = { title: string };
+/**
+ * Тема (она же заметка). body — текст темы: новый список голосом или правленый («добавь в список продуктов сыр»);
+ * changes — что поменялось, только для карточки. Старое приложение эти поля не знает и создаёт пустую тему по названию.
+ */
+export type TopicDraft = { title: string; body?: string; changes?: string[] };
 
 export type DraftItem =
   | { key: string; type: 'task'; data: TaskDraft }
   | { key: string; type: 'wish'; data: WishDraft }
   | { key: string; type: 'watch'; data: WatchDraft }
   | { key: string; type: 'idea'; data: IdeaDraft }
-  | { key: string; type: 'topic'; data: TopicDraft };
+  | { key: string; type: 'topic'; data: TopicDraft; id?: string };
 
 export type ChangeAction = 'update' | 'mark' | 'unmark' | 'delete';
 export type ChangeDraft = {
@@ -128,7 +134,7 @@ export type Context = {
     ideas?: { id: string; text: string; topicId: string | null }[];
   };
   /** Мои темы идей */
-  topics?: { id: string; title: string }[];
+  topics?: { id: string; title: string; body?: string }[];
   /** Тема, открытая на экране: идея без названной темы идёт в неё */
   currentTopicId?: string | null;
   /** Участники текущей группы (id) — для «мы», «у нас» */

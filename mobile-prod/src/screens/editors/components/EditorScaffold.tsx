@@ -21,7 +21,7 @@ import {
   type ScrollView as RNScrollView,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import { Marquee, TopBar, size as S, space, type as T, useTheme, type TopBarAction } from '@/ui';
+import { Marquee, TopBar, size as S, space, type as T, useInputColors, useTheme, type TopBarAction } from '@/ui';
 import { KeyboardTargetContext, useEditorKeyboard } from './keyboard';
 import { TITLE_MAX } from './limits';
 import { titleShift } from './revealMath';
@@ -80,6 +80,7 @@ const yes = () => true;
 export const EditorScaffold = memo(function EditorScaffold(props: Props) {
   const { caption, title, colors, insets = NO_INSETS, saveDisabled = false, titleRef, onChangeTitle, children } = props;
   const { c } = useTheme();
+  const ic = useInputColors();
   const onBack = useMemo(() => dismissThen(props.onBack), [props.onBack]);
   const onMore = useMemo(() => dismissThen(props.onMore), [props.onMore]);
   const onDelete = useMemo(() => dismissThen(props.onDelete), [props.onDelete]);
@@ -134,8 +135,8 @@ export const EditorScaffold = memo(function EditorScaffold(props: Props) {
             placeholderTextColor={c.muted}
             textAlignVertical="top"
             underlineColorAndroid="transparent"
-            selectionColor={c.text}
-            cursorColor={c.text}
+            selectionColor={ic.selectionColor}
+            cursorColor={ic.cursorColor}
             accessibilityLabel="Название"
             style={[ET.editorTitle, styles.titleInput, titleAuto.style, { color: c.text }]}
           />
@@ -222,11 +223,11 @@ const styles = StyleSheet.create({
   actions: { height: BUTTON, flexDirection: 'row', gap: 8 },
   button: { borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
   /**
-   * flex 1 : 1.6 от основы 15px: в макете это <button> с UA-полями 6+6 и рамкой 3 — свободное место
+   * flex 1 : 1 от основы 15px: в макете это <button> с UA-полями 6+6 и рамкой 3 — свободное место
    * делится уже после них (138 / 212 при ширине 358).
    */
   delete: { flexGrow: 1, flexShrink: 1, flexBasis: 15 },
-  save: { flexGrow: 1.6, flexShrink: 1, flexBasis: 15 },
+  save: { flexGrow: 1, flexShrink: 1, flexBasis: 15 },
   /** min-height 34 + рамки (content-box в макете; Chromium рисует рамку 1.5 как 1px — эталон 36) */
   notice: {
     minHeight: 36,

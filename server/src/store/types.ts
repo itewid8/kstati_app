@@ -46,6 +46,11 @@ export type Group = {
   createdAt: string;
 };
 
+/** Тип дела (в приложении — мини-иконка): обычное, день рождения, важный день, путешествие */
+export const TASK_KINDS = ['task', 'birthday', 'important', 'trip'] as const;
+export type TaskKind = (typeof TASK_KINDS)[number];
+export type Celebrant = { id?: string; name: string };
+
 export type Task = {
   id: string;
   /**
@@ -72,6 +77,10 @@ export type Task = {
   /** Кто занят: участники группы; нет — автор */
   people?: string[];
   /** Подзадача плана: id большого дела того же владельца */
+  /** Тип; нет — обычное дело */
+  kind?: Exclude<TaskKind, 'task'>;
+  /** Именинник (только у дня рождения): участник группы (id) или просто имя */
+  celebrant?: Celebrant;
   parentId?: string | null;
   /** Группа, в которой дело создали; null — в личном календаре */
   home?: string | null;
@@ -131,6 +140,8 @@ export type Topic = {
   groupIds: string[];
   /** Тема в архиве (S2): отметил владелец; нет — обычная */
   archivedAt?: string | null;
+  /** Текст самой темы (тема — тоже заметка); нет — пустая */
+  body?: string;
   createdAt: string;
   updatedAt: string;
 };

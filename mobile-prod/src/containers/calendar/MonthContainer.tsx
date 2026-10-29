@@ -18,6 +18,7 @@ const shift = (n: number) => () => {
 };
 export const prevMonth = shift(-1);
 export const nextMonth = shift(1);
+const goToday = () => useStore.getState().setCalendarDate(toISODate(new Date()));
 const selectDate = (date: string) => useStore.getState().setCalendarDate(date);
 const openYear = () => useStore.getState().setTasksView('year');
 
@@ -36,6 +37,7 @@ export const MonthContainer = () => {
       {...data}
       onPrev={prevMonth}
       onNext={nextMonth}
+      onToday={goToday}
       onSelectDate={selectDate}
       onOpenEvent={openTaskKey}
       onLongPressEvent={holdTask}

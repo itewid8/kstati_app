@@ -10,9 +10,12 @@ import { TasksListScreen, type TasksView } from '@/screens/lists/TasksListScreen
 import { NO_ME, nav, openTaskEditor, signedInOnly, toPlanGrid, useChrome, useClock, useInsets, usePersonColors, type StoreState } from '../common';
 import { holdTask } from '../quick/quickStore';
 
+/** Из списка — в выбранный вид календаря */
 const changeView = (v: TasksView) => {
   if (v !== 'list') useStore.getState().setTasksView(v);
 };
+
+const toggleSection = (id: ID) => useStore.getState().toggleSection(id);
 
 /** Отметка по ключу строки: «id@дата» — раз серии */
 const toggleTask = (key: ID) => {
@@ -35,6 +38,7 @@ const pickList = (s: StoreState): TasksListSnapshot & Pick<Snapshot, 'users'> =>
   tasks: s.tasks,
   activity: s.activity,
   activitySeen: s.activitySeen,
+  collapsedSections: s.collapsedSections,
 });
 
 /** C-List: вкладка «Дела» списком (s.tasksView === 'list'); без групп сюда не попадают (app/(tabs)/tasks/index.tsx) */
@@ -53,6 +57,7 @@ export const TasksListContainer = signedInOnly(function TasksList() {
       insets={insets}
       onPickGroup={onPickGroup}
       onChangeView={changeView}
+      onToggleSection={toggleSection}
       onToggleTask={toggleTask}
       onOpenTask={openTask}
       onOpenPlan={toPlanGrid}

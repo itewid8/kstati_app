@@ -49,7 +49,7 @@ export type SheetBase = { levels: readonly number[]; ms: number; bottomInset: nu
 
 const BUTTON: Record<RecButton, SheetAction> = {
   cancel: { key: 'cancel', label: 'ОТМЕНА', onPress: cancelVoice },
-  done: { key: 'done', label: 'ГОТОВО', tone: 'primary', flex: 1.3, onPress: finishRecording },
+  done: { key: 'done', label: 'ГОТОВО', tone: 'primary', onPress: finishRecording },
 };
 
 type LiveProps = SheetBase & { live: boolean; mode: RecMode };
@@ -76,7 +76,7 @@ export const LiveSheet = memo(function LiveSheet({ levels, ms, bottomInset, live
 const ARM_HEADER = sheetHeader([], 0);
 const ARM_ACTIONS: SheetAction[] = [
   { key: 'cancel', label: 'ОТМЕНА', onPress: disarmRecording },
-  { key: 'rec', label: 'ЗАПИСАТЬ', tone: 'primary', flex: 1.6, onPress: () => void beginRecording() },
+  { key: 'rec', label: 'ЗАПИСАТЬ', tone: 'primary', onPress: () => void beginRecording() },
 ];
 
 export const ArmSheet = memo(function ArmSheet({ bottomInset }: { bottomInset: number }) {

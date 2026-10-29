@@ -5,9 +5,23 @@
  */
 import { memo, useCallback, useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import type { ID, PersonColor } from '@/lib/types';
-import { BottomNav, ScreenTitle, SectionBox, Tabs, size as S, space, tint, useTheme, type LiftTarget, type NavTab, type Scheme, type TabItem } from '@/ui';
-import { CompactGroupBar } from './components/CompactGroupBar';
+import type { ID, PersonColor, TaskKind } from '@/lib/types';
+import {
+  BottomNav,
+  ListMotion,
+  RowMotion,
+  SectionBox,
+  TopBar,
+  size as S,
+  space,
+  tint,
+  useTheme,
+  type LiftTarget,
+  type NavTab,
+  type Scheme,
+  type TopBarAction,
+} from '@/ui';
+import { ViewSwitch, type TasksSwitchValue } from '@/screens/calendar/components/ViewSwitch';
 import { TaskRow } from './components/TaskRow';
 
 /** Одно или два цвета (общее дело: верх — первый, низ — второй) */
@@ -23,6 +37,8 @@ export type TaskItem = {
   done: boolean;
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
+  /** Тип дела (мини-иконка); нет — обычное */
+  taskType?: TaskKind;
 };
 
 export type PlanStep = {
@@ -55,9 +71,12 @@ export type TaskSection = {
   /** «ПН 05», «07—11» */
   date: string;
   items: TaskListEntry[];
+  /** Свёрнут: видна только шапка (нажать — раскрыть) */
+  collapsed?: boolean;
 };
 
-export type TasksView = 'list' | 'week';
+/** Куда переключились из списка: вид календаря */
+export type TasksView = TasksSwitchValue;
 
 export type TasksListScreenProps = {
   groupLabel: string;
@@ -68,6 +87,8 @@ export type TasksListScreenProps = {
 
   onPickGroup?: () => void;
   onChangeView?: (view: TasksView) => void;
+  /** Свернуть или раскрыть раздел */
+  onToggleSection?: (id: ID) => void;
   /** Дело или шаг плана отмечен/снят */
   onToggleTask?: (id: ID, done: boolean) => void;
   onOpenTask?: (id: ID) => void;
@@ -82,14 +103,11 @@ export type TasksListScreenProps = {
 };
 
 const NO_INSETS = { top: 0, bottom: 0 };
-const VIEWS: ReadonlyArray<TabItem<TasksView>> = [
-  { key: 'list', label: 'СПИСОК' },
-  { key: 'week', label: 'НЕДЕЛЯ' },
-];
 /** Заливка плана и шагов цветом плана (в C-List плотнее не нужна: 0.14 / 0.16) */
 const PLAN_ALPHA: Record<Scheme, number> = { light: 0.14, dark: 0.16 };
 /** Секции начинаются сразу под заголовком (без вкладок) */
-const SECTIONS_TOP = 122;
+/** Переключатель (titleTop, h 28) и зазор */
+const SECTIONS_TOP = S.titleTop + S.viewSwitch + 14;
 
 type RowCallbacks = Pick<TasksListScreenProps, 'onToggleTask' | 'onOpenTask' | 'onOpenPlan' | 'onLongPressTask'>;
 
@@ -104,6 +122,7 @@ const TaskEntry = memo(function TaskEntry({ task, onToggleTask, onOpenTask, onLo
       strip={b ? [person(a), person(b)] : person(a)}
       done={task.done}
       hidden={task.hidden}
+      taskType={task.taskType}
       onToggle={onToggleTask ? () => onToggleTask(task.id, !task.done) : undefined}
       onPress={onOpenTask ? () => onOpenTask(task.id) : undefined}
       onLongPress={onLongPressTask ? (lift) => onLongPressTask(task.id, lift) : undefined}
@@ -155,6 +174,7 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
     insets = NO_INSETS,
     onPickGroup,
     onChangeView,
+    onToggleSection,
     onToggleTask,
     onOpenTask,
     onOpenPlan,
@@ -165,41 +185,35 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
     onNavigate,
     onRec,
   } = props;
-  const { c } = useTheme();
-  const viewSwitch = useMemo(
-    () => <Tabs variant="view" items={VIEWS} value="list" onChange={onChangeView} style={styles.view} />,
-    [onChangeView],
+  const { c, person, personInk } = useTheme();
+  const lead = useMemo(() => ({ kind: 'group' as const, label: groupLabel, onPress: onPickGroup }), [groupLabel, onPickGroup]);
+  // Та же панель, что в календаре (CalendarScaffold): группа, «список / календарь», «+», лента, профиль
+  const actions = useMemo<TopBarAction[]>(
+    () => [
+      { key: 'add', icon: 'plus', accessibilityLabel: 'Добавить', onPress: onAdd },
+      { key: 'feed', icon: 'bell', accessibilityLabel: 'Лента', onPress: onOpenFeed, badge: hasNews },
+      { key: 'me', letter: me.letter, fill: person(me.color), ink: personInk(me.color), accessibilityLabel: 'Настройки', onPress: onOpenSettings },
+    ],
+    [onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
   );
   const renderEntry = useCallback(
     (e: TaskListEntry) =>
       e.kind === 'plan' ? (
-        <PlanEntry
-          key={e.id}
-          plan={e}
-          onToggleTask={onToggleTask}
-          onOpenTask={onOpenTask}
-          onOpenPlan={onOpenPlan}
-          onLongPressTask={onLongPressTask}
-        />
+        <RowMotion key={e.id}>
+          <PlanEntry plan={e} onToggleTask={onToggleTask} onOpenTask={onOpenTask} onOpenPlan={onOpenPlan} onLongPressTask={onLongPressTask} />
+        </RowMotion>
       ) : (
-        <TaskEntry key={e.id} task={e} onToggleTask={onToggleTask} onOpenTask={onOpenTask} onLongPressTask={onLongPressTask} />
+        <RowMotion key={e.id}>
+          <TaskEntry task={e} onToggleTask={onToggleTask} onOpenTask={onOpenTask} onLongPressTask={onLongPressTask} />
+        </RowMotion>
       ),
     [onToggleTask, onOpenTask, onOpenPlan, onLongPressTask],
   );
 
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
-      <CompactGroupBar
-        groupLabel={groupLabel}
-        me={me}
-        hasNews={hasNews}
-        onPickGroup={onPickGroup}
-        onAdd={onAdd}
-        onOpenFeed={onOpenFeed}
-        onOpenSettings={onOpenSettings}
-        style={[styles.abs, { top: insets.top + S.topBarTop }]}
-      />
-      <ScreenTitle title="Дела" right={viewSwitch} style={[styles.abs, { top: insets.top + S.titleTop }]} />
+      <TopBar lead={lead} actions={actions} style={[styles.abs, { top: insets.top + S.topBarTop }]} />
+      <ViewSwitch value="list" onChange={onChangeView} style={[styles.abs, { top: insets.top + S.titleTop }]} />
 
       <ScrollView
         // Непрозрачный фон: на web прозрачный слой прокрутки выключает субпиксельное сглаживание текста
@@ -207,11 +221,21 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
         contentContainerStyle={styles.sections}
         showsVerticalScrollIndicator={false}
       >
-        {sections.map((sec) => (
-          <SectionBox key={sec.id} title={sec.label} count={sec.date} style={styles.section}>
-            {sec.items.map(renderEntry)}
-          </SectionBox>
-        ))}
+        {/* Смена группы — новый список целиком, без анимации строк */}
+        <ListMotion key={groupLabel}>
+          {sections.map((sec) => (
+            <SectionBox
+              key={sec.id}
+              title={sec.label}
+              count={sec.date}
+              collapsed={!!sec.collapsed}
+              onToggle={onToggleSection ? () => onToggleSection(sec.id) : undefined}
+              style={styles.section}
+            >
+              {sec.items.map(renderEntry)}
+            </SectionBox>
+          ))}
+        </ListMotion>
       </ScrollView>
 
       <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
@@ -222,7 +246,6 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   abs: { position: 'absolute', left: space.side, right: space.side },
-  view: { marginBottom: 5 },
   sections: { gap: 10 },
   section: { flexShrink: 0 },
 });

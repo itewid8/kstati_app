@@ -137,4 +137,24 @@ await data.apply(S, { op: 'group.leave', id: 'fam' });
 assert.deepEqual(ids(await sync(K)), [], 'дела ушедшего пропали из группы');
 assert.ok(ids(await sync(S)).includes('old1'), 'у владельца остались');
 
-console.log('✓ личный календарь: видимость, режимы, права, перенос, старое приложение');
+/* ---------- тип дела ---------- */
+await put(S, { id: 'bd1', groupId: PERSONAL, title: 'ДР Маши', kind: 'birthday', repeat: { freq: 'year', every: 1 } });
+const bd = (await sync(S)).tasks.find((t: Task) => t.id === 'bd1');
+assert.equal(bd.kind, 'birthday');
+await put(S, { id: 'bd1', groupId: PERSONAL, title: 'ДР Маши (старое приложение)' });
+assert.equal((await sync(S)).tasks.find((t: Task) => t.id === 'bd1').kind, 'birthday', 'без поля тип не стирается');
+await put(S, { id: 'bd1', groupId: PERSONAL, title: 'ДР Маши', kind: 'task' });
+assert.equal((await sync(S)).tasks.find((t: Task) => t.id === 'bd1').kind, undefined, 'обычное дело — поля нет');
+
+/* ---------- именинник ---------- */
+const bd2 = async () => (await sync(S)).tasks.find((t: Task) => t.id === 'bd2');
+await put(S, { id: 'bd2', groupId: PERSONAL, title: 'ДР Пети', kind: 'birthday', celebrant: { name: 'Петя' } });
+assert.deepEqual((await bd2()).celebrant, { name: 'Петя' });
+await put(S, { id: 'bd2', groupId: PERSONAL, title: 'ДР Пети' });
+assert.deepEqual((await bd2()).celebrant, { name: 'Петя' }, 'без поля именинник не стирается');
+await put(S, { id: 'bd2', groupId: PERSONAL, title: 'ДР', kind: 'birthday', celebrant: { id: 'чужой', name: 'Чужой' } });
+assert.deepEqual((await bd2()).celebrant, { name: 'Чужой' }, 'id не из круга — только имя');
+await put(S, { id: 'bd2', groupId: PERSONAL, title: 'ДР', kind: 'important' });
+assert.equal((await bd2()).celebrant, undefined, 'не день рождения — без именинника');
+
+console.log('✓ личный календарь: видимость, режимы, права, перенос, старое приложение, тип дела');

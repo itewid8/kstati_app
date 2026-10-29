@@ -48,8 +48,9 @@ export const screens = {
     <WidgetSettingsScreen
       prefs={{ ...DEFAULT_WIDGET_PREFS, opacity: 0.7, groups: ['g1', 'g2'] }}
       size="4x2"
-      preview={{ header: HEAD_BOTH, days: days4x2(theme).slice(0, 2), items: items2x2(theme), dark: theme === 'dark' }}
+      preview={{ header: HEAD_BOTH, days: days4x2(theme), items: items2x2(theme), dark: theme === 'dark' }}
       groups={[
+        { id: '@me', name: 'Я' },
         { id: 'g1', name: 'Мы с Кариной' },
         { id: 'g2', name: 'Семья' },
         { id: 'g3', name: 'Работа' },

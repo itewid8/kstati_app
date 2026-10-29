@@ -39,7 +39,9 @@ declare module 'react-native-reanimated' {
   export const FadeOut: LayoutAnimationBuilder;
   export const SlideInDown: LayoutAnimationBuilder;
   export const SlideOutDown: LayoutAnimationBuilder;
-  export type AnimatedViewProps = ViewProps & { entering?: LayoutAnimationBuilder; exiting?: LayoutAnimationBuilder };
+  export const LinearTransition: LayoutAnimationBuilder;
+  export const LayoutAnimationConfig: ComponentType<{ skipEntering?: boolean; skipExiting?: boolean; children?: import('react').ReactNode }>;
+  export type AnimatedViewProps = ViewProps & { entering?: LayoutAnimationBuilder; exiting?: LayoutAnimationBuilder; layout?: LayoutAnimationBuilder };
 
   const Animated: {
     View: ComponentType<AnimatedViewProps>;

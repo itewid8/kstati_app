@@ -30,7 +30,7 @@ export const FilterSheetView = memo(function FilterSheetView({ title, options, o
   const buttons = useMemo<SheetButton[]>(
     () => [
       { key: 'clear', label: 'ОЧИСТИТЬ', disabled: chosen === 0, onPress: onClear },
-      { key: 'done', label: 'ГОТОВО', tone: 'primary', flex: 1.3, onPress: onDone },
+      { key: 'done', label: 'ГОТОВО', tone: 'primary', onPress: onDone },
     ],
     [chosen, onClear, onDone],
   );

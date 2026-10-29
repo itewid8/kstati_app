@@ -1,16 +1,23 @@
 /**
- * Тема идей (макета нет; раскладка C-Ideas): назад + подпись, кнопки «открыть группам» / «+» / «⋯» (только своя тема),
- * заголовок темы, секция «ИДЕИ» с записями (новые сверху), нижняя навигация с REC.
- * Своя тема: нажатие — правка, смахнуть влево — удалить. Чужая — нажатие открывает быстрые действия.
+ * Тема заметок (C-Topic). Тема — сама заметка: назад + подпись, кнопки «открыть группам» / «+» (заметка внутри) / «⋯»,
+ * название (своё правится прямо в заголовке), текст темы строками заметки (components/NoteLines — писать можно сразу,
+ * ткнув в любое место), ниже — «ЗАМЕТКИ» внутри темы (новые сверху): первая строка, вторая, дата и счёт чек-листа.
+ * Пока открыта клавиатура, вместо нижней навигации — панель заметки с ГОТОВО.
+ * Нажатие на заметку — открыть (чужую — только читать), смахнуть влево — удалить свою.
  * Удержание — быстрые действия над поднятой строкой. Прокрутка подменяется (PullScrollView — обновление потягиванием).
  */
-import { memo, useCallback, useMemo, type ComponentType } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from 'react-native';
+import { memo, useCallback, useMemo, useRef, type ComponentType } from 'react';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from 'react-native';
+import type { NoteBlock } from '@/lib/note';
+import type { NoteCaret, NoteTool } from '@/lib/noteEdit';
 import type { ID, PersonColor } from '@/lib/types';
 import {
   BottomNav,
+  Icon,
   LONG_PRESS_MS,
-  Marquee,
+  ListMotion,
+  RowMotion,
+  fonts,
   TopBar,
   pad2,
   size as S,
@@ -23,12 +30,18 @@ import {
   type NavTab,
   type TopBarAction,
 } from '@/ui';
-import { ET } from '../editors/components/text';
+import { NOTE_TOOL, NoteLines, NoteTools, useKeyboardOverlap, type NoteHandlers } from '../lists/components/NoteLines';
+import { TitleField } from '../lists/components/TitleField';
 import { SwipeDelete } from './components/SwipeDelete';
 
 export type TopicIdea = {
   id: ID;
-  text: string;
+  /** Первая строка заметки */
+  title: string;
+  /** Вторая строка; пусто — строки нет */
+  line: string;
+  /** Чек-лист: «2/4»; null — его нет */
+  checks: string | null;
   /** «28 СЕН» */
   date: string;
 };
@@ -37,6 +50,18 @@ export type TopicScreenProps = {
   /** «ТЕМА · КАРИНА», «БЕЗ ТЕМЫ», «ТЕМЫ НЕТ» */
   caption: string;
   title: string;
+  /** Своя тема: название правится в заголовке */
+  onChangeTitle?: (title: string) => void;
+  /** Новая тема — курсор сразу в названии */
+  focusTitle?: boolean;
+  /** Текст самой темы; нет — «Без темы» (только заметки) */
+  body?: NoteHandlers & {
+    blocks: readonly NoteBlock[];
+    editable: boolean;
+    active: number | null;
+    caret?: (NoteCaret & { nonce: number }) | null;
+    onTool?: (tool: NoteTool) => void;
+  };
   /** Цвет владельца — полоса строк; null — нейтральная */
   color: PersonColor | null;
   ideas: readonly TopicIdea[];
@@ -50,6 +75,8 @@ export type TopicScreenProps = {
   onShare?: () => void;
   onAdd?: () => void;
   onMore?: () => void;
+  /** Скопировать текст темы */
+  onCopy?: () => void;
   onOpenIdea?: (id: ID) => void;
   onHoldIdea?: (id: ID, lift: LiftTarget) => void;
   onDeleteIdea?: (id: ID) => void;
@@ -75,7 +102,7 @@ const IdeaRow = memo(function IdeaRow(props: RowProps) {
     <Pressable
       ref={lift.ref}
       accessibilityRole="button"
-      accessibilityLabel={idea.text}
+      accessibilityLabel={idea.title}
       onPress={onOpen ? () => onOpen(idea.id) : undefined}
       onLongPress={lift.onLongPress}
       delayLongPress={LONG_PRESS_MS}
@@ -83,10 +110,25 @@ const IdeaRow = memo(function IdeaRow(props: RowProps) {
       style={[styles.row, { backgroundColor: c.panel, borderTopColor: c.hair }]}
     >
       <View style={[styles.strip, { backgroundColor: strip }]} />
-      <Text numberOfLines={8} style={[ET.description, { color: c.text }]}>
-        {idea.text}
+      <Text numberOfLines={1} style={[styles.noteTitle, { color: c.text }]}>
+        {idea.title}
       </Text>
-      <Text style={[T.rowMeta, { color: c.muted }]}>{idea.date}</Text>
+      {idea.line ? (
+        <Text numberOfLines={1} style={[styles.noteLine, { color: c.muted }]}>
+          {idea.line}
+        </Text>
+      ) : null}
+      <View style={styles.meta}>
+        <Text style={[T.rowMeta, { color: c.muted }]}>{idea.date}</Text>
+        {idea.checks ? (
+          <View style={styles.checks}>
+            <View style={[styles.checkBox, { borderColor: c.text }]}>
+              <Icon name="check" size={7} color={c.text} />
+            </View>
+            <Text style={[styles.checksText, { color: c.text }]}>{idea.checks}</Text>
+          </View>
+        ) : null}
+      </View>
     </Pressable>
   );
 });
@@ -98,6 +140,7 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
     color,
     ideas,
     shared,
+    body,
     insets = NO_INSETS,
     Scroll = ScrollView,
     onBack,
@@ -112,6 +155,10 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
   } = props;
   const { c, person } = useTheme();
   const strip = color ? person(color) : c.hairStrong;
+  const root = useRef<View>(null);
+  const overlap = useKeyboardOverlap(root);
+  // Клавиатура открыта (правят текст или название) — снизу панель заметки вместо навигации
+  const typing = overlap > 0 && !!body?.editable;
 
   const actions = useMemo<TopBarAction[]>(() => {
     const out: TopBarAction[] = [];
@@ -124,48 +171,92 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
         ...(shared ? { fill: c.text, ink: c.bg } : null),
       });
     }
-    if (onAdd) out.push({ key: 'add', icon: 'plus', accessibilityLabel: 'Новая идея', onPress: onAdd });
+    if (props.onCopy) out.push({ key: 'copy', icon: 'copy', accessibilityLabel: 'Скопировать', onPress: props.onCopy });
+    if (onAdd) out.push({ key: 'add', icon: 'plus', accessibilityLabel: 'Новая заметка', onPress: onAdd });
     if (onMore) out.push({ key: 'more', icon: 'dots', accessibilityLabel: 'Ещё', onPress: onMore });
     return out;
-  }, [shared, onShare, onAdd, onMore, c.text, c.bg]);
+  }, [shared, onShare, onAdd, onMore, props.onCopy, c.text, c.bg]);
+
+  const bottom = typing ? overlap + KB_GAP + NOTE_TOOL + BAR_PAD : insets.bottom + S.contentBottom;
 
   return (
-    <View style={[styles.screen, { backgroundColor: c.bg }]}>
+    <View ref={root} style={[styles.screen, { backgroundColor: c.bg }]}>
       <TopBar lead={{ kind: 'back', label: caption, onBack }} actions={actions} style={[styles.abs, { top: insets.top + S.topBarTop }]} />
       <View style={[styles.abs, styles.title, { top: insets.top + S.titleTop }]}>
-        <Marquee accessibilityLabel={title} ellipsis={false} style={[T.h1, styles.titleText, { color: c.text }]}>
-          {title}
-        </Marquee>
+        <TitleField
+          value={title}
+          onChange={props.onChangeTitle}
+          autoFocus={props.focusTitle}
+          placeholder="Новая тема"
+          maxLength={80}
+          textStyle={T.h1}
+        />
       </View>
 
-      <View style={[styles.abs, { top: insets.top + S.tabsTop, bottom: insets.bottom + S.contentBottom }]}>
-        <View style={[styles.box, { borderColor: c.border }]}>
-          <View style={[styles.header, { backgroundColor: c.text }]}>
-            <Text style={[T.section, { color: c.bg }]}>ИДЕИ</Text>
-            <Text style={[T.section, { color: c.bg }]}>{pad2(ideas.length)}</Text>
+      <Scroll
+        style={[styles.scroll, { top: insets.top + BODY_TOP, bottom, backgroundColor: c.bg }]}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {body ? (
+          <NoteLines
+            blocks={body.blocks}
+            editable={body.editable}
+            caret={body.caret}
+            fill={{ minHeight: ideas.length ? 24 : 160, grow: !ideas.length }}
+            onChangeText={body.onChangeText}
+            onBackspace={body.onBackspace}
+            onToggleCheck={body.onToggleCheck}
+            onFocus={body.onFocus}
+          />
+        ) : null}
+        {ideas.length ? (
+          <View style={[styles.box, { borderColor: c.border }]}>
+            <View style={[styles.header, { backgroundColor: c.text }]}>
+              <Text style={[T.section, { color: c.bg }]}>ЗАМЕТКИ</Text>
+              <Text style={[T.section, { color: c.bg }]}>{pad2(ideas.length)}</Text>
+            </View>
+            <ListMotion>
+              {ideas.map((idea) => (
+                <RowMotion key={idea.id}>
+                  <SwipeDelete onDelete={onDeleteIdea ? () => onDeleteIdea(idea.id) : undefined}>
+                    <IdeaRow idea={idea} strip={strip} onOpen={onOpenIdea} onHold={onHoldIdea} />
+                  </SwipeDelete>
+                </RowMotion>
+              ))}
+            </ListMotion>
           </View>
-          <Scroll style={[styles.scroll, { backgroundColor: c.bg }]} showsVerticalScrollIndicator={false}>
-            {ideas.map((idea) => (
-              <SwipeDelete key={idea.id} onDelete={onDeleteIdea ? () => onDeleteIdea(idea.id) : undefined}>
-                <IdeaRow idea={idea} strip={strip} onOpen={onOpenIdea} onHold={onHoldIdea} />
-              </SwipeDelete>
-            ))}
-          </Scroll>
-        </View>
-      </View>
+        ) : null}
+      </Scroll>
 
-      <BottomNav active="ideas" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+      {typing && body ? (
+        <>
+          <View style={[styles.bar, { height: overlap + KB_GAP + NOTE_TOOL + BAR_PAD + S.hairline, backgroundColor: c.bg, borderTopColor: c.hair }]} />
+          <View style={[styles.abs, { bottom: overlap + KB_GAP }]}>
+            <NoteTools current={body.active !== null ? body.blocks[body.active] : undefined} onTool={body.onTool} onDone={Keyboard.dismiss} />
+          </View>
+        </>
+      ) : (
+        <BottomNav active="ideas" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+      )}
     </View>
   );
 });
+
+/** Текст темы — сразу под названием; панель над клавиатурой: отступы 16 и 8 */
+const BODY_TOP = 122;
+const BAR_PAD = 16;
+const KB_GAP = 8;
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   abs: { position: 'absolute', left: space.side, right: space.side },
   title: { height: S.titleHeight, justifyContent: 'flex-end' },
-  /** Хвост последней буквы при letterSpacing −2 не срезается */
-  titleText: { paddingRight: 2 },
-  box: { borderWidth: S.border, flexShrink: 1, minHeight: 0 },
+  box: { borderWidth: S.border },
+  scroll: { position: 'absolute', left: 0, right: 0 },
+  content: { paddingHorizontal: space.side, paddingBottom: 16, flexGrow: 1 },
+  bar: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopWidth: S.hairline },
   header: {
     height: S.sectionHeader,
     paddingHorizontal: 8,
@@ -173,7 +264,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  scroll: { flexGrow: 0, flexShrink: 1 },
-  row: { borderTopWidth: S.hairline, paddingVertical: 9, paddingLeft: 12, paddingRight: 10, gap: 4 },
+  row: { borderTopWidth: S.hairline, paddingVertical: 9, paddingLeft: 12, paddingRight: 10, gap: 3 },
+  noteTitle: { fontFamily: fonts.sans600, fontSize: 13, lineHeight: 16 },
+  noteLine: { fontFamily: fonts.sans400, fontSize: 12.5, lineHeight: 16 },
+  meta: { height: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  checks: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  checkBox: { width: 10, height: 10, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
+  checksText: { fontFamily: fonts.mono600, fontSize: 9, letterSpacing: 0.18, lineHeight: 11 },
   strip: { position: 'absolute', left: 0, top: 0, bottom: 0, width: S.strip },
 });

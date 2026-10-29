@@ -13,10 +13,10 @@ import { fonts } from '@/ui';
 export const WIDGET = {
   radius: 22,
   pad: 10,
-  /** Высоты как в макете (шапка — content-box: линия 1 снизу сверх 40). Дело — одна строка без разделителей */
-  header: 41,
-  day: 20,
-  row: 26,
+  /** Высоты как в макете: шапка без линии снизу, дело — одна строка без разделителей */
+  header: 40,
+  day: 16,
+  row: 20,
   /** Отступ под шапкой 2×2 */
   stackGap: 4,
   strip: 2,
@@ -68,7 +68,7 @@ export const RecCapsule = memo(function RecCapsule({ h, label, c }: { h: number;
         <View style={[styles.glow, { backgroundColor: c.recGlow }]} />
         <View style={[styles.dot, { backgroundColor: c.recDot }]} />
       </View>
-      {label ? <Text style={[styles.recLabel, { fontSize: big ? 8.5 : 8, color: c.recInk }]}>REC</Text> : null}
+      {label ? <Text allowFontScaling={false} style={[styles.recLabel, { fontSize: big ? 8.5 : 8, color: c.recInk }]}>REC</Text> : null}
     </View>
   );
 });
@@ -92,13 +92,13 @@ export const FaceSurface = memo(function FaceSurface({
 /** Шапка: группа, день недели, число и капсула D без подписи — только кружок */
 const Header = memo(function Header({ h, c }: { h: FaceHeader; c: FaceColors }) {
   return (
-    <View style={[styles.header, { borderBottomColor: c.hair, backgroundColor: c.headBg }]}>
-      <Text numberOfLines={1} style={[styles.headLabel, { color: c.headInk }]}>
+    <View style={[styles.header, { backgroundColor: c.headBg }]}>
+      <Text allowFontScaling={false} numberOfLines={1} style={[styles.headLabel, { color: c.headInk }]}>
         {h.label}
       </Text>
-      <Text style={[styles.headWeekday, { color: c.headMuted }]}>{h.weekday}</Text>
+      <Text allowFontScaling={false} style={[styles.headWeekday, { color: c.headMuted }]}>{h.weekday}</Text>
       <View style={[styles.today, { backgroundColor: c.today, marginRight: c.showRec ? 4 : 12 }]}>
-        <Text style={styles.todayText}>{h.day}</Text>
+        <Text allowFontScaling={false} style={styles.todayText}>{h.day}</Text>
       </View>
       {c.showRec ? <RecCapsule h={24} label={false} c={c} /> : null}
       {c.showRec ? <View style={styles.headEnd} /> : null}
@@ -109,7 +109,7 @@ const Header = memo(function Header({ h, c }: { h: FaceHeader; c: FaceColors }) 
 const DayLabel = memo(function DayLabel({ label, c }: { label: string; c: FaceColors }) {
   return (
     <View style={styles.day}>
-      <Text style={[styles.dayText, { color: c.muted }]}>{label}</Text>
+      <Text allowFontScaling={false} style={[styles.dayText, { color: c.muted }]}>{label}</Text>
     </View>
   );
 });
@@ -118,7 +118,7 @@ const DayLabel = memo(function DayLabel({ label, c }: { label: string; c: FaceCo
 const Row = memo(function Row({ r, c, small = false }: { r: FaceRow; c: FaceColors; small?: boolean }) {
   return (
     <View style={styles.row}>
-      <Strip colors={r.strip} inset={5} />
+      <Strip colors={r.strip} inset={4} />
       <Text
         numberOfLines={1}
         ellipsizeMode="clip"
@@ -126,12 +126,37 @@ const Row = memo(function Row({ r, c, small = false }: { r: FaceRow; c: FaceColo
       >
         {r.title}
       </Text>
-      <Text style={[small ? styles.timeSmall : styles.time, { color: small ? c.day : c.time }]}>{r.time}</Text>
+      <Text allowFontScaling={false} style={[small ? styles.timeSmall : styles.time, { color: small ? c.day : c.time }]}>{r.time}</Text>
     </View>
   );
 });
 
-/** 4×2 и 4×4: шапка и дела по дням; fade — гаснущий низ у большого (дела не влезли) */
+/**
+ * Сколько дел влезает под шапку (как в виджете Android, KstatiWidget.kt): дни и строки сверху вниз, пока есть место.
+ * cut — влезли не все (низ гаснет)
+ */
+export function fitDays(days: readonly FaceDay[], height: number): { days: FaceDay[]; cut: boolean } {
+  let room = height - WIDGET.header - WIDGET.pad;
+  const out: FaceDay[] = [];
+  let total = 0;
+  let shown = 0;
+  for (const d of days) {
+    total += d.rows.length;
+    const rows: FaceRow[] = [];
+    for (const r of d.rows) {
+      const need = WIDGET.row + (rows.length === 0 ? WIDGET.day : 0);
+      if (need > room) break;
+      room -= need;
+      rows.push(r);
+    }
+    shown += rows.length;
+    if (rows.length) out.push({ ...d, rows });
+    if (rows.length < d.rows.length) break;
+  }
+  return { days: out, cut: shown < total || out.length < days.length };
+}
+
+/** 4×2 и 4×4: шапка и дела по дням, сколько влезет; не влезли — низ гаснет (fade — гаснет всегда) */
 export const FaceDays = memo(function FaceDays(props: {
   width: number;
   height: number;
@@ -142,13 +167,16 @@ export const FaceDays = memo(function FaceDays(props: {
   empty?: string;
   style?: ViewStyle;
 }) {
-  const { width, height, c, header, days, fade, empty, style } = props;
+  const { width, height, c, header, empty, style } = props;
+  const fit = fitDays(props.days, height);
+  const days = fit.days;
+  const fade = props.fade || fit.cut;
   return (
     <FaceSurface width={width} height={height} c={c} style={style}>
       <Header h={header} c={c} />
       {days.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={[styles.emptyText, { color: c.muted }]}>{empty ?? 'Дел нет'}</Text>
+          <Text allowFontScaling={false} style={[styles.emptyText, { color: c.muted }]}>{empty ?? 'Дел нет'}</Text>
         </View>
       ) : (
         days.map((d) => (
@@ -207,13 +235,13 @@ export const FaceNext = memo(function FaceNext(props: { width: number; height: n
           {item ? (
             <>
               <Strip colors={item.strip} inset={4} />
-              <Text numberOfLines={2} style={[styles.nextTitle, { color: c.text }]}>
+              <Text allowFontScaling={false} numberOfLines={2} style={[styles.nextTitle, { color: c.text }]}>
                 {item.title}
               </Text>
-              <Text style={[styles.when, { color: c.day }]}>{item.when}</Text>
+              <Text allowFontScaling={false} style={[styles.when, { color: c.day }]}>{item.when}</Text>
             </>
           ) : (
-            <Text style={[styles.nextTitle, { color: c.muted }]}>Дел нет</Text>
+            <Text allowFontScaling={false} style={[styles.nextTitle, { color: c.muted }]}>Дел нет</Text>
           )}
         </View>
         {c.showRec ? (
@@ -248,13 +276,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderBottomWidth: 1,
   },
-  headLabel: { flex: 1, minWidth: 0, fontFamily: fonts.mono600, fontSize: 9, letterSpacing: 0.72 },
-  headWeekday: { fontFamily: fonts.mono600, fontSize: 9, letterSpacing: 0.72 },
+  headLabel: { flex: 1, minWidth: 0, fontFamily: fonts.mono600, fontSize: 8, letterSpacing: 0.64 },
+  headWeekday: { fontFamily: fonts.mono600, fontSize: 8, letterSpacing: 0.64 },
   today: { paddingHorizontal: 4, paddingVertical: 2 },
   headEnd: { width: 2 },
-  todayText: { fontFamily: fonts.mono600, fontSize: 9.5, color: '#FFFFFF' },
+  todayText: { fontFamily: fonts.mono600, fontSize: 8.5, color: '#FFFFFF' },
   capsule: { borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   // Свечение — кольцо 5 вокруг точки, как box-shadow: места в раскладке не занимает
   dotBox: { width: 9, height: 9 },
@@ -262,22 +289,22 @@ const styles = StyleSheet.create({
   dot: { width: 9, height: 9, borderRadius: 4.5 },
   recLabel: { fontFamily: fonts.mono600, letterSpacing: 1.02 },
   day: { height: WIDGET.day, justifyContent: 'flex-end', paddingBottom: 3 },
-  dayText: { fontFamily: fonts.mono600, fontSize: 8.5, letterSpacing: 0.68 },
+  dayText: { fontFamily: fonts.mono600, fontSize: 7.5, letterSpacing: 0.6 },
   row: { height: WIDGET.row, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 9 },
   stackGap: { height: WIDGET.stackGap },
   strip: { position: 'absolute', left: 0, width: WIDGET.strip },
   stripPart: { flex: 1 },
-  title: { flex: 1, minWidth: 0, fontFamily: fonts.sans500, fontSize: 13 },
+  title: { flex: 1, minWidth: 0, fontFamily: fonts.sans500, fontSize: 10.5 },
   done: { textDecorationLine: 'line-through' },
-  time: { fontFamily: fonts.mono600, fontSize: 12, letterSpacing: 0.24 },
-  timeSmall: { fontFamily: fonts.mono600, fontSize: 10, letterSpacing: 0.2 },
-  when: { fontFamily: fonts.mono600, fontSize: 9, letterSpacing: 0.36 },
+  time: { fontFamily: fonts.mono600, fontSize: 9.5, letterSpacing: 0.19 },
+  timeSmall: { fontFamily: fonts.mono600, fontSize: 8.5, letterSpacing: 0.17 },
+  when: { fontFamily: fonts.mono600, fontSize: 8, letterSpacing: 0.32 },
   empty: { height: 120, justifyContent: 'center', paddingLeft: 2 },
-  emptyText: { fontFamily: fonts.sans500, fontSize: 13 },
+  emptyText: { fontFamily: fonts.sans500, fontSize: 10.5 },
   fade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 28 },
   fadeStep: { flex: 1 },
   next: { flex: 1, flexDirection: 'row', gap: 8 },
   nextText: { flex: 1, minWidth: 0, paddingLeft: 9, justifyContent: 'center', gap: 3 },
-  nextTitle: { fontFamily: fonts.sans500, fontSize: 12.5, lineHeight: 15 },
+  nextTitle: { fontFamily: fonts.sans500, fontSize: 10.5, lineHeight: 13 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

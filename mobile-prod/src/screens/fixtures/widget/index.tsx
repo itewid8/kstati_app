@@ -23,7 +23,14 @@ export const days4x2 = (t: Scheme): FaceDay[] => {
   return [
     { key: 'd25', label: 'ВС 25 · ЗАВТРА', rows: [{ key: 'a', title: 'Аренда Воронеж', time: '—', strip: st.k }] },
     { key: 'd28', label: 'СР 28', rows: [{ key: 'f', title: 'Футбол', time: '18:00', strip: st.k }] },
-    { key: 'd1', label: 'ВС 1 НОЯ', rows: [{ key: 'b', title: 'Купить билет в Врн', time: '—', strip: st.s }] },
+    {
+      key: 'd1',
+      label: 'ВС 1 НОЯ',
+      rows: [
+        { key: 'b', title: 'Купить билет в Врн', time: '—', strip: st.s },
+        { key: 'z', title: 'Забрать заказ', time: '—', strip: st.k },
+      ],
+    },
   ];
 };
 

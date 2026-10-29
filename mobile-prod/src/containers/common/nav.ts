@@ -17,6 +17,8 @@ function query(params: Record<string, string | null | undefined>): string {
 
 /** Новое дело — id «new» */
 export const NEW_TASK = 'new';
+/** Новая заметка — id «new» */
+export const NEW_NOTE = 'new';
 
 /** Строка окна дела, раскрытая при открытии: when — дата и время (ДАТА… в быстрых действиях) */
 export type TaskEditorField = 'when' | 'remind';
@@ -46,6 +48,8 @@ export const nav = {
   widgetSettings: (): Href => '/settings/widget',
   profileEdit: (field?: ProfileField): Href => `/settings/edit${query({ field })}`,
   topic: (id: ID): Href => `/ideas/${encodeURIComponent(id)}`,
+  /** Заметка (C-Note): id — своя или чужая; NEW_NOTE — новая в теме topic (нет — «Без темы») */
+  note: (id: ID, topic?: ID | null): Href => `/note/${encodeURIComponent(id)}${query({ topic: topic ?? undefined })}`,
 } as const;
 
 /** Параметр адреса из useLocalSearchParams: первое значение, пустое — undefined */

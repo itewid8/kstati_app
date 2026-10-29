@@ -68,5 +68,5 @@ const styles = StyleSheet.create({
   list: { maxHeight: MAX_LIST },
   actions: { flexDirection: 'row', gap: 8 },
   settings: { flexGrow: 1, flexShrink: 1, flexBasis: 15 },
-  create: { flexGrow: 1.6, flexShrink: 1, flexBasis: 15 },
+  create: { flexGrow: 1, flexShrink: 1, flexBasis: 15 },
 });

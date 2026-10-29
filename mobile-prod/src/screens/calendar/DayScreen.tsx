@@ -113,6 +113,7 @@ const DayEvent = memo(function DayEvent({
       who={who}
       done={event.done}
       hidden={event.hidden}
+      kind={event.kind}
       colors={colors}
       onPress={onOpenEvent ? open : undefined}
       onLongPress={hold}
@@ -149,6 +150,7 @@ const DayBar = memo(function DayBar({
       meta={barMeta(bar, namesOf(peopleOf(bar.people, byId)))}
       colors={colors}
       hidden={bar.hidden}
+      kind={bar.kind}
       onPress={onOpenBar ? open : undefined}
       onLongPress={hold}
     />

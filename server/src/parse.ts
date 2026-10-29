@@ -4,6 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { applyListEdit, listBody, spokenList } from './lists.js';
 import { buildMessages } from './prompt.js';
 import { occurrences } from './recur.js';
 import { changesRepeat, firstDate, spokenRepeat, stopsRepeat, stripRepeat } from './repeat.js';
@@ -193,13 +194,13 @@ const topicStems = (s: string) =>
 const stemHit = (a: string, b: string) => a.startsWith(b) || b.startsWith(a);
 
 /** Тема из списка по названию, как его сказали или переписала модель: сначала точное совпадение, потом по основам слов */
-export function findTopic(name: string, topics: { id: string; title: string }[]) {
+export function findTopic<T extends { id: string; title: string }>(name: string, topics: T[]): T | null {
   const n = normName(name);
   if (!n) return null;
   const exact = topics.find((t) => normName(t.title) === n);
   if (exact) return exact;
   const want = topicStems(name);
-  let best: { id: string; title: string } | null = null;
+  let best: T | null = null;
   let bestScore = 0;
   for (const t of topics) {
     const have = topicStems(t.title);
@@ -222,7 +223,7 @@ function mentioned(title: string, transcript: string) {
 
 /**
  * Куда положить идею. Названа существующая тема — в неё; названа новая — создастся при сохранении;
- * не названа — тема, открытая на экране, иначе «Без темы» (или тема, которую модель подобрала по смыслу).
+ * не названа (или не прозвучала во фразе) — тема, открытая на экране, иначе «Без темы».
  */
 function resolveTopic(name: string, ctx: Context, transcript: string): { topicId: string | null; newTopic: string | null } {
   const topics = ctx.topics ?? [];
@@ -230,12 +231,59 @@ function resolveTopic(name: string, ctx: Context, transcript: string): { topicId
   if (!name || /^без тем/i.test(name)) return { topicId: cur, newTopic: null };
   const hit = findTopic(name, topics);
   if (hit) {
-    // В открытой теме идея идёт в неё, если другая тема во фразе не прозвучала
-    if (cur && hit.id !== cur && !mentioned(hit.title, transcript)) return { topicId: cur, newTopic: null };
+    // Тема должна прозвучать во фразе: подобранная моделью «по смыслу» часто чужая
+    if (hit.id !== cur && !mentioned(hit.title, transcript)) return { topicId: cur, newTopic: null };
     return { topicId: hit.id, newTopic: null };
   }
   if (mentioned(name, transcript)) return { topicId: null, newTopic: cap(name) };
   return { topicId: cur, newTopic: null };
+}
+
+
+/* ---------- заметки-списки ---------- */
+
+const strs = (v: unknown, max = 40) => (Array.isArray(v) ? v.map(str).filter(Boolean).slice(0, max) : []);
+
+/**
+ * Продиктованный перечень: пункты от модели (items), строки чек-листа в тексте или «Название: а, б и в».
+ * Меньше двух пунктов — не список.
+ */
+function dictatedList(a: RawAction, text: string): { title: string; items: string[] } | null {
+  const given = strs(a.items);
+  if (given.length >= 2) return { title: cap(str(a.title) || str(a.list)), items: given };
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const checks = lines.flatMap((l) => {
+    const m = /^(?:[-*•] ?(?:\[[ xX]\])?|\d{1,3}[.)]) ?(.+)$/.exec(l);
+    return m ? [m[1]] : [];
+  });
+  if (checks.length >= 2) return { title: cap(lines.find((l) => !/^(?:[-*•]|\d{1,3}[.)])/.test(l))?.replace(/:$/, '') ?? ''), items: checks };
+  return spokenList(text);
+}
+
+/** Тема-список: есть тема с таким названием — пункты дописываются в неё, иначе новая тема с чек-листом */
+function listTopic(key: string, list: { title: string; items: string[] }, ctx: Context): DraftItem {
+  const title = list.title || 'Список';
+  const same = (ctx.topics ?? []).find((t) => normName(t.title) === normName(title));
+  if (same) {
+    const r = applyListEdit(same.body ?? '', { add: list.items });
+    return { key, type: 'topic', id: same.id, data: { title: same.title, body: r.body, changes: r.changes } };
+  }
+  return { key, type: 'topic', data: { title, body: listBody(list.items) } };
+}
+
+/** «Добавь в список продуктов сыр, убери хлеб» — правка пунктов темы (названной или открытой на экране) */
+function listEdit(a: RawAction, ctx: Context): DraftItem | null {
+  const topics = ctx.topics ?? [];
+  const name = str(a.topic);
+  const t = (name ? findTopic(name, topics) : null) ?? topics.find((x) => x.id === ctx.currentTopicId) ?? null;
+  const replace = (Array.isArray(a.replace) ? a.replace : []).flatMap((r) => {
+    const o = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
+    return str(o.from) && str(o.to) ? [{ from: str(o.from), to: str(o.to) }] : [];
+  });
+  const edit = { add: strs(a.add), remove: strs(a.remove), replace, check: strs(a.check), uncheck: strs(a.uncheck) };
+  if (!t) return name && edit.add.length ? listTopic(randomUUID(), { title: cap(name), items: edit.add }, ctx) : null;
+  const r = applyListEdit(t.body ?? '', edit);
+  return r.changes.length ? { key: randomUUID(), type: 'topic', id: t.id, data: { title: t.title, body: r.body, changes: r.changes } } : null;
 }
 
 /* ---------- сборка результата ---------- */
@@ -348,15 +396,25 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     // Идея: текст как сказали, тема — по названию или по смыслу
     if (a.type === 'idea') {
       const text = cap(str(a.text) || str(a.title));
-      if (text) items.push({ key, type: 'idea', data: { title: text, ...resolveTopic(str(a.topic), ctx, transcript) } });
+      const topic = resolveTopic(str(a.topic), ctx, transcript);
+      // Перечень без названной темы — отдельная заметка-список (тема с чек-листом)
+      const list = dictatedList(a, text);
+      if (list && !topic.topicId && !topic.newTopic) items.push(listTopic(key, list, ctx));
+      else if (list) {
+        // Перечень в названную тему — заметка в ней: название заголовком, пункты чек-листом
+        const body = listBody(list.items);
+        items.push({ key, type: 'idea', data: { title: list.title ? `# ${list.title}\n${body}` : body, ...topic } });
+      } else if (text) items.push({ key, type: 'idea', data: { title: text, ...topic } });
+      continue;
+    }
+    if (a.type === 'topic') {
+      const list = dictatedList(a, '');
+      if (list) items.push(listTopic(key, { ...list, title: list.title || cap(str(a.title)) }, ctx));
+      else if (cap(str(a.title))) items.push({ key, type: 'topic', data: { title: cap(str(a.title)) } });
       continue;
     }
     const title = cap(str(a.title));
     if (!title) continue;
-    if (a.type === 'topic') {
-      items.push({ key, type: 'topic', data: { title } });
-      continue;
-    }
     // «Добавь сегодня в 18:00 футбол» — модель может принять за передачу в «Смотреть».
     // Есть дата или время и нет слов про фильм/сериал/«посмотреть» — это дело
     const looksLikeTask =
@@ -389,6 +447,14 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
       const people = resolvePeople(a.people, ctx);
       if (people.length) data.people = people;
       if (parent) data.parentId = parent.id;
+      // Тип: день рождения — весь день и каждый год (если повтор не сказан)
+      const kind = oneOf<'birthday' | 'important' | 'trip'>(['birthday', 'important', 'trip'], a.kind);
+      if (kind) data.kind = kind;
+      if (kind === 'birthday' && data.date) {
+        data.time = null;
+        delete data.endTime;
+        delete data.endDate;
+      }
       items.push({ key, type: 'task', data });
     }
   }
@@ -431,6 +497,12 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
       d.title = stripRepeat(d.title);
     }
   }
+  for (const a of actions.filter((x) => x.intent === 'list_edit')) {
+    const it = listEdit(a, ctx);
+    if (it) items.push(it);
+  }
+  // День рождения повторяется каждый год, если повтор не сказан иначе
+  for (const i of items) if (i.type === 'task' && i.data.kind === 'birthday' && i.data.date && !i.data.repeat) i.data.repeat = { freq: 'year', every: 1 };
   // Одна запись в «Смотреть» — тип по слову во фразе («фильм», «сериал», «мультик»), если модель его не дала
   const watches = items.filter((i) => i.type === 'watch');
   if (watches.length === 1 && watches[0].type === 'watch' && !watches[0].data.kind) watches[0].data.kind = spokenKind(transcript);

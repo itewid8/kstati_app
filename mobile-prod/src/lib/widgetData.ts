@@ -7,7 +7,7 @@
  * Подписи времени (whenParts) и цвета (widgetColors) Kotlin считает так же — меняя одно, менять и другое.
  * Прошедшие дела виджет отбрасывает сам: каждое дело несёт until — момент, после которого оно уходит.
  */
-import { PERSONAL, taskGroups } from './visibility';
+import { PERSONAL, PERSONAL_NAME, taskGroups } from './visibility';
 import { colorMap, colorOf } from '@/adapters/common/people';
 import type { Snapshot } from '@/adapters/snapshot';
 import { palettes, type Palette, type Scheme } from '@/ui/tokens';
@@ -33,13 +33,15 @@ export type WidgetPrefs = {
   opacity: number;
   text: WidgetTone;
   time: WidgetTone;
-  /** Цвет верхней плашки (группа и сегодня) */
+  /** Цвет шапки (группа и сегодня) */
   head: WidgetTone;
+  /** Непрозрачность заливки шапки 0…1; null — как раньше: цвет «авто» — без заливки, светлый / тёмный — сплошная */
+  headOpacity: number | null;
   /** Группы, дела которых показывать; пусто — все мои */
   groups: ID[];
 };
 
-export const DEFAULT_WIDGET_PREFS: WidgetPrefs = { mic: true, micTone: 'auto', bg: 'auto', opacity: 0.94, text: 'auto', time: 'auto', head: 'auto', groups: [] };
+export const DEFAULT_WIDGET_PREFS: WidgetPrefs = { mic: true, micTone: 'auto', bg: 'auto', opacity: 0.94, text: 'auto', time: 'auto', head: 'auto', headOpacity: null, groups: [] };
 
 /** Ключ общих настроек в widget-prefs.json: экран в приложении меняет его, виджет без своих настроек берёт его */
 export const PREFS_DEFAULT_KEY = 'default';
@@ -62,6 +64,12 @@ export function cleanPrefs(raw: unknown, base: WidgetPrefs = DEFAULT_WIDGET_PREF
     text: tone(raw.text, base.text),
     time: tone(raw.time, base.time),
     head: tone(raw.head, base.head),
+    headOpacity:
+      typeof raw.headOpacity === 'number' && Number.isFinite(raw.headOpacity)
+        ? Math.round(Math.min(1, Math.max(0, raw.headOpacity)) * 100) / 100
+        : raw.headOpacity === null
+          ? null
+          : base.headOpacity,
     groups: Array.isArray(raw.groups)
       ? raw.groups.filter((g): g is string => typeof g === 'string' && g.length > 0)
       : typeof raw.group === 'string' && raw.group
@@ -153,8 +161,11 @@ const strip = (color: PersonColor): StripColor => [colorHex(color, false), color
 export type WidgetSource = Pick<Snapshot, 'me' | 'users' | 'groups' | 'tasks'>;
 
 /** Мои группы (где я участник) по порядку */
-export const myGroups = (s: Pick<Snapshot, 'me' | 'groups'>): WidgetGroup[] =>
-  s.groups.filter((g) => g.memberIds.includes(s.me.id)).map((g) => ({ id: g.id, name: g.name }));
+/** Что можно выбрать в виджете: личный календарь и мои группы */
+export const myGroups = (s: Pick<Snapshot, 'me' | 'groups'>): WidgetGroup[] => [
+  { id: PERSONAL, name: PERSONAL_NAME },
+  ...s.groups.filter((g) => g.memberIds.includes(s.me.id)).map((g) => ({ id: g.id, name: g.name })),
+];
 
 /**
  * Ближайшие дела моих групп с датой (с повторами, на WIDGET_DAYS дней вперёд), без сделанных и прошедших,
@@ -352,14 +363,17 @@ export type FaceColors = {
   showRec: boolean;
 };
 
-/** Непрозрачность поверхности по умолчанию и наименьшая (прозрачность в настройках — до 80%) */
+/** Непрозрачность поверхности по умолчанию и наименьшая (прозрачность в настройках — до 100%) */
 export const WIDGET_OPACITY_DEFAULT = 0.94;
-export const WIDGET_OPACITY_MIN = 0.2;
+export const WIDGET_OPACITY_MIN = 0;
 
 const rgba = (hex: string, a: number) => {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${Math.round(a * 1000) / 1000})`;
 };
+
+/** Заливка шапки 0…1: своя настройка; нет — у цвета «авто» заливки нет, у светлого / тёмного — сплошная */
+export const headAlpha = (p: Pick<WidgetPrefs, 'head' | 'headOpacity'>): number => p.headOpacity ?? (p.head === 'auto' ? 0 : 1);
 
 export function faceColors(prefs: WidgetPrefs, scheme: Scheme): FaceColors {
   const look = (tone: WidgetTone): WidgetPalette => (tone === 'light' ? palettes.light : tone === 'dark' ? palettes.dark : palettes[scheme]);
@@ -369,6 +383,7 @@ export function faceColors(prefs: WidgetPrefs, scheme: Scheme): FaceColors {
   const head = prefs.head === 'auto' ? null : look(prefs.head);
   const time = ink(prefs.time);
   const opacity = Math.max(WIDGET_OPACITY_MIN, Math.min(1, prefs.opacity));
+  const headFill = headAlpha(prefs);
   return {
     card: rgba(bg.panel, opacity),
     text: ink(prefs.text).text,
@@ -377,7 +392,7 @@ export function faceColors(prefs: WidgetPrefs, scheme: Scheme): FaceColors {
     today: bg.red,
     time: time.text,
     day: prefs.time === 'auto' ? bg.muted : time.text,
-    headBg: head ? head.panel : 'transparent',
+    headBg: headFill > 0 ? rgba((head ?? bg).panel, headFill) : 'transparent',
     headInk: head ? head.text : ink(prefs.text).text,
     headMuted: head ? head.muted : bg.muted,
     recFill: rec.panel,

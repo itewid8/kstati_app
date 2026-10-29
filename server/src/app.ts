@@ -8,6 +8,7 @@ import { toOggOpus } from './audio.js';
 import { HttpError, registerAuth, requireUser } from './auth.js';
 import { API_LEVEL, apiLevel, appVersion } from './client.js';
 import { config } from './config.js';
+import { sendMail } from './mail.js';
 import { writeLog } from './log.js';
 import { parseText } from './parse.js';
 import { normalizeTimes } from './spoken.js';
@@ -96,7 +97,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       store.listWishes(user.id),
       store.listNotes(user.id).catch(() => []),
     ]);
-    const topics = notes.flatMap((n) => (n.kind === 'topic' ? [{ id: n.id, title: n.title }] : []));
+    const topics = notes.flatMap((n) => (n.kind === 'topic' && !n.archivedAt ? [{ id: n.id, title: n.title, body: n.body ?? '' }] : []));
     // Для переноса и удаления голосом хватает последних идей; текст укорачиваем — экономим токены
     const ideas = notes
       .flatMap((n) => (n.kind === 'idea' ? [n] : []))
@@ -154,6 +155,31 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     const key = quotaKey(user);
     const used = Math.min((await store.getCounters([key]))[key] ?? 0, config.voiceDailyLimit);
     return { limit: config.voiceDailyLimit, used, left: config.voiceDailyLimit - used };
+  });
+
+  /**
+   * Отзыв из приложения: ошибка или предложение. Хранится на сервере (ключ feedback#…) и уходит письмом на FEEDBACK_EMAIL.
+   * Письмо не дошло — отзыв всё равно сохранён, человеку ошибку не показываем.
+   */
+  const Feedback = z.object({
+    kind: z.enum(['bug', 'idea']),
+    text: z.string().trim().min(1).max(4000),
+    device: z.string().max(200).optional(),
+  });
+  app.post('/feedback', async (req) => {
+    const user = await requireUser(req, store);
+    const body = Feedback.parse(req.body);
+    const n = await store.incrUpTo(`feedback#${user.id}#${mskDay()}`, config.feedbackDailyLimit);
+    if (n === null) throw new HttpError(429, 'daily_limit', 'На сегодня отзывов достаточно — спасибо! Завтра можно снова.');
+    const ts = new Date().toISOString();
+    const entry = { ts, userId: user.id, name: user.name, email: user.email ?? null, kind: body.kind, text: body.text, app: appVersion(req) ?? null, api: apiLevel(req), device: body.device ?? null };
+    await store.claimKey(`feedback#${ts}#${user.id}`, JSON.stringify(entry));
+    if (config.feedbackEmail) {
+      const subject = `${body.kind === 'bug' ? 'Ошибка' : 'Предложение'} от ${user.name || user.id}`;
+      const text = [body.text, '', `Кто: ${user.name} (${user.email ?? user.id})`, `Приложение: ${entry.app ?? '—'} · API ${entry.api}`, `Устройство: ${entry.device ?? '—'}`, `Когда: ${ts}`].join('\n');
+      await sendMail(config.feedbackEmail, subject, text).catch((e) => req.log.error({ err: errText(e) }, 'Отзыв не отправлен письмом'));
+    }
+    return { ok: true };
   });
 
   /** Разбор текста — «Разобрать заново» */

@@ -68,7 +68,7 @@ function itemCard(s: Snapshot, colors: ColorMap, change: ChangeDraft): VoiceTask
   if (change.type === 'idea') {
     const x = s.ideas.find((i) => i.id === id);
     if (!x) return null;
-    return { id, title: clip(x.text, 60), meta: `ИДЕЯ · ${clip(upper(topicName(s, x.topicId)), 28)}`, colors: [colorOf(colors, x.ownerId)] };
+    return { id, title: clip(x.text, 60), meta: `ЗАМЕТКА · ${clip(upper(topicName(s, x.topicId)), 28)}`, colors: [colorOf(colors, x.ownerId)] };
   }
   return null;
 }

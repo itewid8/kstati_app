@@ -1,12 +1,11 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { emptyDraft } from '@/components/CardSheet';
 import { ALL_IDEAS, IDEAS_SECTIONS, ideasProps, type IdeasSnapshot } from '@/adapters/lists/ideas';
 import { DEMO, useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { IdeasScreen, type IdeasSection } from '@/screens/lists/IdeasScreen';
-import { NO_ME, nav, signedInOnly, useChrome, useClock, useInsets, usePersonColors, type StoreState } from '../common';
+import { NEW_NOTE, NO_ME, nav, signedInOnly, useChrome, useClock, useInsets, usePersonColors, type StoreState } from '../common';
 
 /** Архив тем — только с сервером API 2 (старый молча срежет archivedAt) */
 const archiveOn = (api: number | null) => DEMO || (api ?? 0) >= 2;
@@ -19,7 +18,8 @@ function toggleArchive(id: ID, archived: boolean) {
 }
 
 const openTopic = (id: ID) => router.push(nav.topic(id));
-const addTopic = () => useStore.getState().setCard({ source: 'manual', items: [emptyDraft('topic')], editing: true });
+/** Новая тема — сразу экран темы: пишется название и текст, тема появляется с первым словом */
+const addTopic = () => router.push(nav.topic(NEW_NOTE));
 const toggleSection = (section: IdeasSection) => useStore.getState().toggleSection(IDEAS_SECTIONS[section]);
 
 /** Только то, что нужно блокноту (и цветам людей): дела, хотелки и «Смотреть» экран не перерисовывают */

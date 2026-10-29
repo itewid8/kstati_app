@@ -124,10 +124,10 @@ export function editVisibleFixture(): TaskEditorScreenProps {
     visiblePanel: {
       onlyMe: false,
       groups: [
-        { id: 'g1', name: 'Мы с Кариной', mode: 'ВСЕ, КРОМЕ СКРЫТЫХ', visible: false, manual: true },
-        { id: 'g2', name: 'Семья', mode: 'ВСЕ, КРОМЕ СКРЫТЫХ', visible: false, manual: true },
-        { id: 'g3', name: 'Друзья', mode: 'ТОЛЬКО ВЫБРАННЫЕ', visible: true, manual: true },
-        { id: 'g4', name: 'Работа', mode: 'ТОЛЬКО ВЫБРАННЫЕ', visible: false, manual: false },
+        { id: 'g1', name: 'Мы с Кариной', mode: 'ВСЕ, КРОМЕ СКРЫТЫХ', visible: false },
+        { id: 'g2', name: 'Семья', mode: 'ВСЕ, КРОМЕ СКРЫТЫХ', visible: false },
+        { id: 'g3', name: 'Друзья', mode: 'ТОЛЬКО ВЫБРАННЫЕ', visible: true },
+        { id: 'g4', name: 'Работа', mode: 'ТОЛЬКО ВЫБРАННЫЕ', visible: false },
       ],
     },
   };
