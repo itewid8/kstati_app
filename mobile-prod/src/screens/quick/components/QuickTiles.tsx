@@ -2,10 +2,10 @@
  * Ряды кнопок окна быстрых действий: плитки 60px (значок 18 + подпись) и ряд «ПЕРЕНЕСТИ» / «В ТЕМУ» 32px.
  * Колонки равные, соседние кнопки делят рамку 1.5px (сдвиг −1.5, как margin-left в макете поверх сетки колонок).
  */
-import { memo, useCallback } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Marquee, fonts, size as S, useTheme } from '@/ui';
+import { Icon, Marquee, fonts, size as S, useTheme } from '@/ui';
 import type { QuickSection, QuickSegment, QuickTile, QuickTileKey } from '../types';
 
 type Glyph = 'check' | 'edit' | 'plan' | 'copy' | 'gift' | 'link' | 'toTask' | 'bell';
@@ -104,6 +104,7 @@ const Segment = memo(function Segment({ segment, first, onSegment }: SegmentProp
 /** Подпись («ПЕРЕНЕСТИ») и ряд кнопок под ней */
 export const QuickSegments = memo(function QuickSegments({ section, onSegment }: { section: QuickSection; onSegment?: (key: string) => void }) {
   const { c } = useTheme();
+  if (section.dropdown) return <QuickDropdown section={section} current={section.dropdown.current} onSegment={onSegment} />;
   return (
     <View style={styles.section}>
       <Text style={[styles.sectionLabel, { color: c.muted }]}>{section.label}</Text>
@@ -116,8 +117,60 @@ export const QuickSegments = memo(function QuickSegments({ section, onSegment }:
   );
 });
 
+/** Подпись и раскрываемый список: строка с текущим значением, по нажатию — все варианты с прокруткой */
+const QuickDropdown = memo(function QuickDropdown({ section, current, onSegment }: { section: QuickSection; current: string; onSegment?: (key: string) => void }) {
+  const { c } = useTheme();
+  const [open, setOpen] = useState(false);
+  const toggle = useCallback(() => setOpen((o) => !o), []);
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionLabel, { color: c.muted }]}>{section.label}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${section.label}: ${current}`}
+        disabled={!onSegment}
+        onPress={toggle}
+        style={[styles.dropHead, { borderColor: c.border, backgroundColor: open ? c.text : c.panel }]}
+      >
+        <Marquee style={[styles.dropLabel, { color: open ? c.bg : c.text }]}>{current}</Marquee>
+        <View style={open && styles.flip}>
+          <Icon name="chevronDown" size={12} color={open ? c.bg : c.text} />
+        </View>
+      </Pressable>
+      {open ? (
+        <ScrollView
+          style={[styles.dropList, { borderColor: c.border, backgroundColor: c.panel }]}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+        >
+          {section.segments.map((s, i) => (
+            <Pressable
+              key={s.key}
+              accessibilityRole="button"
+              accessibilityLabel={s.label}
+              disabled={s.disabled || !onSegment}
+              onPress={() => onSegment?.(s.key)}
+              style={({ pressed }) => [styles.dropItem, i > 0 && { borderTopWidth: S.hairline, borderTopColor: c.hair }, pressed && { backgroundColor: c.hair }]}
+            >
+              <Text numberOfLines={1} style={[styles.dropLabel, { color: s.disabled ? c.faint : c.text }]}>
+                {s.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
+    </View>
+  );
+});
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row' },
+  dropHead: { height: 36, borderWidth: S.border, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dropLabel: { flex: 1, minWidth: 0, fontFamily: fonts.mono600, fontSize: 10, letterSpacing: 0.4 },
+  flip: { transform: [{ rotate: '180deg' }] },
+  dropList: { maxHeight: 220, marginTop: -S.border - 5, borderWidth: S.border },
+  dropItem: { height: 36, paddingHorizontal: 10, justifyContent: 'center' },
   /** Колонка сетки; кнопка в ней — на всю ширину плюс 1.5 влево (общая рамка с соседом) */
   cell: { flex: 1, minWidth: 0, flexDirection: 'row' },
   joined: { marginLeft: -S.border },

@@ -32,6 +32,8 @@ export type QuickSection = {
   /** «ПЕРЕНЕСТИ», «В ТЕМУ» */
   label: string;
   segments: readonly QuickSegment[];
+  /** Раскрываемый список вместо ряда кнопок (темы: их может быть много); current — что выбрано сейчас */
+  dropdown?: { current: string };
 };
 
 /** Что показывает окно (адаптер → экран) */

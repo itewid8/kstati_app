@@ -36,7 +36,7 @@ const Time5 = z.string().regex(/^\d{2}:\d{2}$/).nullable();
 const Stamp = z.string().max(40).nullable();
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-/** Повтор дела — см. mobile/src/lib/types.ts (Repeat) */
+/** Повтор дела — см. mobile-prod/src/lib/types.ts (Repeat) */
 const RepeatIn = z.object({
   freq: z.enum(['day', 'week', 'month', 'year']),
   every: z.number().int().min(1).max(99),

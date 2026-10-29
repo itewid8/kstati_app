@@ -21,7 +21,10 @@ import {
   type Scheme,
   type TopBarAction,
 } from '@/ui';
+import { CAL } from '@/screens/calendar/components/CalendarScaffold';
+import { PeriodNote, PeriodTitle, PeriodWeekday } from '@/screens/calendar/components/PeriodBar';
 import { ViewSwitch, type TasksSwitchValue } from '@/screens/calendar/components/ViewSwitch';
+import { MONTHS_SHORT, WEEKDAYS, pad2 as pad, parts, weekday } from '@/screens/calendar/format';
 import { TaskRow } from './components/TaskRow';
 
 /** Одно или два цвета (общее дело: верх — первый, низ — второй) */
@@ -80,6 +83,8 @@ export type TasksView = TasksSwitchValue;
 
 export type TasksListScreenProps = {
   groupLabel: string;
+  /** Сегодня (YYYY-MM-DD) — строка даты на месте строки периода календаря */
+  today?: string;
   me: { letter: string; color: PersonColor };
   sections: TaskSection[];
   hasNews?: boolean;
@@ -106,8 +111,8 @@ const NO_INSETS = { top: 0, bottom: 0 };
 /** Заливка плана и шагов цветом плана (в C-List плотнее не нужна: 0.14 / 0.16) */
 const PLAN_ALPHA: Record<Scheme, number> = { light: 0.14, dark: 0.16 };
 /** Секции начинаются сразу под заголовком (без вкладок) */
-/** Переключатель (titleTop, h 28) и зазор */
-const SECTIONS_TOP = S.titleTop + S.viewSwitch + 14;
+/** Строка даты и переключатель — там же, где в календаре (CAL), секции — под переключателем */
+const SECTIONS_TOP = CAL.viewTop + S.viewSwitch + 12;
 
 type RowCallbacks = Pick<TasksListScreenProps, 'onToggleTask' | 'onOpenTask' | 'onOpenPlan' | 'onLongPressTask'>;
 
@@ -213,7 +218,14 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
       <TopBar lead={lead} actions={actions} style={[styles.abs, { top: insets.top + S.topBarTop }]} />
-      <ViewSwitch value="list" onChange={onChangeView} style={[styles.abs, { top: insets.top + S.titleTop }]} />
+      {props.today ? (
+        <View style={[styles.abs, styles.period, { top: insets.top + CAL.periodTop }]}>
+          <PeriodWeekday label={WEEKDAYS[weekday(props.today)]} today />
+          <PeriodTitle text={pad(parts(props.today).d)} />
+          <PeriodNote lines={[MONTHS_SHORT[parts(props.today).m - 1], String(parts(props.today).y)]} style={styles.periodNote} />
+        </View>
+      ) : null}
+      <ViewSwitch value="list" onChange={onChangeView} style={[styles.abs, { top: insets.top + CAL.viewTop }]} />
 
       <ScrollView
         // Непрозрачный фон: на web прозрачный слой прокрутки выключает субпиксельное сглаживание текста
@@ -244,6 +256,8 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
 });
 
 const styles = StyleSheet.create({
+  period: { height: CAL.periodHeight, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  periodNote: { marginLeft: 2 },
   screen: { flex: 1 },
   abs: { position: 'absolute', left: space.side, right: space.side },
   sections: { gap: 10 },
