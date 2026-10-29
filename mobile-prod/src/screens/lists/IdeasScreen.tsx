@@ -163,7 +163,7 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
       <TopBar lead={{ kind: 'caption', text: caption }} actions={actions} style={[styles.abs, { top: insets.top + S.topBarTop }]} />
-      <ScreenTitle title="Идеи" style={[styles.abs, { top: insets.top + S.titleTop }]} />
+      <ScreenTitle title="Заметки" style={[styles.abs, { top: insets.top + S.titleTop }]} />
       <Tabs items={tabs} value={selectedPersonId} onChange={onSelectPerson} style={[styles.abs, { top: insets.top + S.tabsTop }]} />
 
       <View style={[styles.abs, { top: insets.top + S.contentTop, bottom: insets.bottom + S.contentBottom }]}>

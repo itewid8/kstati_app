@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Animated, PanResponder, StyleSheet, useWindowDimensions } from 'react-native';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { useBottomSpace } from '@/containers/common/layout';
-import { useStore } from '@/lib/store';
+import { UNDO_MS, useStore } from '@/lib/store';
 import { UndoToastView } from '@/screens/sheets';
 import { space } from '@/ui';
 
-const UNDO_MS = 5000;
 const AWAY_MS = 150;
 
 /**
- * «УДАЛЕНО · ОТМЕНИТЬ» — 5 секунд после удаления; так же — короткие сообщения без кнопки.
+ * «УДАЛЕНО · ВЕРНУТЬ» — 5 секунд после удаления или отметки (UNDO_MS), правка тем временем не уходит на сервер; так же — короткие сообщения без кнопки.
  * Над нижней навигацией; смахнуть влево (или вправо) — убрать сразу
  */
 export function UndoToast() {
@@ -55,7 +55,10 @@ export function UndoToast() {
         },
       ]}
     >
-      <UndoToastView label={undo.label} onUndo={undo.restore} />
+      {/* Каждое новое сообщение проявляется заново (key) */}
+      <Reanimated.View key={undo.at} entering={FadeIn.duration(180)}>
+        <UndoToastView label={undo.label} onUndo={undo.restore} />
+      </Reanimated.View>
     </Animated.View>
   );
 }

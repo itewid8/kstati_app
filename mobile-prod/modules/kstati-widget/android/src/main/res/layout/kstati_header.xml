@@ -37,7 +37,7 @@
       android:ellipsize="end"
       android:hyphenationFrequency="none"
       android:breakStrategy="simple"
-      android:textSize="9dp" />
+      android:textSize="8dp" />
     <TextView
       android:id="@+id/kstati_header_weekday"
       android:layout_width="wrap_content"
@@ -47,7 +47,7 @@
       android:includeFontPadding="false"
       android:letterSpacing="0.08"
       android:maxLines="1"
-      android:textSize="9dp" />
+      android:textSize="8dp" />
     <TextView
       android:id="@+id/kstati_header_day"
       android:layout_width="wrap_content"
@@ -61,7 +61,7 @@
       android:paddingEnd="4dp"
       android:paddingBottom="2dp"
       android:textColor="#FFFFFF"
-      android:textSize="9.5dp" />
+      android:textSize="8.5dp" />
     <!-- Без REC — поле 12 справа. Только FrameLayout: голый View в RemoteViews запрещён, виджет не добавится -->
     <FrameLayout
       android:id="@+id/kstati_header_end"
@@ -83,5 +83,6 @@
     android:id="@+id/kstati_header_line"
     android:layout_width="match_parent"
     android:layout_height="1dp"
+    android:visibility="gone"
     android:importantForAccessibility="no" />
 </LinearLayout>

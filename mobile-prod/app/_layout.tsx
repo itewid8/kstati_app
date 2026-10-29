@@ -104,9 +104,11 @@ export default function RootLayout() {
                 <Stack.Screen name="settings/avatar" />
                 <Stack.Screen name="settings/reminders" />
                 <Stack.Screen name="settings/widget" />
+                <Stack.Screen name="settings/feedback" />
                 <Stack.Screen name="group/join" />
                 <Stack.Screen name="group/new" />
                 <Stack.Screen name="group/share" />
+                <Stack.Screen name="note/[id]" />
               </Stack.Protected>
             </Stack>
             <UndoToast />

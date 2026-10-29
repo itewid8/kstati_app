@@ -31,7 +31,7 @@ const colors = colorMap(s);
 const byId = (secs: TaskSection[], id: string) => secs.find((x) => x.id === id);
 
 describe('tasksListProps (C-List)', () => {
-  const props = tasksListProps(s, colors, CLOCK);
+  const props = tasksListProps({ ...s, collapsedSections: [] }, colors, CLOCK);
   const fx = tasksListFixture();
 
   test('шапка и разделы как в макете: СЕГОДНЯ «ПН 05», ЗАВТРА «ВТ 06», НЕДЕЛЯ «07—11»', () => {
@@ -39,7 +39,8 @@ describe('tasksListProps (C-List)', () => {
     assert.deepEqual(props.me, fx.me);
     assert.deepEqual(
       props.sections.map((x) => [x.id, x.label, x.date]),
-      fx.sections.map((x) => [x.id, x.label, x.date]),
+      // В макете ещё свёрнутые ПРОШЛО и СДЕЛАНО — в данных макета таких дел нет
+      fx.sections.filter((x) => !x.collapsed).map((x) => [x.id, x.label, x.date]),
     );
   });
 
@@ -101,12 +102,13 @@ describe('разделы списка', () => {
     assert.equal(sectionOf(t('2026-10-12'), '2026-10-10'), 'later');
   });
 
-  test('ПРОШЛО: несделанное; сделанное — только отмеченное сегодня. БЕЗ ДАТЫ — новые сверху', () => {
+  test('ПРОШЛО: несделанное; сделанное из прошлого и без даты — в СДЕЛАНО (свежие сверху). БЕЗ ДАТЫ — новые сверху', () => {
     const secs = tasksListSections(
       snapshot({
         tasks: [
           task('late', '2026-10-01', null, 'Просрочено', ['s']),
-          task('oldDone', '2026-10-01', null, 'Сделано давно', ['s'], { doneAt: '2026-10-02T09:00:00.000Z' }),
+          task('oldDone', '2026-10-01', null, 'Сделано на неделе', ['s'], { doneAt: '2026-10-02T09:00:00.000Z' }),
+          task('ancient', '2026-09-20', null, 'Сделано давно', ['s'], { doneAt: '2026-09-21T09:00:00.000Z' }),
           task('justDone', '2026-10-02', null, 'Сделано сейчас', ['s'], { doneAt: DONE }),
           task('n1', null, null, 'Раньше', ['s'], { createdAt: '2026-09-01T09:00:00.000Z' }),
           task('n2', null, null, 'Позже', ['s'], { createdAt: '2026-09-20T09:00:00.000Z' }),
@@ -119,9 +121,26 @@ describe('разделы списка', () => {
     assert.deepEqual(
       secs.map((x) => [x.id, x.date, x.items.map((i) => [i.id, i.kind === 'task' ? i.time : ''])]),
       [
-        ['past', '02', [['late', '1 ОКТ'], ['justDone', '2 ОКТ']]],
+        ['past', '01', [['late', '1 ОКТ']]],
         ['none', '02', [['n2', '—'], ['n1', '—']]],
         ['later', '01', [['later', '20 ОКТ']]],
+        ['done', '03', [['justDone', '2 ОКТ'], ['oldDone', '1 ОКТ'], ['ancient', '20 СЕН']]],
+      ],
+    );
+  });
+
+  test('серия: отмеченные прошлые разы — в СДЕЛАНО, ближайший неотмеченный — на своём месте; свёрнутые разделы помечены', () => {
+    const secs = tasksListSections(
+      snapshot({ tasks: [task('yoga', '2026-09-21', '19:00', 'Йога', ['s'], { repeat: { freq: 'week', every: 1 }, doneDates: ['2026-09-21', '2026-09-28'] })] }),
+      colors,
+      CLOCK,
+      ['done'],
+    );
+    assert.deepEqual(
+      secs.map((x) => [x.id, !!x.collapsed, x.items.map((i) => [i.id, i.kind === 'task' && i.done])]),
+      [
+        ['today', false, [['yoga@2026-10-05', false]]],
+        ['done', true, [['yoga@2026-09-28', true], ['yoga@2026-09-21', true]]],
       ],
     );
   });

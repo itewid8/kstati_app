@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { fonts, size as S, useTheme } from '@/ui';
+import { fonts, size as S, useInputColors, useTheme } from '@/ui';
 
 type Props = {
   value: string;
@@ -34,6 +34,7 @@ export const Field = forwardRef<TextInput, Props>(function Field(
   ref,
 ) {
   const { c } = useTheme();
+  const ic = useInputColors();
   return (
     <View
       style={[
@@ -51,8 +52,8 @@ export const Field = forwardRef<TextInput, Props>(function Field(
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={c.muted}
-        selectionColor={c.text}
-        cursorColor={c.text}
+        selectionColor={ic.selectionColor}
+        cursorColor={ic.cursorColor}
         onSubmitEditing={onSubmitEditing ? () => onSubmitEditing() : undefined}
         accessibilityLabel={accessibilityLabel ?? placeholder}
         style={[styles.text, styles.input, { color: c.text }]}

@@ -3,7 +3,7 @@
  * данные приходят пропсами, действия уходят колбэками. Переходник из Task описан в src/lib/calendarLayout/index.ts.
  */
 import type { DayMinute, IsoDate } from '@/lib/calendarLayout';
-import type { ID, PersonColor } from '@/lib/types';
+import type { ID, PersonColor, TaskKind } from '@/lib/types';
 import type { NavTab } from '@/ui';
 
 export type { DayMinute, IsoDate };
@@ -37,6 +37,8 @@ export type TimedEvent = {
   toNextDay?: boolean;
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
+  /** Тип (мини-иконка перед названием); нет — обычное дело */
+  kind?: Exclude<TaskKind, 'task'>;
 };
 
 /** Полоса над сеткой: на весь день, многодневное, общее дело с подзадачами */
@@ -50,6 +52,8 @@ export type CalendarBar = {
   people: readonly ID[];
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
+  /** Тип (мини-иконка перед названием); нет — обычное дело */
+  kind?: Exclude<TaskKind, 'task'>;
 };
 
 /** Общее для всех видов: верхняя панель, переключатель вида, нижняя навигация */

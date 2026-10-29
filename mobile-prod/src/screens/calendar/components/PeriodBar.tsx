@@ -10,7 +10,14 @@ import { IconButton, fonts, size as S, useTheme } from '@/ui';
 export const PeriodTitle = memo(function PeriodTitle({ text, onPress }: { text: string; onPress?: () => void }) {
   const { c } = useTheme();
   return (
-    <Text accessibilityRole={onPress ? 'button' : undefined} onPress={onPress} style={[styles.title, { color: c.text }]}>
+    <Text
+      accessibilityRole={onPress ? 'button' : undefined}
+      onPress={onPress}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.6}
+      style={[styles.title, { color: c.text }]}
+    >
       {text}
     </Text>
   );
@@ -65,7 +72,7 @@ export const TodayButton = memo(function TodayButton({ active, onPress }: { acti
 });
 
 const styles = StyleSheet.create({
-  title: { fontFamily: fonts.sans700, fontSize: 34, lineHeight: 36, letterSpacing: -1.7 },
+  title: { flexShrink: 1, fontFamily: fonts.sans700, fontSize: 34, lineHeight: 36, letterSpacing: -1.7 },
   note: { fontFamily: fonts.mono400, fontSize: 10, lineHeight: 13, letterSpacing: 0.8 },
   weekday: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },

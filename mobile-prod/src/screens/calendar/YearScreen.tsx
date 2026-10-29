@@ -15,7 +15,7 @@ import type { ID } from '@/lib/types';
 import { fonts, size as S, space, useTheme, type Scheme } from '@/ui';
 import { CalendarScaffold, NO_INSETS, frameOf, useScreenSize } from './components/CalendarScaffold';
 import { DiagonalFill, DiagonalSwatch, usePeopleColors, usePeopleMap } from './components/PeopleColor';
-import { PeriodArrows, PeriodNote, PeriodTitle } from './components/PeriodBar';
+import { PeriodArrows, PeriodNote, PeriodTitle, TodayButton } from './components/PeriodBar';
 import { MONTHS, MONTHS_SHORT, addDays, daysInMonth, isoDate, parts, tasksWord, weekday } from './format';
 import type { CalendarChromeProps, CalendarPerson } from './types';
 
@@ -38,6 +38,8 @@ export type YearScreenProps = CalendarChromeProps & {
   monthCounts: readonly number[];
 
   onPrev?: () => void;
+  /** «СЕГОДНЯ»: к текущему году */
+  onToday?: () => void;
   onNext?: () => void;
   /** month — 1…12 */
   onOpenMonth?: (month: number) => void;
@@ -150,7 +152,7 @@ const LegendItem = memo(function LegendItem({ label, ids, byId }: { label: strin
 });
 
 export const YearScreen = memo(function YearScreen(props: YearScreenProps) {
-  const { people, year, today, total, days, monthCounts, onPrev, onNext, onOpenMonth, onScrollY, insets = NO_INSETS, ...chrome } = props;
+  const { people, year, today, total, days, monthCounts, onPrev, onNext, onToday, onOpenMonth, onScrollY, insets = NO_INSETS, ...chrome } = props;
   const [screen, onLayout] = useScreenSize();
   const frame = frameOf(screen, insets);
   const layout = yearLayout(frame);
@@ -172,6 +174,7 @@ export const YearScreen = memo(function YearScreen(props: YearScreenProps) {
       <PeriodTitle text={String(year)} />
       <PeriodNote lines={[String(total), tasksWord(total)]} style={styles.note} />
       <PeriodArrows prevLabel="Предыдущий год" nextLabel="Следующий год" onPrev={onPrev} onNext={onNext} />
+      <TodayButton active={t?.y === year} onPress={onToday} />
     </>
   );
 

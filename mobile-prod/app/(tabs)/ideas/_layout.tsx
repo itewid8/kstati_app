@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import React from 'react';
 import { useTheme } from '@/ui';
 
-/** Вкладка «Идеи»: список тем и экран темы — внутри вкладки, чтобы микрофон и вкладки оставались под рукой */
+/** Вкладка «Заметки»: список тем и экран темы — внутри вкладки, чтобы микрофон и вкладки оставались под рукой */
 export default function IdeasLayout() {
   const { c } = useTheme();
   return (

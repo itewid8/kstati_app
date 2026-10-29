@@ -82,6 +82,7 @@ describe('widgetItems', () => {
     assert.ok(!items.some((x) => x.id === 'alien'));
     const file = widgetFile(s, 'system', NOW);
     assert.deepEqual(file.groups, [
+      { id: '@me', name: 'Я' },
       { id: 'g1', name: 'Мы с Кариной' },
       { id: 'g2', name: FRIENDS.name },
     ]);
@@ -148,6 +149,8 @@ describe('настройки', () => {
     assert.equal(cleanPrefs({ opacity: 0.333 }).opacity, 0.33);
     assert.deepEqual(cleanPrefs({ group: 'g2' }).groups, ['g2']);
     assert.deepEqual(cleanPrefs({ groups: ['g1', 3, 'g2'] }).groups, ['g1', 'g2']);
+    assert.equal(cleanPrefs({ headOpacity: 0.456 }).headOpacity, 0.46);
+    assert.equal(cleanPrefs({ headOpacity: 'x' }).headOpacity, null);
     assert.equal(transparencyPercent(0.7), 30);
   });
 
@@ -185,5 +188,10 @@ describe('подписи раскладок (C-Widget*)', () => {
     assert.equal(c.recFill, '#F4F3EF');
     assert.equal(c.recBorder, '#CFCEC8');
     assert.equal(c.headBg, 'transparent');
+  });
+  test('прозрачность шапки: своя заливка у «авто», светлый — сплошной, пока не задано', () => {
+    assert.equal(faceColors({ ...DEFAULT_WIDGET_PREFS, headOpacity: 0.5 }, 'light').headBg, 'rgba(244,243,239,0.5)');
+    assert.equal(faceColors({ ...DEFAULT_WIDGET_PREFS, head: 'dark' }, 'light').headBg, 'rgba(21,21,21,1)');
+    assert.equal(faceColors({ ...DEFAULT_WIDGET_PREFS, head: 'dark', headOpacity: 0 }, 'light').headBg, 'transparent');
   });
 });

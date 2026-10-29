@@ -1,6 +1,6 @@
 /**
  * Полоска со значением 0…1 в стиле «Инструмент»: дорожка 1.5px, заполненная часть цветом текста, квадратный бегунок.
- * Тянуть или нажать в любое место. Значение уходит наружу по ходу движения (onChange) — превью меняется сразу.
+ * Бегунок не выходит за края полоски. Тянуть или нажать в любое место. Значение уходит наружу по ходу движения (onChange) — превью меняется сразу.
  */
 import { memo, useCallback, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
@@ -10,7 +10,7 @@ import { size as S, useTheme } from '@/ui';
 type Props = { value: number; onChange?: (value: number) => void; accessibilityLabel: string };
 
 const THUMB = 20;
-const STEP = 1 / 80;
+const STEP = 1 / 100;
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const snap = (v: number) => Math.round(clamp01(v) / STEP) * STEP;
@@ -19,9 +19,10 @@ export const Slider = memo(function Slider({ value, onChange, accessibilityLabel
   const { c } = useTheme();
   const [width, setWidth] = useState(0);
   const onLayout = useCallback((e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width), []);
-  const track = Math.max(1, width);
+  /** Путь центра бегунка: от THUMB/2 до width − THUMB/2 */
+  const track = Math.max(1, width - THUMB);
 
-  const emit = useCallback((x: number) => onChange?.(snap(x / track)), [onChange, track]);
+  const emit = useCallback((x: number) => onChange?.(snap((x - THUMB / 2) / track)), [onChange, track]);
   const pan = Gesture.Pan()
     .runOnJS(true)
     .minDistance(0)
@@ -45,8 +46,8 @@ export const Slider = memo(function Slider({ value, onChange, accessibilityLabel
         accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       >
         <View style={[styles.track, { backgroundColor: c.hair }]} />
-        <View style={[styles.fill, { width: left, backgroundColor: c.text }]} />
-        <View style={[styles.thumb, { left: left - THUMB / 2, borderColor: c.border, backgroundColor: c.panel }]} />
+        <View style={[styles.fill, { width: left + THUMB / 2, backgroundColor: c.text }]} />
+        <View style={[styles.thumb, { left, borderColor: c.border, backgroundColor: c.panel }]} />
       </View>
     </GestureDetector>
   );

@@ -140,6 +140,7 @@ const WeekBar = memo(function WeekBar({
       meta={bar.meta}
       colors={colors}
       hidden={bar.hidden}
+      kind={bar.kind}
       onPress={onOpenBar ? open : undefined}
       onLongPress={hold}
     />

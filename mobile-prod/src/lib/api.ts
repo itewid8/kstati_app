@@ -120,3 +120,17 @@ export async function fetchHealth(): Promise<{ api: number } | null> {
     return null;
   }
 }
+
+export type FeedbackKind = 'bug' | 'idea';
+
+/** POST /feedback — ошибка или предложение. Возвращает текст проблемы или null, если отправлено */
+export async function sendFeedback(kind: FeedbackKind, text: string, device: string): Promise<string | null> {
+  try {
+    await request('/feedback', { token: useStore.getState().session?.token, body: { kind, text, device }, timeoutMs: 20_000 });
+    return null;
+  } catch (e) {
+    if (e instanceof ApiError) return e.message;
+    if (e instanceof NetError) return 'Нет связи с сервером';
+    return String((e as Error)?.message ?? e);
+  }
+}

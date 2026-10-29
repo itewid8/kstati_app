@@ -48,6 +48,8 @@ declare module 'react-native' {
   export type TextInputChangeEvent = NativeSyntheticEvent<{ text: string }>;
   export type TextInputSubmitEditingEvent = NativeSyntheticEvent<{ text: string }>;
   export type TextInputContentSizeChangeEvent = NativeSyntheticEvent<{ contentSize: { width: number; height: number } }>;
+  export type TextInputKeyPressEventData = { key: string };
+  export type TextInputSelectionChangeEventData = { selection: { start: number; end: number } };
 
   export type AccessibilityRole = string;
   export type AccessibilityState = { disabled?: boolean; selected?: boolean; checked?: boolean | 'mixed'; busy?: boolean; expanded?: boolean };
@@ -156,6 +158,8 @@ declare module 'react-native' {
     textAlignVertical?: 'auto' | 'top' | 'bottom' | 'center';
     onChangeText?: (text: string) => void;
     onChange?: (event: TextInputChangeEvent) => void;
+    onKeyPress?: (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => void;
+    onSelectionChange?: (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => void;
     onSubmitEditing?: (event: TextInputSubmitEditingEvent) => void;
     onFocus?: (event: NativeSyntheticEvent<object>) => void;
     onBlur?: (event: NativeSyntheticEvent<object>) => void;

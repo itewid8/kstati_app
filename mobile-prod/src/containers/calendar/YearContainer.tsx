@@ -16,6 +16,7 @@ const shift = (n: number) => () => {
 };
 export const prevYear = shift(-1);
 export const nextYear = shift(1);
+const goToday = () => useStore.getState().setCalendarDate(toISODate(new Date()));
 const openMonth = (month: number) => {
   const s = useStore.getState();
   s.setCalendarDate(monthAnchor(parts(s.calendarDate).y, month, toISODate(new Date())));
@@ -30,5 +31,5 @@ export const YearContainer = () => {
   const { today } = useClock();
   const year = useStore((s) => parts(s.calendarDate).y);
   const data = useMemo(() => yearProps(snap, { today }, colors, { year }), [snap, today, colors, year]);
-  return <YearScreen {...chrome} {...data} onPrev={prevYear} onNext={nextYear} onOpenMonth={openMonth} />;
+  return <YearScreen {...chrome} {...data} onPrev={prevYear} onNext={nextYear} onToday={goToday} onOpenMonth={openMonth} />;
 };

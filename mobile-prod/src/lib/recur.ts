@@ -98,11 +98,14 @@ export function nextOpen(task: Task, from: string): string | null {
  * Для списка «Дела»: у серии показываем один раз — ближайший неотмеченный (прошедшие пропуски не висят).
  * Отмеченный сегодня тоже остаётся виден (зачёркнутым), как обычные выполненные дела.
  */
-export function listInstances(tasks: Task[], today: string): Task[] {
+export function listInstances(tasks: Task[], today: string, doneFrom: string = today): Task[] {
   return tasks.flatMap((t) => {
     if (!t.repeat || !t.date) return [t];
     const out: Task[] = [];
-    if (t.doneDates?.includes(today) && occurrences(t, today, today).length) out.push(instance(t, today));
+    // Отмеченные разы с doneFrom по сегодня — зачёркнутыми (как в календаре)
+    for (const d of [...(t.doneDates ?? [])].sort()) {
+      if (d >= doneFrom && d <= today && occurrences(t, d, d).length) out.push(instance(t, d));
+    }
     const next = nextOpen(t, today);
     if (next) out.push(instance(t, next));
     return out;

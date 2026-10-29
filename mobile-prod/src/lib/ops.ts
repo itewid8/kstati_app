@@ -24,6 +24,8 @@ type TaskOp = {
   endTime: string | null;
   people: string[];
   parentId: string | null;
+  kind?: 'task' | 'birthday' | 'important' | 'trip';
+  celebrant?: { id?: string; name: string } | null;
 };
 type WatchOp = {
   id: string;
@@ -47,7 +49,7 @@ export type Op =
   /** Подарок чужой хотелки (API 2): снять может только подаривший */
   | { op: 'wish.gift'; ownerId: ID; id: ID; gifted: boolean }
   /** archivedAt: строка — в архив, null — из архива, нет поля — не трогать */
-  | { op: 'topic.put'; topic: { id: string; title: string; groupIds: string[]; archivedAt?: string | null } }
+  | { op: 'topic.put'; topic: { id: string; title: string; groupIds: string[]; body?: string; archivedAt?: string | null } }
   | { op: 'topic.delete'; id: string }
   | { op: 'idea.put'; idea: { id: string; topicId: string | null; text: string } }
   | { op: 'idea.delete'; id: string }

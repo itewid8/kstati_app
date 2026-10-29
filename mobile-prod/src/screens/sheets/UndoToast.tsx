@@ -1,5 +1,5 @@
 /**
- * Нижнее сообщение «УДАЛЕНО · ОТМЕНИТЬ»: квадратная плашка, инвертированная (как шапка секции),
+ * Нижнее сообщение «УДАЛЕНО · ВЕРНУТЬ»: квадратная плашка, инвертированная (как шапка секции),
  * моноширинный текст заглавными; кнопка отмены — плашка цвета фона.
  */
 import { memo } from 'react';
@@ -9,7 +9,7 @@ import { Marquee, fonts, size as S, type as T, useTheme } from '@/ui';
 export type UndoToastViewProps = {
   /** «Удалено «Йога»», «Нет группы» */
   label: string;
-  /** Есть — кнопка «ОТМЕНИТЬ» */
+  /** Есть — кнопка «ВЕРНУТЬ» */
   onUndo?: () => void;
   style?: StyleProp<ViewStyle>;
 };
@@ -20,8 +20,8 @@ export const UndoToastView = memo(function UndoToastView({ label, onUndo, style 
     <View accessibilityRole="alert" style={[styles.toast, { borderColor: c.border, backgroundColor: c.text }, style]}>
       <Marquee style={[styles.label, { color: c.bg }]}>{label.toLocaleUpperCase('ru-RU')}</Marquee>
       {onUndo ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Отменить" onPress={onUndo} hitSlop={6} style={[styles.button, { backgroundColor: c.bg }]}>
-          <Text style={[T.action, { color: c.text }]}>ОТМЕНИТЬ</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Вернуть" onPress={onUndo} hitSlop={6} style={[styles.button, { backgroundColor: c.bg }]}>
+          <Text style={[T.action, { color: c.text }]}>ВЕРНУТЬ</Text>
         </Pressable>
       ) : null}
     </View>

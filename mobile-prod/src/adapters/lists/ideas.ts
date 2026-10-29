@@ -2,6 +2,7 @@
  * C-Ideas: блокнот тем. Темы — мои (свежие сверху), «Без темы», затем открытые мне чужие; в архиве (API 2) — отдельно,
  * последние убранные сверху. Вкладки людей: я и владельцы открытых мне тем.
  */
+import { notePreview } from '@/lib/note';
 import { INBOX, type ID, type Idea, type Topic } from '@/lib/types';
 import type { ALL_IDEAS as SCREEN_ALL, ArchivedTopic, IdeaTopic, IdeasPerson, IdeasScreenProps } from '@/screens/lists/IdeasScreen';
 import { MONTHS_SHORT, pad2, parts } from '@/screens/calendar/format';
@@ -60,7 +61,8 @@ export function ideasProps(s: IdeasSnapshot, colors: ColorMap, clock: Pick<Clock
     id: topic.id,
     title: topic.title,
     updated: relativeDay(dateOfStamp(last), clock.today),
-    last: list[0]?.text ?? '—',
+    // Тема — сама заметка: первая строка её текста, иначе — свежая заметка внутри
+    last: notePreview(topic.body ?? '').title || notePreview(list[0]?.text ?? '').title || '—',
     count: pad2(list.length),
     ownerColor: colorOf(colors, topic.ownerId),
     shared: topic.groupIds.length > 0 || topic.ownerId !== meId,
@@ -74,7 +76,7 @@ export function ideasProps(s: IdeasSnapshot, colors: ColorMap, clock: Pick<Clock
             id: INBOX,
             title: 'Без темы',
             updated: relativeDay(dateOfStamp(newest.createdAt), clock.today),
-            last: newest.text,
+            last: notePreview(newest.text).title,
             count: pad2(inbox.length),
             ownerColor: null,
             shared: false,

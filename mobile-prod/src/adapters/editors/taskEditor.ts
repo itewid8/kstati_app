@@ -14,7 +14,8 @@ import { kidsOf } from '../common/tasks';
 import { whenLabel } from '../common/when';
 import { canSaveDraft, draftPeople, noteValue, type EditorDraft, type EditorField, type EditorUi } from './draft';
 import { endLabel, remindSummary, repeatText, subtaskSummary } from './labels';
-import { mySpecs, remindPanel, repeatPanel, whenPanel, whoPanel } from './panels';
+import { memberIds, mySpecs, remindPanel, repeatPanel, whenPanel, whoPanel } from './panels';
+import type { CelebrantField } from '@/screens/editors/components/CelebrantRow';
 
 export type TaskEditorData = DataOf<TaskEditorScreenProps>;
 
@@ -58,6 +59,15 @@ export function subtasksField(d: EditorDraft, s: Pick<Snapshot, 'tasks'>): strin
   return kids.length ? subtaskSummary(kids.length, kids.filter((t) => t.doneAt).length) : null;
 }
 
+/** «ИМЕНИННИК»: имя и участники групп дела (выбран — тот, кто записан именинником) */
+export function celebrantField(d: EditorDraft, s: Snapshot, colors: ColorMap): CelebrantField {
+  const options = memberIds(s, d.groupId).flatMap((id) => {
+    const user = userOf(s, id);
+    return user ? [{ id, name: user.name, color: colorOf(colors, id), selected: d.celebrant?.id === id }] : [];
+  });
+  return { name: d.celebrant?.name ?? null, options };
+}
+
 export function taskEditorProps(d: EditorDraft, ui: EditorUi, s: Snapshot, clock: Pick<Clock, 'today'>): TaskEditorData {
   const colors = colorMap(s);
   const refs = draftPeopleRefs(d, s, colors);
@@ -66,6 +76,8 @@ export function taskEditorProps(d: EditorDraft, ui: EditorUi, s: Snapshot, clock
   return {
     caption: editorCaption('ДЕЛО', s, d.groupId, d.createdBy),
     title: d.title,
+    kind: d.kind,
+    ...(d.kind === 'birthday' && { celebrant: celebrantField(d, s, colors) }),
     colors: refs.colors,
     when: whenLabel(d.date, d.time),
     end: endLabel(d),

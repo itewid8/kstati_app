@@ -73,7 +73,7 @@ const NO_INSETS = { top: 0, bottom: 0 };
 
 const ROLE_LABEL: Record<GroupRole, string> = { owner: 'СОЗДАТЕЛЬ', admin: 'АДМИН', member: 'УЧАСТНИК' };
 
-const LIST_LABEL: Record<SharedListKey, string> = { tasks: 'Дела', wishes: 'Хочу', watch: 'Смотреть', ideas: 'Идеи' };
+const LIST_LABEL: Record<SharedListKey, string> = { tasks: 'Дела', wishes: 'Хочу', watch: 'Смотреть', ideas: 'Заметки' };
 
 /** «12 ОТКРЫТЫХ», «04 ЖЕЛАНИЯ», «07 В ОЧЕРЕДИ», «09 ИДЕЙ» */
 function listSummary({ key, count }: SharedListSummary): string {
@@ -86,7 +86,7 @@ function listSummary({ key, count }: SharedListSummary): string {
     case 'watch':
       return `${n} В ОЧЕРЕДИ`;
     case 'ideas':
-      return `${n} ${plural(count, 'ИДЕЯ', 'ИДЕИ', 'ИДЕЙ')}`;
+      return `${n} ${plural(count, 'ЗАМЕТКА', 'ЗАМЕТКИ', 'ЗАМЕТОК')}`;
   }
 }
 

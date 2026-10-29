@@ -107,7 +107,7 @@ export const quickWatchFixture: QuickFixture = {
 
 export const quickIdeaFixture: QuickFixture = {
   backdrop: {
-    title: 'Идеи',
+    title: 'Заметки',
     head: 'РЕМОНТ',
     count: '04',
     rows: rows([

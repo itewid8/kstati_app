@@ -52,7 +52,7 @@ export const AskDeleteSheet = memo(function AskDeleteSheet({
   const actions = useMemo<SheetAction[]>(
     () => [
       { key: 'cancel', label: 'ОТМЕНА', onPress: onCancel },
-      { key: 'delete', label: 'УДАЛИТЬ', tone: 'danger', flex: 1.3, onPress: onDelete },
+      { key: 'delete', label: 'УДАЛИТЬ', tone: 'danger', onPress: onDelete },
     ],
     [onCancel, onDelete],
   );

@@ -13,7 +13,10 @@ const dinner = stateOf(draftFromTask(DINNER, s));
 describe('taskEditorProps — макеты окна дела', () => {
   test('C-EditDate: раскрыта «КОГДА», пересечение с йогой Карины', () => {
     const st = open(dinner, { type: 'toggle', field: 'when', today: CLOCK.today });
-    assert.deepEqual(taskEditorProps(st.draft, st.ui, s, CLOCK), editDateFixture());
+    // Плитки типа в макетах не нарисованы — тип проверяем отдельно
+    const { kind, ...props } = taskEditorProps(st.draft, st.ui, s, CLOCK);
+    assert.equal(kind, 'task');
+    assert.deepEqual(props, editDateFixture());
   });
 
   test('C-EditRemind: для меня — «За 2 ч» над «Накануне», пресет «накануне» уже в списке', () => {
@@ -40,7 +43,8 @@ describe('taskEditorProps — макеты окна дела', () => {
 
   test('C-EditWho: Саня свободен, Карина занята 19:00–20:00 · ЙОГА', () => {
     const st = open(dinner, { type: 'toggle', field: 'who', today: CLOCK.today });
-    assert.deepEqual(taskEditorProps(st.draft, st.ui, s, CLOCK), editWhoFixture());
+    const { kind: _kind, ...props } = taskEditorProps(st.draft, st.ui, s, CLOCK);
+    assert.deepEqual(props, editWhoFixture());
   });
 
   test('C-EditRepeat: открыт раз серии 10 окт, «КАЖДУЮ НЕДЕЛЮ: СБ · ДО 31 ДЕК», «НАСТРОИТЬ…»', () => {

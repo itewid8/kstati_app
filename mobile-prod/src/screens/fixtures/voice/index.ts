@@ -143,7 +143,7 @@ export const recordTapFixture: RecordingSheetProps = {
   mode: 'tap',
   actions: [
     { key: 'cancel', label: 'ОТМЕНА' },
-    { key: 'done', label: 'ГОТОВО', tone: 'primary', flex: 1.3 },
+    { key: 'done', label: 'ГОТОВО', tone: 'primary' },
   ],
 };
 

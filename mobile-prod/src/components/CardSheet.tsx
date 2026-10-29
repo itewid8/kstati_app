@@ -114,7 +114,7 @@ const ItemsSheet = ({ visible, card, snapshot, taskKey, onTask }: ItemsProps) =>
     () => [
       { key: 'cancel', label: 'ОТМЕНА', onPress: close },
       ...(card.editing ? [] : [{ key: 'edit', label: 'ИЗМЕНИТЬ', onPress: () => setCard({ ...card, editing: true }) }]),
-      { key: 'save', label: toSave.length === 0 ? 'УЖЕ ЕСТЬ' : 'СОХРАНИТЬ', tone: 'primary', flex: 1.3, disabled: !ok, onPress: save },
+      { key: 'save', label: toSave.length === 0 ? 'УЖЕ ЕСТЬ' : 'СОХРАНИТЬ', tone: 'primary', disabled: !ok, onPress: save },
     ],
     [card, toSave.length, ok, save, setCard],
   );
@@ -198,7 +198,7 @@ const ChangesSheet = ({ visible, card, snapshot }: { visible: boolean; card: Cha
   const buttons = useMemo<SheetButton[]>(
     () => [
       { key: 'cancel', label: 'ОТМЕНА', onPress: close },
-      { key: 'apply', label: confirm.label, tone: confirm.danger ? 'danger' : 'primary', flex: 1.3, disabled: card.changes.length === 0, onPress: apply },
+      { key: 'apply', label: confirm.label, tone: confirm.danger ? 'danger' : 'primary', disabled: card.changes.length === 0, onPress: apply },
     ],
     [confirm.label, confirm.danger, card.changes.length, apply],
   );

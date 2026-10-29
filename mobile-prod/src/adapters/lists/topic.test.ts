@@ -52,8 +52,8 @@ describe('topicProps (тема идей)', () => {
     assert.equal(got.shared, true);
     assert.equal(got.own, true);
     assert.deepEqual(got.ideas, [
-      { id: 'b', text: 'Шарф', date: '2 ОКТ' },
-      { id: 'a', text: 'Сертификат на керамику', date: '28 СЕН' },
+      { id: 'b', title: 'Шарф', line: '', checks: null, date: '2 ОКТ' },
+      { id: 'a', title: 'Сертификат на керамику', line: '', checks: null, date: '28 СЕН' },
     ]);
   });
 
@@ -67,7 +67,7 @@ describe('topicProps (тема идей)', () => {
 
   test('«Без темы» — только мои идеи без темы, полоса нейтральная', () => {
     const got = topicProps(s, colors, INBOX);
-    assert.deepEqual([got.caption, got.title, got.color, got.shared, got.own], ['ИДЕИ', 'Без темы', null, null, true]);
+    assert.deepEqual([got.caption, got.title, got.color, got.shared, got.own], ['ЗАМЕТКИ', 'Без темы', null, null, true]);
     assert.deepEqual(got.ideas.map((i) => i.id), ['d']);
   });
 

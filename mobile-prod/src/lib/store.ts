@@ -60,6 +60,12 @@ const code = () => {
 /** Сообщение внизу экрана: с отменой (после удаления) или просто текст (restore нет) */
 export type Undo = { label: string; restore?: () => void; at: number };
 
+/** Сколько висит «ВЕРНУТЬ». Пока висит, правка не уходит на сервер (sync.ts ждёт): вернули — серверу нечего отменять */
+export const UNDO_MS = 5000;
+
+/** Сколько ещё ждать отправки: висит «ВЕРНУТЬ» — до её конца */
+export const undoHoldLeft = (u: Undo | null, now = Date.now()): number => (u?.restore ? Math.max(0, u.at + UNDO_MS - now) : 0);
+
 /** Состояние карточки (bottom sheet) */
 export type Card =
   | {
@@ -168,6 +174,8 @@ type State = {
   groupSheet: boolean;
   voice: VoicePhase;
   tasksView: TasksView;
+  /** Последний вид календаря: в него ведёт переключатель из списка */
+  calendarView: Exclude<TasksView, 'list'>;
   /** Вкладки людей в календаре: чьи дела скрыты (дело скрыто, если скрыты все его люди) */
   calendarHidden: ID[];
   /**
@@ -275,12 +283,18 @@ type Actions = {
   deleteWatch: (id: ID) => void;
   /** Идеи: удалить идею, тему (вместе с её идеями), переименовать / открыть группам */
   deleteIdea: (id: ID) => void;
+  /** Заметка из окна C-Note: новая (своя, в теме topicId) или новый текст своей */
+  putNote: (id: ID, topicId: ID | null, text: string) => void;
+  /** Удалить без «ВЕРНУТЬ» (заметку очистили и вышли) */
+  dropIdea: (id: ID) => void;
   deleteTopic: (id: ID) => void;
   updateTopic: (id: ID, patch: Partial<Pick<Topic, 'title' | 'groupIds'>>) => void;
   /** Своя тема: в архив / из архива */
   archiveTopic: (id: ID, archived: boolean) => void;
   /** Новая тема; если такая уже есть — её id */
   createTopic: (title: string) => ID | null;
+  /** Своя тема из экрана темы: новая с этим id или новые название и текст */
+  putTopic: (id: ID, title: string, body: string) => void;
   setVoiceTopic: (id: ID | null) => void;
   setVoiceParent: (id: ID | null) => void;
 
@@ -356,7 +370,8 @@ const initial: State = {
   voice: 'idle',
   // При запуске — общая неделя, раскрыт сегодняшний день
   tasksView: 'week',
-  collapsedSections: ['past'],
+  calendarView: 'week' as Exclude<TasksView, 'list'>,
+  collapsedSections: ['past', 'done'],
   menu: null,
   calendarDate: toISODate(new Date()),
   voiceTopicId: null,
@@ -701,8 +716,11 @@ export const useStore = create<State & Actions>()(
         }
         return;
       }
-      const toggled = get().tasks.map((t) => (t.id === id ? { ...t, doneAt: t.doneAt ? null : new Date().toISOString() } : t));
+      const before = { tasks: get().tasks };
+      const toggled = before.tasks.map((t) => (t.id === id ? { ...t, doneAt: t.doneAt ? null : new Date().toISOString() } : t));
       set({ tasks: syncParent(toggled, t0.parentId) });
+      // Отмечено — «ВЕРНУТЬ» внизу: видно, что именно отметили; дело остаётся на месте зачёркнутым
+      if (!t0.doneAt) withUndo(`Готово · ${t0.title}`, before);
     },
     deleteTask: (id, occ) => {
       const before = { tasks: get().tasks };
@@ -783,10 +801,24 @@ export const useStore = create<State & Actions>()(
       withUndo('Удалено', before);
     },
 
+    putNote: (id, topicId, text) => {
+      const s = get();
+      const me = s.me;
+      if (!me) return;
+      const now = new Date().toISOString();
+      const cur = s.ideas.find((x) => x.id === id);
+      if (cur) {
+        if (cur.ownerId !== me.id || cur.text === text) return;
+        set({ ideas: s.ideas.map((x) => (x.id === id ? { ...x, text, updatedAt: now } : x)) });
+        return;
+      }
+      set({ ideas: [{ id, ownerId: me.id, topicId, text, createdAt: now, updatedAt: now }, ...s.ideas] });
+    },
+    dropIdea: (id) => set({ ideas: get().ideas.filter((x) => x.id !== id) }),
     deleteIdea: (id) => {
       const before = { ideas: get().ideas };
       set({ ideas: before.ideas.filter((x) => x.id !== id) });
-      withUndo('Идея удалена', before);
+      withUndo('Заметка удалена', before);
     },
     deleteTopic: (id) => {
       const before = { topics: get().topics, ideas: get().ideas };
@@ -812,6 +844,19 @@ export const useStore = create<State & Actions>()(
       set({ topics: [...get().topics, t] });
       return t.id;
     },
+    putTopic: (id, title, body) => {
+      const s = get();
+      const me = s.me;
+      const name = title.trim();
+      if (!me || !name) return;
+      const cur = s.topics.find((t) => t.id === id);
+      if (cur) {
+        if (cur.ownerId !== me.id || (cur.title === name && (cur.body ?? '') === body)) return;
+        set({ topics: s.topics.map((t) => (t.id === id ? { ...t, title: name, body } : t)) });
+        return;
+      }
+      set({ topics: [...s.topics, { id, ownerId: me.id, title: name, groupIds: [], body, createdAt: new Date().toISOString() }] });
+    },
     setVoiceTopic: (voiceTopicId) => set({ voiceTopicId }),
     setVoiceParent: (voiceParentId) => set({ voiceParentId }),
 
@@ -829,7 +874,7 @@ export const useStore = create<State & Actions>()(
     setCard: (card) => set({ card }),
     setGroupSheet: (groupSheet) => set({ groupSheet }),
     setVoice: (voice) => set({ voice }),
-    setTasksView: (tasksView) => set({ tasksView }),
+    setTasksView: (tasksView) => set(tasksView === 'list' ? { tasksView } : { tasksView, calendarView: tasksView }),
     toggleCalendarPerson: (id) => {
       const cur = get().calendarHidden;
       set({ calendarHidden: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
@@ -842,7 +887,12 @@ export const useStore = create<State & Actions>()(
       const cur = get().collapsedSections;
       set({ collapsedSections: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key] });
     },
-    clearUndo: () => set({ undo: null }),
+    clearUndo: () => {
+      const held = !!get().undo?.restore;
+      set({ undo: null });
+      // Правки ждали, пока висит «ВЕРНУТЬ», — отправляем сразу
+      if (held) syncHooks.kick();
+    },
     notice: (label) => set({ undo: { label, at: Date.now() } }),
     setMenu: (menu) => set({ menu }),
     setCalendarDate: (calendarDate) => set({ calendarDate }),
@@ -899,12 +949,14 @@ export const useStore = create<State & Actions>()(
   },
   {
     name: 'kstati-state',
-    version: 4,
+    version: 5,
     // Версия 2: напоминания стали строками («d1@20:00», «m60») — переносим старые правила.
     // Версия 3: одна закладка calendarPerson заменена списком скрытых calendarHidden (новые поля берутся из начального состояния)
     // Версия 4: карантин — записи с кодом отказа (раньше просто операции)
+    // Версия 5: в списке дел раздел СДЕЛАНО — свёрнут, пока не раскроют
     migrate: (old: unknown, version) => {
       if (!isRecord(old)) return old as State & Actions;
+      if (version < 5 && Array.isArray(old.collapsedSections) && !old.collapsedSections.includes('done')) old.collapsedSections = [...old.collapsedSections, 'done'];
       if (version < 4) old.quarantine = migrateQuarantine(old.quarantine);
       if (version < 3) delete old.calendarPerson;
       if (version < 2) {

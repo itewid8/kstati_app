@@ -25,7 +25,6 @@ import {
 import type { IsoDate } from '@/lib/calendarLayout';
 import { taskWhen } from '@/lib/dates';
 import { syncParent } from '@/lib/edits';
-import { editIdea } from '@/lib/ideas';
 import { uid } from '@/lib/ids';
 import { instance } from '@/lib/recur';
 import { useStore } from '@/lib/store';
@@ -209,7 +208,7 @@ const ideaTile = (v: QuickIdeaView, key: QuickTileKey): void => {
   const { idea, own } = v;
   switch (key) {
     case 'edit':
-      if (own) editIdea(idea);
+      if (own) router.push(nav.note(idea.id));
       return;
     case 'toTask': {
       const { title, note } = splitIdea(idea.text);

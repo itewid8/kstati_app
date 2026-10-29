@@ -113,6 +113,8 @@ export function saveDraftItems(lists: Lists, items: readonly DraftItem[], ctx: S
       // Повтор без даты не бывает; повторяющееся дело не отмечается целиком
       const rep = data.date ? (repeat ?? null) : null;
       const fields = normalizeEnd({ ...data, repeat: rep, ...(shared !== undefined && { reminders: shared }) });
+      // Обычное дело типа не хранит
+      if (fields.kind === 'task') fields.kind = undefined;
       // Подзадача живёт в группе своего плана
       const parent = fields.parentId ? tasks.find((t) => t.id === fields.parentId && !t.parentId) : null;
       if (!parent) fields.parentId = null;
@@ -165,11 +167,17 @@ export function saveDraftItems(lists: Lists, items: readonly DraftItem[], ctx: S
       }
     } else if (it.type === 'topic') {
       const title = it.data.title.trim();
+      const { body } = it.data;
       const tid = it.id;
       if (tid) {
         if (has(topics, tid)) ids.push(tid);
-        topics = topics.map((t) => (t.id === tid ? { ...t, title } : t));
-      } else ids.push(topicFor(title));
+        topics = topics.map((t) => (t.id === tid ? { ...t, title, ...(body !== undefined && { body }) } : t));
+      } else {
+        const id = topicFor(title);
+        // Новый список голосом: текст — в созданную (или найденную пустую) тему
+        if (body !== undefined) topics = topics.map((t) => (t.id === id && !t.body?.trim() ? { ...t, body } : t));
+        ids.push(id);
+      }
     } else {
       const topicId = it.data.newTopic?.trim() ? topicFor(it.data.newTopic) : it.data.topicId;
       const text = it.data.title.trim();

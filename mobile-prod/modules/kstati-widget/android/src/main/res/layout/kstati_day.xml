@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Подпись дня в 4×2 / 4×4: высота 20, текст прижат к низу (поле 3) -->
+<!-- Подпись дня в 4×2 / 4×4: высота 16, текст прижат к низу (поле 3) -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
   android:id="@+id/kstati_day_label"
   android:layout_width="match_parent"
-  android:layout_height="20dp"
+  android:layout_height="16dp"
   android:fontFamily="@font/kstati_geist_mono_semibold"
   android:gravity="bottom"
   android:includeFontPadding="false"
   android:letterSpacing="0.08"
   android:maxLines="1"
   android:paddingBottom="3dp"
-  android:textSize="8.5dp" />
+  android:textSize="7.5dp" />

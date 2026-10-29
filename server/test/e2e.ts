@@ -395,6 +395,10 @@ async function scenario(name: string, store: Store) {
   assert.deepEqual(q1, { limit: 50, used: 6, left: 44 });
   assert.deepEqual(await ok('GET', '/voice/quota', undefined, T1), q1, 'запрос счётчика лимит не тратит');
   assert.equal((await call('GET', '/voice/quota')).status, 401);
+  // Отзыв: сохраняется на сервере, пустой и без входа — нет
+  assert.deepEqual(await ok('POST', '/feedback', { kind: 'bug', text: 'Зависает при правке заметки', device: 'iOS 18' }, T1), { ok: true });
+  assert.equal((await call('POST', '/feedback', { kind: 'idea', text: '  ' }, T1)).status, 400);
+  assert.equal((await call('POST', '/feedback', { kind: 'idea', text: 'x' })).status, 401);
   config.voiceDailyLimit = savedLimit;
   ip = '127.0.0.3';
 

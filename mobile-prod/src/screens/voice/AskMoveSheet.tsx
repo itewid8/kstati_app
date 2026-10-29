@@ -65,7 +65,7 @@ export const AskMoveSheet = memo(function AskMoveSheet({
     () => [
       { key: 'cancel', label: 'ОТМЕНА', onPress: onCancel },
       { key: 'edit', label: 'ИЗМЕНИТЬ', onPress: onEdit },
-      { key: 'confirm', label: confirmLabel, tone: 'primary', flex: 1.3, onPress: onConfirm },
+      { key: 'confirm', label: confirmLabel, tone: 'primary', onPress: onConfirm },
     ],
     [onCancel, onEdit, onConfirm, confirmLabel],
   );

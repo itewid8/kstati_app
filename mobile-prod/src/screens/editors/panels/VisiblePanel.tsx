@@ -1,6 +1,6 @@
 /**
- * Раскрытая строка «ВИДНО» (C-EditVisible): «Только я», мои группы с отметкой и подписью режима группы,
- * у каждой — «ВРУЧНУЮ» (отмечено в этом деле) или «ПО ГРУППЕ» (по режиму), и сброс к режимам групп.
+ * Раскрытая строка «ВИДНО» (C-EditVisible): «Только я» и мои группы с отметкой и подписью режима группы.
+ * Отметка у группы — решение для этого дела: режим группы на него больше не влияет.
  */
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -15,8 +15,6 @@ export type VisibleGroup = {
   /** «ВСЕ, КРОМЕ СКРЫТЫХ» / «ТОЛЬКО ВЫБРАННЫЕ» — мой режим в группе */
   mode: string;
   visible: boolean;
-  /** Отмечено вручную в этом деле */
-  manual: boolean;
 };
 
 export type VisiblePanelProps = {
@@ -24,7 +22,6 @@ export type VisiblePanelProps = {
   groups: readonly VisibleGroup[];
   onToggleOnly?: () => void;
   onToggleGroup?: (id: ID) => void;
-  onReset?: () => void;
 };
 
 const Box = memo(function Box({ checked }: { checked: boolean }) {
@@ -36,7 +33,7 @@ const Box = memo(function Box({ checked }: { checked: boolean }) {
   );
 });
 
-export const VisiblePanel = memo(function VisiblePanel({ onlyMe, groups, onToggleOnly, onToggleGroup, onReset }: VisiblePanelProps) {
+export const VisiblePanel = memo(function VisiblePanel({ onlyMe, groups, onToggleOnly, onToggleGroup }: VisiblePanelProps) {
   const { c } = useTheme();
   return (
     <>
@@ -58,7 +55,7 @@ export const VisiblePanel = memo(function VisiblePanel({ onlyMe, groups, onToggl
             key={g.id}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: g.visible }}
-            accessibilityLabel={`${g.name}, ${g.manual ? 'вручную' : 'по группе'}`}
+            accessibilityLabel={g.name}
             onPress={onToggleGroup ? () => onToggleGroup(g.id) : undefined}
             style={[styles.group, { backgroundColor: c.panel }, i > 0 && [styles.divided, { borderTopColor: c.hair }]]}
           >
@@ -66,21 +63,10 @@ export const VisiblePanel = memo(function VisiblePanel({ onlyMe, groups, onToggl
               <Marquee style={[ET.memberName, { color: c.text }]}>{g.name}</Marquee>
               <Marquee style={[styles.mode, { color: c.muted }]}>{g.mode}</Marquee>
             </View>
-            <View style={[styles.tag, { borderColor: g.manual ? c.border : c.hair }]}>
-              <Text style={[styles.tagText, { color: g.manual ? c.text : c.muted }]}>{g.manual ? 'ВРУЧНУЮ' : 'ПО ГРУППЕ'}</Text>
-            </View>
             <Box checked={g.visible} />
           </Pressable>
         ))}
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Сбросить к настройкам групп"
-        onPress={onReset}
-        style={[styles.reset, { borderColor: c.border, backgroundColor: c.panel }]}
-      >
-        <Text style={[styles.resetText, { color: c.text }]}>СБРОСИТЬ К НАСТРОЙКАМ ГРУПП</Text>
-      </Pressable>
     </>
   );
 });
@@ -94,9 +80,5 @@ const styles = StyleSheet.create({
   divided: { borderTopWidth: S.hairline },
   text: { flex: 1, minWidth: 0, gap: 1 },
   mode: { fontFamily: fonts.mono400, fontSize: 9, letterSpacing: 0.18, lineHeight: 11 },
-  tag: { height: 20, borderWidth: S.border, paddingHorizontal: 6, justifyContent: 'center' },
-  tagText: { fontFamily: fonts.mono600, fontSize: 8.5, letterSpacing: 0.68 },
   check: { width: S.checkbox, height: S.checkbox, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
-  reset: { height: 32, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
-  resetText: { fontFamily: fonts.mono600, fontSize: 9, letterSpacing: 0.54 },
 });

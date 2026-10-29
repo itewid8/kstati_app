@@ -13,6 +13,7 @@ import type { Op } from './ops';
 import {
   CATEGORIES,
   PERSON_COLORS,
+  TASK_KINDS,
   type Gender,
   type Genre,
   type Group,
@@ -26,6 +27,8 @@ import {
   type ReminderSettings,
   type Repeat,
   type Task,
+  type Celebrant,
+  type TaskKind,
   type TaskReminderOverride,
   type Topic,
   type User,
@@ -80,6 +83,15 @@ export function toRepeat(v: unknown): Repeat | null {
 }
 
 /** Дело с сервера; groupId — группа, под которой оно пришло (если в записи нет своей) */
+/** Именинник с сервера: имя обязательно, id — если есть */
+function celebrantOf(v: unknown): Celebrant | null {
+  const r = obj(v);
+  const name = str(r.name).trim();
+  if (!name) return null;
+  const id = strOrNull(r.id);
+  return id ? { id, name } : { name };
+}
+
 export function toTask(v: unknown, groupId: ID): Task | null {
   const r = obj(v);
   const id = strOrNull(r.id);
@@ -102,6 +114,8 @@ export function toTask(v: unknown, groupId: ID): Task | null {
     endTime: strOrNull(r.endTime),
     people: strs(r.people),
     parentId: strOrNull(r.parentId),
+    ...(typeof r.kind === 'string' && r.kind !== 'task' && (TASK_KINDS as readonly string[]).includes(r.kind) && { kind: r.kind as TaskKind }),
+    ...(celebrantOf(r.celebrant) && { celebrant: celebrantOf(r.celebrant) }),
     ...(r.only === true && { only: true }),
     ...(r.share !== undefined && r.share !== null && { share: record(r.share, (x) => (typeof x === 'boolean' ? x : null)) }),
     ...(Array.isArray(r.in) && { in: strs(r.in) }),
@@ -158,6 +172,8 @@ export function toTopic(v: unknown, ownerId: ID): Topic | null {
     createdAt: str(r.createdAt),
     // Нет поля (старый сервер) — не трогаем архив; null — не в архиве
     ...('archivedAt' in r && { archivedAt: strOrNull(r.archivedAt) }),
+    // Текст самой темы (сервер не присылает пустой)
+    ...(typeof r.body === 'string' && r.body && { body: r.body }),
   };
 }
 

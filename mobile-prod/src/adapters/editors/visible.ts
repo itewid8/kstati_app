@@ -26,6 +26,5 @@ export function visibleGroups(d: EditorDraft, s: Pick<Snapshot, 'me' | 'groups'>
     name: g.name,
     mode: selectsOnly(g, s.me.id) ? 'ТОЛЬКО ВЫБРАННЫЕ' : 'ВСЕ, КРОМЕ СКРЫТЫХ',
     visible: !d.only && visibleIn(asTask(d), g),
-    manual: d.share[g.id] !== undefined,
   }));
 }

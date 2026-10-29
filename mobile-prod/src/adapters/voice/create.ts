@@ -15,9 +15,17 @@ const TYPE_LABEL: Record<DraftItem['type'], string> = {
   task: 'ДЕЛО',
   wish: 'ХОЧУ',
   watch: 'СМОТРЕТЬ',
-  idea: 'ИДЕЯ',
+  idea: 'ЗАМЕТКА',
   topic: 'ТЕМА',
 };
+
+/** Пункты текста темы одной строкой: «МОЛОКО, ЯЙЦА, ХЛЕБ» */
+const listLine = (body: string) =>
+  body
+    .split('\n')
+    .map((l) => l.replace(/^(?:[-*] \[[ xX]\] ?|[-*•] |\d{1,3}[.)] |#+ )/, '').trim())
+    .filter(Boolean)
+    .join(', ');
 
 const text = (key: string, label: string, value: string): RecognizedField => ({ key, label, kind: 'text', value });
 
@@ -91,7 +99,12 @@ export function createFields(item: DraftItem, s: Snapshot): RecognizedField[] {
         text('topic', 'ТЕМА', clip(upper(topic), 28)),
       ];
     }
-    case 'topic':
-      return [type, { key: 'title', label: 'ЧТО', kind: 'title', value: item.data.title }];
+    case 'topic': {
+      const out: RecognizedField[] = [type, { key: 'title', label: 'ЧТО', kind: 'title', value: item.data.title }];
+      const { body, changes } = item.data;
+      if (changes?.length) out.push(text('changes', 'ИЗМЕНЕНИЯ', clip(upper(changes.join(' · ')), 60)));
+      else if (body?.trim()) out.push(text('list', 'СПИСОК', clip(upper(listLine(body)), 60)));
+      return out;
+    }
   }
 }

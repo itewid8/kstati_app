@@ -64,10 +64,20 @@ describe('createFields — C-Voice «В субботу в семь ужин у �
       ],
     );
     assert.deepEqual(label(createFields({ key: '1', type: 'idea', data: { title: 'Байкал', topicId: 't1', newTopic: null } }, s)), [
-      ['ТИП', 'ИДЕЯ'],
+      ['ТИП', 'ЗАМЕТКА'],
       ['ЧТО', 'Байкал'],
       ['ТЕМА', 'ОТПУСК'],
     ]);
+    // Список голосом: новый — пункты, правка — что поменялось
+    assert.deepEqual(label(createFields({ key: '1', type: 'topic', data: { title: 'Список продуктов', body: '- [ ] Молоко\n- [x] Хлеб' } }, s)), [
+      ['ТИП', 'ТЕМА'],
+      ['ЧТО', 'Список продуктов'],
+      ['СПИСОК', 'МОЛОКО, ХЛЕБ'],
+    ]);
+    assert.deepEqual(
+      label(createFields({ key: '1', type: 'topic', id: 't1', data: { title: 'Отпуск', body: '- [ ] Сыр', changes: ['+ Сыр', '− Хлеб'] } }, s)).at(-1),
+      ['ИЗМЕНЕНИЯ', '+ СЫР · − ХЛЕБ'],
+    );
   });
 });
 

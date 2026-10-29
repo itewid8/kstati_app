@@ -49,6 +49,8 @@ export type SettingsScreenProps = {
   onEditAllDayReminders?: () => void;
   onContactSupport?: () => void;
   onOpenPrivacy?: () => void;
+  /** Отзыв: ошибка или предложение */
+  onOpenFeedback?: () => void;
   /** Настройки виджета на рабочем столе; нет — раздела нет (iOS без платного аккаунта) */
   onOpenWidget?: () => void;
   onCancel?: () => void;
@@ -138,6 +140,7 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
     onEditAllDayReminders,
     onContactSupport,
     onOpenPrivacy,
+    onOpenFeedback,
     onOpenWidget,
     onCancel,
     onSave,
@@ -199,6 +202,7 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
 
           <SectionBox title="О ПРИЛОЖЕНИИ">
             <AccountRow label="Версия" value={version} smallValue chevron={false} />
+            {onOpenFeedback ? <AccountRow label="Ошибка или предложение" onPress={onOpenFeedback} /> : null}
             {showAboutLinks ? <AccountRow label="Написать в поддержку" onPress={onContactSupport} /> : null}
             {showAboutLinks ? <AccountRow label="Политика конфиденциальности" onPress={onOpenPrivacy} /> : null}
           </SectionBox>

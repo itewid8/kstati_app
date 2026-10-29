@@ -23,3 +23,6 @@ CLAUDE-SECURITY-*/
 
 # Выгрузка scripts/inspect.sh — в ней личные данные
 inspect.txt
+
+# Файлы, отложенные на удаление
+_to_delete/

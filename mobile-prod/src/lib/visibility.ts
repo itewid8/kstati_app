@@ -9,10 +9,10 @@
  */
 import type { Group, ID, Task } from './types';
 
-/** «Группа» личного календаря: дела, созданные не из группы, и вид «Личное» */
+/** «Группа» личного календаря: дела, созданные не из группы, и вид «Я» */
 export const PERSONAL = '@me';
 /** Как личный календарь называется в выборе группы и в верхней панели */
-export const PERSONAL_NAME = 'Личное';
+export const PERSONAL_NAME = 'Я';
 
 type ModeGroup = Pick<Group, 'id' | 'memberIds' | 'selectOnly'>;
 type Shareable = Pick<Task, 'createdBy' | 'groupId' | 'only' | 'share'>;

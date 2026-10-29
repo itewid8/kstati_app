@@ -60,10 +60,10 @@ const KstatiWidgetView = (props: IosWidgetProps, environment: WidgetEnvironment<
       </HStack>
       {rows.map((r, i) => (
         <HStack key={i} spacing={6} modifiers={[padding({ vertical: 2 })]}>
-          <Text modifiers={[font({ size: 13, weight: 'medium' }), foregroundStyle(textSet[2] ?? '#111'), lineLimit(1)]}>{r.title}</Text>
+          <Text modifiers={[font({ size: 10.5, weight: 'medium' }), foregroundStyle(textSet[2] ?? '#111'), lineLimit(1)]}>{r.title}</Text>
           <Spacer />
           {r.day ? <Text modifiers={[mono(9), foregroundStyle(timeSet[3] ?? '#5E5E58')]}>{r.day}</Text> : null}
-          <Text modifiers={[mono(12), foregroundStyle(timeSet[2] ?? '#111')]}>{r.time}</Text>
+          <Text modifiers={[mono(9.5), foregroundStyle(timeSet[2] ?? '#111')]}>{r.time}</Text>
         </HStack>
       ))}
       <Spacer />

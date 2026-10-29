@@ -9,7 +9,9 @@ import type { ID, PersonColor } from '@/lib/types';
 import {
   BottomNav,
   DoneRow,
+  ListMotion,
   ListRow,
+  RowMotion,
   ScreenTitle,
   SectionBox,
   TopBar,
@@ -168,15 +170,12 @@ export const WatchScreen = memo(function WatchScreen(props: WatchScreenProps) {
       />
 
       <View style={[styles.abs, { top: insets.top + S.contentTop, bottom: insets.bottom + S.contentBottom }]}>
+        <ListMotion key={filter}>
         <SectionBox title="В ОЧЕРЕДИ" count={pad2(queue.length)} collapsed={!queueOpen} onToggle={toggleQueue} scrollable>
           {queue.map((item) => (
-            <QueueRow
-              key={item.id}
-              item={item}
-              onToggleWatched={onToggleWatched}
-              onOpenItem={onOpenItem}
-              onLongPressItem={onLongPressItem}
-            />
+            <RowMotion key={item.id}>
+              <QueueRow item={item} onToggleWatched={onToggleWatched} onOpenItem={onOpenItem} onLongPressItem={onLongPressItem} />
+            </RowMotion>
           ))}
         </SectionBox>
         <View style={styles.spacer} />
@@ -190,15 +189,17 @@ export const WatchScreen = memo(function WatchScreen(props: WatchScreenProps) {
           style={styles.watched}
         >
           {watched.map((w) => (
-            <DoneRow
-              key={w.id}
-              title={w.title}
-              meta={w.date}
-              checkLabel="Вернуть в очередь"
-              onToggle={onToggleWatched ? () => onToggleWatched(w.id, false) : undefined}
-            />
+            <RowMotion key={w.id}>
+              <DoneRow
+                title={w.title}
+                meta={w.date}
+                checkLabel="Вернуть в очередь"
+                onToggle={onToggleWatched ? () => onToggleWatched(w.id, false) : undefined}
+              />
+            </RowMotion>
           ))}
         </SectionBox>
+        </ListMotion>
       </View>
 
       <BottomNav active="watch" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />

@@ -11,6 +11,7 @@ import { SettingsScreen, type RecognitionLang } from '@/screens/account/Settings
 import { useVpnActive } from '../../../modules/kstati-net';
 import { nav, useInsets } from '../common';
 import { backToProfile } from './back';
+import { accountRoutes } from './routes';
 
 /** «0.1.0 (1)»: версия и номер сборки из app.json */
 const VERSION = (() => {
@@ -20,6 +21,7 @@ const VERSION = (() => {
 })();
 
 const editReminders = () => router.push(nav.reminders());
+const openFeedback = () => router.push(accountRoutes.feedback());
 
 /** Выбор на экране, ещё не сохранённый: только то, что меняли */
 type Draft = { theme?: ThemePref; micMode?: MicMode; language?: RecognitionLang; remindersOn?: boolean };
@@ -87,6 +89,7 @@ export function SettingsContainer() {
       onEditTimedReminders={editReminders}
       onEditAllDayReminders={editReminders}
       onOpenWidget={OPEN_WIDGET}
+      onOpenFeedback={openFeedback}
       onCancel={backToProfile}
       onSave={onSave}
     />

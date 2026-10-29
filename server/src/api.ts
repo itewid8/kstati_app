@@ -14,7 +14,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
 import { apiLevel } from './client.js';
-import { giftrev, grev, irev, migrated, PERSON_COLORS, publicUser, trev, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type WatchItem, type Wish } from './store/index.js';
+import { giftrev, grev, irev, migrated, PERSON_COLORS, publicUser, TASK_KINDS, trev, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type WatchItem, type Wish } from './store/index.js';
 import { CATEGORIES } from './types.js';
 import { ownerPart, PERSONAL, visibleIn } from './visibility.js';
 
@@ -71,6 +71,10 @@ const TaskIn = z.object({
   endTime: Time5.optional(),
   people: z.array(Id).max(50).optional(),
   parentId: Id.nullable().optional(),
+  /** Тип дела: обычное, день рождения, важный день, путешествие. Нет поля — как было (старое приложение) */
+  kind: z.enum(TASK_KINDS).optional(),
+  /** Именинник: участник группы или имя; null — убрать; нет поля — как было */
+  celebrant: z.object({ id: Id.optional(), name: z.string().trim().min(1).max(80) }).nullable().optional(),
 });
 const WatchIn = z.object({
   id: Id,
@@ -102,12 +106,14 @@ const TopicIn = z.object({
   groupIds: z.array(Id).max(20),
   /** S2: в архиве с этого момента; null — вернуть из архива; нет поля — не трогать (старое приложение) */
   archivedAt: Stamp.optional(),
+  /** Тема — сама заметка: её текст (строки с разметкой, как у заметки). Нет поля — не трогать (старое приложение) */
+  body: z.string().max(20000).optional(),
 });
-/** Идея: текст и тема (null — «Без темы») */
+/** Идея (заметка внутри темы): текст и тема (null — «Без темы») */
 const IdeaIn = z.object({
   id: Id,
   topicId: Id.nullable(),
-  text: z.string().trim().min(1).max(4000),
+  text: z.string().trim().min(1).max(20000),
 });
 
 const Op = z.discriminatedUnion('op', [
@@ -480,7 +486,15 @@ export class Data {
         // Конец раньше начала не бывает
         const endDate = inT.endDate && inT.date && inT.endDate > inT.date ? inT.endDate : null;
         const endTime = inT.endTime && (endDate || (inT.time && inT.endTime > inT.time)) ? inT.endTime : null;
-        const { ownerId: _o, only: _on, share: _sh, groupId: _g, ...fields } = inT;
+        const { ownerId: _o, only: _on, share: _sh, groupId: _g, kind: kindIn, celebrant: celebrantIn, ...fields } = inT;
+        // Тип: нет поля — как было; обычное дело не храним
+        const kind = kindIn ?? (old?.type === 'task' ? old.kind : undefined);
+        // Именинник — только у дня рождения; id — только человек из круга владельца
+        const celebrantRaw = celebrantIn === undefined ? (old?.type === 'task' ? old.celebrant : undefined) : celebrantIn;
+        const celebrant =
+          kind === 'birthday' && celebrantRaw
+            ? { ...(celebrantRaw.id && circle.has(celebrantRaw.id) && { id: celebrantRaw.id }), name: celebrantRaw.name }
+            : undefined;
         const task: Task = {
           type: 'task',
           ...fields,
@@ -493,6 +507,8 @@ export class Data {
           home,
           ...(only && { only }),
           ...(share && Object.keys(share).length && { share }),
+          ...(kind && kind !== 'task' && { kind }),
+          ...(celebrant && { celebrant }),
           createdBy: owner,
           createdAt: old?.createdAt ?? now,
           updatedAt: now,
@@ -614,6 +630,7 @@ export class Data {
         const groupIds = [...new Set(op.topic.groupIds)].filter((g) => mine.has(g));
         // Архив (S2): менять может только владелец — тема пишется только в его идеи. Нет поля — как было
         const archivedAt = op.topic.archivedAt === undefined ? (old?.kind === 'topic' ? (old.archivedAt ?? null) : null) : op.topic.archivedAt;
+        const body = op.topic.body === undefined ? (old?.kind === 'topic' ? (old.body ?? '') : '') : op.topic.body.replace(/\s+$/, '');
         const t: Topic = {
           kind: 'topic',
           id: op.topic.id,
@@ -621,6 +638,7 @@ export class Data {
           title: op.topic.title,
           groupIds,
           ...(archivedAt && { archivedAt }),
+          ...(body && { body }),
           createdAt: old?.createdAt ?? now,
           updatedAt: now,
         };

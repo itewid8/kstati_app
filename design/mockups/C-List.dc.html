@@ -18,28 +18,26 @@ body{margin:0}
 <div style="position: relative; width: 390px; height: 844px; overflow: hidden; border-radius: 20px; background: {{t.bg}}; color: {{t.text}}; outline: 1.5px solid {{t.border}}">
 
 <div style="position: absolute; left: 16px; right: 16px; top: 20px; height: 40px; display: flex; align-items: center; gap: 8px">
-<button style="height: 40px; flex: 1; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-align: left; padding: 0 10px; display: flex; align-items: center; justify-content: space-between">МЫ С КАРИНОЙ<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2.5"><path d="m6 9 6 6 6-6"></path></svg></button>
-<button aria-label="Добавить" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg></button>
-<button aria-label="Лента" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></button>
-<button aria-label="Настройки" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.s}}; color: #FFFFFF; font-family: 'Geist Mono', monospace; font-size: 14px; font-weight: 600">С</button>
+<button style="height: 40px; flex: 1; border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-align: left; padding: 0 12px; display: flex; align-items: center; justify-content: space-between">МЫ С КАРИНОЙ<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2.5"><path d="m6 9 6 6 6-6"></path></svg></button>
+<div style="display: flex; flex-shrink: 0"><button aria-label="Список" style="width: 36px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.text}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.bg}}" stroke-width="2"><path d="M5.5 6h13M5.5 12h13M5.5 18h13"></path></svg></button><button aria-label="Календарь" style="width: 36px; height: 40px; margin-left: -1.5px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M4 5h16v15H4zM4 10h16M9 3v4M15 3v4"></path></svg></button></div>
+<button aria-label="Добавить" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg></button>
+<button aria-label="Лента" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text}}" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></button>
+<button aria-label="Настройки" style="width: 40px; height: 40px; border: 1.5px solid {{t.border}}; background: {{t.s}}; color: {{t.sInk}}; font-family: 'Geist Mono', monospace; font-size: 15px; font-weight: 600">С</button>
 </div>
 
 <div style="position: absolute; left: 16px; right: 16px; top: 70px; height: 42px; display: flex; align-items: flex-end; justify-content: space-between">
 <span style="font-size: 40px; font-weight: 700; letter-spacing: -0.05em; line-height: 42px">Дела</span>
-<div style="display: flex; margin-bottom: 5px">
-<button style="height: 28px; padding: 0 9px; border: 1.5px solid {{t.border}}; background: {{t.text}}; color: {{t.bg}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em">СПИСОК</button>
-<button style="height: 28px; padding: 0 9px; border: 1.5px solid {{t.border}}; border-left: 0; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.08em">НЕДЕЛЯ</button>
-</div>
+
 </div>
 
-<div style="position: absolute; left: 16px; right: 16px; top: 122px; display: flex; flex-direction: column; gap: 10px">
+<div style="position: absolute; left: 16px; right: 16px; top: 122px; bottom: 98px; overflow: hidden; display: flex; flex-direction: column; gap: 10px">
 <sc-for list="{{t.sections}}" as="sec" hint-placeholder-count="3">
-<div style="display: flex; flex-direction: column; border: 1.5px solid {{t.border}}">
-<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>{{sec.label}}</span><span>{{sec.date}}</span></div>
+<div style="flex-shrink: 0; display: flex; flex-direction: column; border: 1.5px solid {{t.border}}">
+<div style="height: 22px; padding: 0 8px; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.08em"><span>{{sec.label}}</span><span style="display: flex; align-items: center; gap: 6px">{{sec.date}}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="transform: rotate({{sec.rot}}deg)"><path d="m6 15 6-6 6 6"></path></svg></span></div>
 <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="2">
 <div style="position: relative; height: {{r.h}}px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 {{r.pad}}px; background: {{r.bg}}; background-image: {{r.hatch}}; background-size: 100% 100%; border-top: 1px solid {{t.hair}}">
 <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1.5px; background: {{r.strip}}"></span>
-<button role="checkbox" aria-checked="{{r.checked}}" aria-label="Готово" style="width: 32px; height: 32px; flex-shrink: 0; border: 0; background: none; padding: 0; display: flex; align-items: center; justify-content: center"><span style="width: 18px; height: 18px; box-sizing: border-box; border: 1.5px solid {{t.border}}; background: {{r.box}}"></span></button>
+<button role="checkbox" aria-checked="{{r.checked}}" aria-label="Готово" style="width: 32px; height: 32px; flex-shrink: 0; border: 0; background: none; padding: 0; display: flex; align-items: center; justify-content: center"><span style="width: 18px; height: 18px; box-sizing: border-box; border: 1.5px solid {{t.border}}; background: {{r.box}}; display: flex; align-items: center; justify-content: center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{r.tick}}" stroke-width="3.5"><path d="M5 12l5 5L20 7"></path></svg></span></button>
 <span style="flex: 1; min-width: 0; font-size: {{r.size}}px; line-height: 16px; font-weight: {{r.weight}}; color: {{r.color}}; text-decoration: {{r.deco}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.title}}</span>
 <span style="font-family: 'Geist Mono', monospace; font-size: {{r.timeSize}}px; font-weight: 600; letter-spacing: -0.02em; color: {{r.color}}">{{r.time}}</span>
 </div>
@@ -53,7 +51,7 @@ body{margin:0}
 <button style="border: 1.5px solid {{t.border}}; background: {{t.text}}; color: {{t.bg}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em">ДЕЛА</button>
 <button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ХОЧУ</button>
 <button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">СМОТРЕТЬ</button>
-<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ИДЕИ</button>
+<button style="border: 1.5px solid {{t.border}}; background: {{t.panel}}; color: {{t.text}}; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em">ЗАМЕТКИ</button>
 </div>
 <button aria-label="Голосовая команда" style="width: 104px; border: 1.5px solid {{t.border}}; background: {{t.panel}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px"><span style="width: 26px; height: 26px; border-radius: 13px; background: {{t.red}}; box-shadow: 0 0 10px {{t.glow}}"></span><span style="font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; color: {{t.text}}">REC</span></button>
 </div>
@@ -69,7 +67,9 @@ class Component extends DCLogic {
       { bg: '#E7E6E1', panel: '#F4F3EF', border: '#161616', hair: '#CFCEC8', text: '#111111', muted: '#5E5E58', red: '#E0281E', s: '#2F6BDB', k: '#E2407E', a: 0.14 },
       { bg: '#0B0B0B', panel: '#151515', border: '#2E2E2E', hair: '#242424', text: '#F2F2F0', muted: '#7C7C78', red: '#FF3B30', s: '#5B8DEF', k: '#F06A9B', a: 0.16 },
     ];
+    // ПРОШЛО и СДЕЛАНО по умолчанию свёрнуты (шапка нажимается — раскрыть)
     const data = [
+      { label: 'ПРОШЛО', date: '02', rows: [], collapsed: true },
       { label: 'СЕГОДНЯ', date: 'ПН 05', rows: [['Стоматолог', '09:30', 's', true], ['Забрать посылку', '—', 'k', true], ['Йога', '19:00', 'k'], ['Подарок Лене', '—', 's', false, 'task', true]] },
       { label: 'ЗАВТРА', date: 'ВТ 06', rows: [['Оплатить коммуналку', '—', 's'], ['Ужин с Леной', '19:00', 'sk']] },
       { label: 'НЕДЕЛЯ', date: '07—11', rows: [
@@ -80,6 +80,7 @@ class Component extends DCLogic {
         ['Баня', 'СБ 15', 'sk'],
         ['Закупка на неделю', 'ВС 12', 'sk'],
       ] },
+      { label: 'СДЕЛАНО', date: '05', rows: [], collapsed: true },
     ];
     // Штриховка — тот же узор SVG, что в приложении (ui/Hatch.tsx): линии 1.5 с шагом 6, поворот 45°, 16% цвета текста
     const hatch = (col) => "url('data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='100%' height='100%'><defs><pattern id='h' patternUnits='userSpaceOnUse' width='6' height='6' patternTransform='rotate(45)'><rect x='0' y='0' width='1.5' height='6' fill='" + col + "' fill-opacity='0.16'/></pattern></defs><rect x='0' y='0' width='100%' height='100%' fill='url(#h)'/></svg>").replace(/'/g, '%27') + "')";
@@ -88,7 +89,7 @@ class Component extends DCLogic {
         ...p,
         glow: rgba(p.red, 0.6),
         sections: data.map((sec) => ({
-          label: sec.label, date: sec.date,
+          label: sec.label, date: sec.date, rot: sec.collapsed ? 180 : 0,
           // hidden — моё дело, скрытое от этой группы: мне видно заштрихованным
           rows: sec.rows.map(([title, time, who, done, kind, hidden]) => {
             const sub = kind === 'sub';
@@ -98,7 +99,7 @@ class Component extends DCLogic {
               weight: kind === 'plan' ? 600 : 500,
               bg: kind === 'plan' || sub ? rgba(p.k, p.a) : p.panel,
               strip: who === 'sk' ? 'linear-gradient(' + p.s + ' 50%, ' + p.k + ' 50%)' : who === 's' ? p.s : p.k,
-              box: done ? p.text : 'transparent',
+              box: done ? p.text : 'transparent', tick: done ? p.bg : 'none',
               color: done ? p.muted : p.text, deco: done ? 'line-through' : 'none',
               hatch: hidden ? hatch(p.text) : 'none',
             };

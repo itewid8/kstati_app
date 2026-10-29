@@ -46,7 +46,7 @@ export function WidgetSettingsContainer({ widgetId }: Props) {
   const preview = useMemo((): WidgetPreviewData => {
     const now = Date.now();
     const today = todayOf(now);
-    const items = file ? visibleAt(file.items, now, 6, prefs.groups) : [];
+    const items = file ? visibleAt(file.items, now, 12, prefs.groups) : [];
     const dark = scheme === 'dark';
     const strip = (x: WidgetItem) => x.c.map((pair) => (dark ? pair[1] : pair[0]));
     return {
@@ -56,7 +56,7 @@ export function WidgetSettingsContainer({ widgetId }: Props) {
         label: d.label,
         rows: d.items.map((x) => ({ key: `${x.id}@${x.occ ?? ''}`, title: x.title, time: x.time ?? '—', strip: strip(x), done: x.d === true })),
       })),
-      items: items.slice(0, 5).map((x) => ({ key: `${x.id}@${x.occ ?? ''}`, title: x.title, when: faceWhen(x.date, x.time, today, true), strip: strip(x) })),
+      items: items.slice(0, 6).map((x) => ({ key: `${x.id}@${x.occ ?? ''}`, title: x.title, when: faceWhen(x.date, x.time, today, true), strip: strip(x) })),
       dark,
     };
   }, [file, prefs.groups, scheme]);

@@ -5,7 +5,7 @@
  */
 import { memo, useCallback, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Icon, PersonTag, size as S, type as T, useTheme } from '@/ui';
+import { Icon, PersonTag, size as S, type as T, useInputColors, useTheme } from '@/ui';
 import { useKeyboardTarget } from './keyboard';
 import { ET } from './text';
 import { useWebAutoHeight } from './webAutoHeight';
@@ -91,6 +91,8 @@ type FieldInputRowProps = {
   empty: string;
   maxLength: number;
   inputRef?: RefObject<TextInput | null>;
+  /** Первая строка таблицы — без линии сверху */
+  first?: boolean;
   onChangeText: (text: string) => void;
 };
 
@@ -99,8 +101,9 @@ type FieldInputRowProps = {
  * FieldDescription. Справа «›», как у остальных строк в макете. Поле в фокусе сообщает окну (useKeyboardTarget),
  * и окно прокручивается так, чтобы строка была над клавиатурой
  */
-export const FieldInputRow = memo(function FieldInputRow({ label, value, empty, maxLength, inputRef, onChangeText }: FieldInputRowProps) {
+export const FieldInputRow = memo(function FieldInputRow({ label, value, empty, maxLength, inputRef, first, onChangeText }: FieldInputRowProps) {
   const { c } = useTheme();
+  const ic = useInputColors();
   const setTarget = useKeyboardTarget();
   const row = useRef<View>(null);
   const own = useRef<TextInput>(null);
@@ -118,7 +121,7 @@ export const FieldInputRow = memo(function FieldInputRow({ label, value, empty, 
   }, [setTarget]);
 
   return (
-    <Pressable ref={row} accessible={false} onPress={focus} style={[styles.row, styles.divided, { backgroundColor: c.panel, borderTopColor: c.hair }]}>
+    <Pressable ref={row} accessible={false} onPress={focus} style={[styles.row, first ? styles.first : [styles.divided, { borderTopColor: c.hair }], { backgroundColor: c.panel }]}>
       <View style={styles.label}>
         <Text style={[T.fieldLabel, { color: c.muted }]}>{label}</Text>
       </View>
@@ -135,8 +138,8 @@ export const FieldInputRow = memo(function FieldInputRow({ label, value, empty, 
           maxLength={maxLength}
           textAlignVertical="top"
           underlineColorAndroid="transparent"
-          selectionColor={c.text}
-          cursorColor={c.text}
+          selectionColor={ic.selectionColor}
+          cursorColor={ic.cursorColor}
           accessibilityLabel={label}
           style={[ET.description, styles.input, auto.style, { color: c.text }]}
         />

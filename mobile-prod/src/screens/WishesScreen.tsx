@@ -12,6 +12,8 @@ import {
   DoneRow,
   ListRow,
   RowLinkButton,
+  ListMotion,
+  RowMotion,
   ScreenTitle,
   SectionBox,
   Tabs,
@@ -174,6 +176,8 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
       <Tabs items={tabs} value={selectedPersonId} onChange={onSelectPerson} style={[styles.tabs, { top: insets.top + S.tabsTop }]} />
 
       <View style={[styles.content, { top: insets.top + S.contentTop, bottom: insets.bottom + S.contentBottom }]}>
+        {/* Другой человек — новый список целиком, без анимации строк */}
+        <ListMotion key={selectedPersonId}>
         <SectionBox
           title="ХОЧУ"
           count={pad2(wishes.length)}
@@ -182,14 +186,9 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
           scrollable
         >
           {wishes.map((w) => (
-            <WishItem
-              key={w.id}
-              wish={w}
-              onToggleGift={onToggleGift}
-              onOpenLink={onOpenLink}
-              onOpenWish={onOpenWish}
-              onLongPressWish={onLongPressWish}
-            />
+            <RowMotion key={w.id}>
+              <WishItem wish={w} onToggleGift={onToggleGift} onOpenLink={onOpenLink} onOpenWish={onOpenWish} onLongPressWish={onLongPressWish} />
+            </RowMotion>
           ))}
         </SectionBox>
         <View style={styles.spacer} />
@@ -203,15 +202,17 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
           style={styles.gifted}
         >
           {gifted.map((g) => (
-            <DoneRow
-              key={g.id}
-              title={g.title}
-              meta={g.from}
-              checkLabel="Вернуть в список"
-              onToggle={onToggleGift ? () => onToggleGift(g.id, false) : undefined}
-            />
+            <RowMotion key={g.id}>
+              <DoneRow
+                title={g.title}
+                meta={g.from}
+                checkLabel="Вернуть в список"
+                onToggle={onToggleGift ? () => onToggleGift(g.id, false) : undefined}
+              />
+            </RowMotion>
           ))}
         </SectionBox>
+        </ListMotion>
       </View>
 
       <BottomNav active="wishes" onSelect={onNavigate} onRec={onRec} style={[styles.nav, { bottom: insets.bottom + S.navBottom }]} />

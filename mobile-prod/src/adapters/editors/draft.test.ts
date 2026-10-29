@@ -136,10 +136,20 @@ describe('draftToItem', () => {
         endTime: null,
         people: ['sanya', 'karina'],
         parentId: null,
+        kind: 'task',
+        celebrant: null,
         only: false,
         share: {},
       },
     });
+  });
+
+  test('тип: день рождения — на весь день и каждый год; обратно в «дело» повтор и дата остаются', () => {
+    const d = reduceDraft(draftFromTask(DINNER, s), { type: 'kind', kind: 'birthday' });
+    assert.deepEqual([d.kind, d.time, d.endTime, d.endDate, d.repeat], ['birthday', null, null, null, { freq: 'year', every: 1 }]);
+    const back = reduceDraft(d, { type: 'kind', kind: 'task' });
+    assert.deepEqual([back.kind, back.date, back.repeat], ['task', '2026-10-10', { freq: 'year', every: 1 }]);
+    assert.equal(reduceDraft(draftFromTask(DINNER, s), { type: 'kind', kind: 'trip' }).time, '19:00', 'путешествие время не трогает');
   });
 
   test('раз серии: правка меняет всю серию, сдвиг даты — от начала серии', () => {
@@ -254,5 +264,23 @@ describe('название и описание — правка прямо в о
     assert.equal(noteValue(apply(d, { type: 'note', note: '  \n' })), null);
     assert.equal(noteValue(apply(d, { type: 'note', note: 'Взять торт\n' })), 'Взять торт\n');
     assert.equal(draftToItem(apply(d, { type: 'title', title: 'Ужин' }, { type: 'note', note: ' Взять торт\n' })).data.note, 'Взять торт');
+  });
+});
+
+describe('reduceDraft — именинник', () => {
+  test('имя ведёт название «ДР <имя>», пока его не переписали; участник выбирается и снимается', () => {
+    const bd = apply(emptyDraft(s, { date: '2026-10-06' }), { type: 'kind', kind: 'birthday' });
+    let d = apply(bd, { type: 'celebrantName', name: 'Петя' });
+    assert.deepEqual([d.title, d.celebrant], ['ДР Петя', { name: 'Петя' }]);
+    d = apply(d, { type: 'celebrantPick', id: 'karina', name: 'Карина' });
+    assert.deepEqual([d.title, d.celebrant], ['ДР Карина', { id: 'karina', name: 'Карина' }]);
+    d = apply(d, { type: 'celebrantPick', id: 'karina', name: 'Карина' });
+    assert.deepEqual([d.title, d.celebrant], ['', null]);
+    d = apply(d, { type: 'title', title: 'Юбилей бабушки' }, { type: 'celebrantName', name: 'Бабушка' });
+    assert.equal(d.title, 'Юбилей бабушки', 'своё название не трогаем');
+    const item = draftToItem(d);
+    assert.deepEqual(item.type === 'task' && item.data.celebrant, { name: 'Бабушка' });
+    const other = draftToItem(apply(d, { type: 'kind', kind: 'important' }));
+    assert.equal(other.type === 'task' && other.data.celebrant, null, 'не день рождения — без именинника');
   });
 });

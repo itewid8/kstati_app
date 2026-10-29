@@ -4,9 +4,10 @@
  * Строка рисуется, только если полоса вмещает её по высоте целиком (fitTextLines).
  */
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fitTextLines } from '@/lib/calendarLayout';
-import { Hatch, LONG_PRESS_MS, Marquee, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import type { TaskKind } from '@/lib/types';
+import { Hatch, Icon, KIND_ICON, LONG_PRESS_MS, Marquee, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { PeopleFill, PeopleTip } from './PeopleColor';
 
 export type AllDayBarSize = {
@@ -36,6 +37,8 @@ type Props = {
   colors: readonly string[];
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
+  /** Тип — мини-иконка перед названием */
+  kind?: TaskKind;
   onPress?: () => void;
   /** Удержание: полоса отдаёт своё место в окне и копию (быстрые действия) */
   onLongPress?: LiftHandler;
@@ -61,10 +64,13 @@ export const AllDayBar = memo(function AllDayBar(props: Props) {
       {props.hidden ? <Hatch /> : null}
       <PeopleTip colors={colors} width={TIP} />
       {fits ? (
-        <Marquee style={[styles.title, { fontSize, letterSpacing, lineHeight: height, color: c.text }]}>
-          {title}
-          {meta ? <Text style={[styles.meta, { color: c.muted }]}>{meta}</Text> : null}
-        </Marquee>
+        <View style={styles.row}>
+          {props.kind ? <Icon name={KIND_ICON[props.kind]} size={Math.round(fontSize + 1)} color={c.text} /> : null}
+          <Marquee style={[styles.title, styles.flex, { fontSize, letterSpacing, lineHeight: height, color: c.text }]}>
+            {title}
+            {meta ? <Text style={[styles.meta, { color: c.muted }]}>{meta}</Text> : null}
+          </Marquee>
+        </View>
       ) : null}
     </Pressable>
   );
@@ -73,5 +79,7 @@ export const AllDayBar = memo(function AllDayBar(props: Props) {
 const styles = StyleSheet.create({
   bar: { position: 'absolute', overflow: 'hidden' },
   title: { fontFamily: fonts.sans600 },
+  row: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  flex: { flex: 1, minWidth: 0 },
   meta: { fontFamily: fonts.mono400 },
 });

@@ -46,7 +46,7 @@ export const AskAgendaSheet = memo(function AskAgendaSheet({
   const actions = useMemo<SheetAction[]>(
     () => [
       { key: 'close', label: 'ЗАКРЫТЬ', onPress: onClose },
-      { key: 'open', label: openLabel, tone: 'primary', flex: 1.6, onPress: onOpen },
+      { key: 'open', label: openLabel, tone: 'primary', onPress: onOpen },
     ],
     [onClose, onOpen, openLabel],
   );

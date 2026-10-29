@@ -15,7 +15,7 @@ import { memo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { ClipPath, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { COLUMN, fitTextLines, textRoom, type ColumnBlock } from '@/lib/calendarLayout';
-import { useHatchId, HatchPattern, LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { useHatchId, HatchPattern, Icon, LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
 import { hardStops, useSvgId } from './PeopleColor';
 import { useTextLines } from './useTextLines';
 
@@ -41,12 +41,17 @@ const WORD = Platform.OS === 'web' ? { flexShrink: 1, textOverflow: 'clip' } : {
  * (CSS без переноса внутри слова, overflow: hidden). Обычный Text на телефоне ломал бы такое слово по буквам.
  * Слова — строки одной строкой в ряду с переносом: зазор колонок (columnGap) — ширина пробела, на краю строки его нет
  */
-type TitleWordsProps = { title: string; color: string; done?: boolean; onLayout?: (e: LayoutChangeEvent) => void };
+type TitleWordsProps = { title: string; color: string; done?: boolean; check?: string; onLayout?: (e: LayoutChangeEvent) => void };
 
-const TitleWords = memo(function TitleWords({ title, color, done, onLayout }: TitleWordsProps) {
+const TitleWords = memo(function TitleWords({ title, color, done, check, onLayout }: TitleWordsProps) {
   const words = title.split(SPACES).filter(Boolean);
   return (
     <View onLayout={onLayout} style={styles.words}>
+      {done && check ? (
+        <View style={styles.check}>
+          <Icon name="check" size={8} color={check} />
+        </View>
+      ) : null}
       {words.map((w, i) => (
         <Text key={i} numberOfLines={1} ellipsizeMode="clip" style={[styles.title, WORD, { color }, done && styles.done]}>
           {w}
@@ -77,7 +82,7 @@ type Props = {
 
 export const WeekEventBlock = memo(function WeekEventBlock(props: Props) {
   const { colX, gridY, block, title, time, who, done, colors, onPress, onLongPress } = props;
-  const { c } = useTheme();
+  const { c, person } = useTheme();
   // Копия — в начале координат рамки: колонка и сетка сдвинуты на положение блока
   const lift = useLift(onLongPress, 'block', () => (
     <WeekEventBlock {...props} colX={-block.x} gridY={-block.y} onPress={undefined} onLongPress={undefined} />
@@ -100,7 +105,7 @@ export const WeekEventBlock = memo(function WeekEventBlock(props: Props) {
   const firstText = bands.findIndex((b) => b.right - b.left > COLUMN.STRIP + EPS);
   const text = (measured: boolean) => (
     <View style={[styles.text, { width: textWidth, height: fit.height }]}>
-      <TitleWords title={title} color={c.text} done={done} onLayout={measured ? measure[0] : undefined} />
+      <TitleWords title={title} color={c.text} done={done} check={person('green')} onLayout={measured ? measure[0] : undefined} />
       {fit.lines[1] ? (
         <Text onLayout={measured ? measure[1] : undefined} style={[styles.mono, { color: c.text }]}>
           {time}
@@ -180,5 +185,6 @@ const styles = StyleSheet.create({
   words: { flexShrink: 0, flexDirection: 'row', flexWrap: 'wrap', columnGap: WORD_GAP },
   title: { fontFamily: fonts.sans600, fontSize: TITLE_SIZE, lineHeight: LINE.title, letterSpacing: TITLE_TRACKING },
   done: { textDecorationLine: 'line-through' },
+  check: { height: LINE.title, justifyContent: 'center' },
   mono: { flexShrink: 0, fontFamily: fonts.mono400, fontSize: 7, lineHeight: LINE.mono, letterSpacing: -0.14 },
 });

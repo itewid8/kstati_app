@@ -45,6 +45,16 @@ describe('saveDraftItems', () => {
     assert.deepEqual([...saveDraftItems(lists(), [{ ...edit, id: 'gone' }], ctx('g1')).ids], []);
   });
 
+  test('список голосом: новая тема с пунктами; правка — текст существующей темы', () => {
+    const body = '- [ ] Молоко\n- [ ] Хлеб';
+    const r = saveDraftItems(lists(), [{ key: 'l', type: 'topic', data: { title: 'Список продуктов', body } }], ctx('g1'));
+    assert.equal(r.lists.topics.find((t) => t.id === r.ids[0])?.body, body);
+    const id = r.ids[0]!;
+    const e = saveDraftItems(r.lists, [{ key: 'e', type: 'topic', id, data: { title: 'Список продуктов', body: '- [ ] Молоко', changes: ['− Хлеб'] } }], ctx('g1'));
+    assert.deepEqual([...e.ids], [id]);
+    assert.equal(e.lists.topics.find((t) => t.id === id)?.body, '- [ ] Молоко');
+  });
+
   test('несколько записей — id по порядку; ideaTopicId — тема первой идеи', () => {
     const items: DraftItem[] = [
       { key: 'w', type: 'wish', data: { title: 'Хочу', note: '', link: '' } },

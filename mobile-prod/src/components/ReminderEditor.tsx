@@ -161,7 +161,7 @@ const CustomBefore = ({ onAdd, onCancel }: CustomProps) => {
       <SheetButtons
         buttons={[
           { key: 'cancel', label: 'ОТМЕНА', onPress: onCancel },
-          { key: 'add', label: 'ДОБАВИТЬ', tone: 'primary', flex: 1.3, disabled: min === 0, onPress: () => onAdd(specM(min)) },
+          { key: 'add', label: 'ДОБАВИТЬ', tone: 'primary', disabled: min === 0, onPress: () => onAdd(specM(min)) },
         ]}
       />
     </View>
@@ -189,7 +189,7 @@ const CustomDays = ({ onAdd, onCancel }: CustomProps) => {
       <SheetButtons
         buttons={[
           { key: 'cancel', label: 'ОТМЕНА', onPress: onCancel },
-          { key: 'add', label: 'ДОБАВИТЬ', tone: 'primary', flex: 1.3, onPress: () => onAdd(spec) },
+          { key: 'add', label: 'ДОБАВИТЬ', tone: 'primary', onPress: () => onAdd(spec) },
         ]}
       />
     </View>
