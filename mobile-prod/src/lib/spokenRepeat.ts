@@ -3,11 +3,11 @@
  * «каждое 15 число», «каждый год 8 марта», «через день», «до конца года», «10 раз».
  * Считаем кодом, как даты и время: облегчённая модель тут ошибается, а правила простые.
  *
- * Этот файл один и тот же в двух местах: server/src/repeat.ts и mobile/src/lib/spokenRepeat.ts
+ * Этот файл один и тот же в двух местах: server/src/repeat.ts и mobile-prod/src/lib/spokenRepeat.ts
  * (приложение разбирает фразы само в режиме без сервера). Правите один — скопируйте во второй.
  */
 
-/** Как в mobile/src/lib/types.ts (Repeat) */
+/** Как в mobile-prod/src/lib/types.ts (Repeat) */
 export type Repeat = {
   freq: 'day' | 'week' | 'month' | 'year';
   every: number;

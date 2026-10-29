@@ -69,5 +69,8 @@ export function useNoteEditor(initial: string, save: (text: string) => void, opt
     [active, edit],
   );
 
-  return { blocks, active, caret, flush, onChangeText, onBackspace, onToggleCheck, onTool, onFocus: setActive };
+  /** Курсор в конец текста (из названия — клавишей «Далее») */
+  const focusEnd = useCallback(() => moveCaret({ index: Math.max(0, latest.current.length - 1), at: 'end' }), [moveCaret]);
+
+  return { blocks, active, caret, flush, focusEnd, onChangeText, onBackspace, onToggleCheck, onTool, onFocus: setActive };
 }

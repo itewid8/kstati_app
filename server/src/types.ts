@@ -1,4 +1,4 @@
-// Те же типы, что в приложении (mobile/src/lib/types.ts, mockParser.ts) — формат ответа общий.
+// Те же типы, что в приложении (mobile-prod/src/lib/types.ts, mockParser.ts) — формат ответа общий.
 
 /** Записи, которые голос может менять. Идеи — только перенос в другую тему и удаление */
 export type ItemType = 'task' | 'wish' | 'watch' | 'idea';

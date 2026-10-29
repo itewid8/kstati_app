@@ -1,5 +1,5 @@
 /**
- * Заметка внутри темы (C-Note): назад + подпись темы, «копировать», «в тему», «⋯»; название (бегущей строкой,
+ * Заметка внутри темы (C-Note): назад + подпись темы, «копировать», «⋯» (там и перенос в тему); название (бегущей строкой,
  * нажатие — правка), строки заметки по видам (components/NoteLines).
  * Своя — правится прямо в строках, ткнуть можно в любое место ниже текста; снизу (над клавиатурой) — панель
  * с ГОТОВО. Чужая — только читать. Презентационный экран: строки и курсор — пропсами, правки — колбэками.
@@ -31,8 +31,6 @@ export type NoteScreenProps = NoteHandlers & {
   onMore?: () => void;
   /** Скопировать текст заметки */
   onCopy?: () => void;
-  /** Перенести в другую тему */
-  onMove?: () => void;
   onTool?: (tool: NoteTool) => void;
   onDone?: () => void;
 };
@@ -52,7 +50,6 @@ export const NoteScreen = memo(function NoteScreen(props: NoteScreenProps) {
 
   const actions: TopBarAction[] = [];
   if (props.onCopy) actions.push({ key: 'copy', icon: 'copy', accessibilityLabel: 'Скопировать', onPress: props.onCopy });
-  if (props.onMove) actions.push({ key: 'move', icon: 'folder', accessibilityLabel: 'В тему', onPress: props.onMove });
   if (onMore) actions.push({ key: 'more', icon: 'dots', accessibilityLabel: 'Ещё', onPress: onMore });
   const barBottom = overlap > 0 ? overlap + KB_GAP : insets.bottom + BAR_PAD;
   const bottomSpace = editable ? barBottom + NOTE_TOOL + BAR_PAD : insets.bottom + BAR_PAD;

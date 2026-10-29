@@ -10,7 +10,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard } from 'react-native';
 import { upper } from '@/adapters/common/ru';
 import { uid } from '@/lib/ids';
-import { moveNoteMenu } from '@/lib/ideas';
 import { isBlankNote, joinTitle, notePlain, parseNote, splitTitle } from '@/lib/note';
 import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
@@ -74,12 +73,6 @@ export const NoteContainer = signedInOnly(function Note({ id: routeId, topicId: 
       .then(() => useStore.getState().notice('Скопировано'))
       .catch(() => useStore.getState().notice('Не скопировалось'));
   }, [ed]);
-  const onMove = useCallback(() => {
-    Keyboard.dismiss();
-    ed.flush();
-    const cur = useStore.getState().ideas.find((x) => x.id === id);
-    if (cur) moveNoteMenu(cur);
-  }, [id, ed]);
 
   // Заметку удалили (быстрые действия, другой телефон) — уходим
   useEffect(() => {
@@ -112,7 +105,6 @@ export const NoteContainer = signedInOnly(function Note({ id: routeId, topicId: 
       onBack={onDone}
       onMore={idea ? onMore : undefined}
       onCopy={onCopy}
-      onMove={idea && editable ? onMove : undefined}
       onChangeText={ed.onChangeText}
       onBackspace={ed.onBackspace}
       onToggleCheck={ed.onToggleCheck}

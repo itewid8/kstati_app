@@ -15,7 +15,7 @@ const WIDGET_PLUGIN = [
     "widgets": [
       {
         "name": "KstatiWidget",
-        "displayName": "Кстати β",
+        "displayName": "Кстати",
         "description": "Ближайшие дела и микрофон",
         "ios": {
           "supportedFamilies": [

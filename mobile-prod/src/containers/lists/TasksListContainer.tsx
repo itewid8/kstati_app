@@ -54,6 +54,7 @@ export const TasksListContainer = signedInOnly(function TasksList() {
   return (
     <TasksListScreen
       {...data}
+      today={today}
       insets={insets}
       onPickGroup={onPickGroup}
       onChangeView={changeView}

@@ -188,14 +188,14 @@ describe('C-QuickIdea', () => {
     assert.deepEqual(v.sheet.section, quickIdeaFixture.sheet.section);
     assert.deepEqual(v.sheet.card, { ...quickIdeaFixture.sheet.card, meta: 'САНЯ · 12 ОКТ', colors: ['blue'] });
   });
-  test('«В ТЕМУ»: без текущей и архивных, свежие первыми; идея без темы — три темы', () => {
+  test('«В ТЕМУ»: без текущей и архивных, свежие первыми; все темы списком', () => {
     assert.deepEqual(
       topicSegments(s, { topicId: null }).map((x) => x.key),
-      ['t-repair', 't-vacation', 't-gifts'],
+      ['t-repair', 't-vacation', 't-gifts', 't-books'],
     );
     assert.deepEqual(
       topicSegments(s, { topicId: 't-vacation' }).map((x) => x.key),
-      ['t-repair', 't-gifts', NO_TOPIC],
+      ['t-repair', 't-gifts', 't-books', NO_TOPIC],
     );
   });
   test('чужая идея — без правки, темы и удаления', () => {

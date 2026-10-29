@@ -108,15 +108,23 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
     if (topic) topicMenu(topic, share);
   }, [topic, share]);
   const open = useCallback((ideaId: ID) => router.push(nav.note(ideaId)), []);
+  // Тема целиком: название, её текст и заметки внутри (в порядке списка), через пустую строку
   const copy = useCallback(() => {
     ed.flush();
     const name = titleOf(titleRef.current, bodyRef.current);
-    const text = notePlain([name, bodyRef.current].filter((x) => x.trim()).join('\n'));
+    const head = notePlain([name, bodyRef.current].filter((x) => x.trim()).join('\n'));
+    const all = useStore.getState().ideas;
+    const notes = data.ideas.flatMap((r) => {
+      const idea = all.find((x) => x.id === r.id);
+      const t = idea ? notePlain(idea.text) : '';
+      return t ? [t] : [];
+    });
+    const text = [head, ...notes].filter(Boolean).join('\n\n');
     if (!text) return;
     Clipboard.setStringAsync(text)
       .then(() => useStore.getState().notice('Скопировано'))
       .catch(() => useStore.getState().notice('Не скопировалось'));
-  }, [ed]);
+  }, [ed, data.ideas]);
   // Название показываем своё (правится), пока темы нет — пустое
   const shownTitle = editable ? title : data.title;
 
@@ -141,6 +149,7 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
                   onToggleCheck: ed.onToggleCheck,
                   onFocus: ed.onFocus,
                   onTool: ed.onTool,
+                  onStart: ed.focusEnd,
                 }
               : undefined
           }

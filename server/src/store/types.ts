@@ -8,7 +8,7 @@ import type { GroupCategory } from '../types.js';
 export type Gender = 'm' | 'f';
 
 /**
- * Цвет человека в календаре и на иконке: ключ палитры стикеров (mobile/src/lib/colors.ts)
+ * Цвет человека в календаре и на иконке: ключ палитры стикеров (mobile-prod/src/lib/colors.ts)
  * или свой цвет «#rrggbb» с полосы спектра; нет — подбирается сам
  */
 export const PERSON_COLORS = ['blue', 'pink', 'green', 'yellow', 'orange', 'violet', 'teal'] as const;
@@ -65,7 +65,7 @@ export type Task = {
   note?: string;
   createdBy: string;
   doneAt: string | null;
-  /** Повтор (формат — mobile/src/lib/types.ts, Repeat) */
+  /** Повтор (формат — mobile-prod/src/lib/types.ts, Repeat) */
   repeat?: { freq: 'day' | 'week' | 'month' | 'year'; every: number; weekdays?: number[]; monthDays?: number[]; months?: number[]; until?: string | null; count?: number | null } | null;
   doneDates?: string[];
   skipDates?: string[];

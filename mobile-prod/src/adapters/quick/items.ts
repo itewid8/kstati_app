@@ -14,8 +14,6 @@ import { off, type QuickEnv, type QuickSnapshot } from './types';
 
 /** Ключ «Без темы» в ряду «В ТЕМУ» */
 export const NO_TOPIC = 'inbox';
-/** В ряду «В ТЕМУ» не больше трёх кнопок */
-const TOPICS_MAX = 3;
 
 const nameOf = (s: QuickSnapshot, id: ID) => upper(userOf(s, id)?.name ?? '—');
 const added = (stamp: string) => dayMonthShort(dateOfStamp(stamp));
@@ -85,7 +83,7 @@ const lastActivity = (t: Topic, ideas: readonly Idea[]) =>
   ideas.reduce((m, i) => (i.topicId === t.id && i.createdAt > m ? i.createdAt : m), t.createdAt);
 
 /**
- * Ряд «В ТЕМУ»: мои темы (не в архиве), кроме текущей, свежие первыми, и «БЕЗ ТЕМЫ», если идея в теме — всего до трёх
+ * Список «В ТЕМУ»: все мои темы (не в архиве), кроме текущей, свежие первыми, и «БЕЗ ТЕМЫ», если идея в теме
  */
 export const topicSegments = (s: Pick<QuickSnapshot, 'me' | 'topics' | 'ideas'>, idea: Pick<Idea, 'topicId'>): QuickSegment[] => {
   const inbox: QuickSegment[] = idea.topicId ? [{ key: NO_TOPIC, label: 'БЕЗ ТЕМЫ' }] : [];
@@ -93,7 +91,6 @@ export const topicSegments = (s: Pick<QuickSnapshot, 'me' | 'topics' | 'ideas'>,
     .filter((t) => t.ownerId === s.me.id && !t.archivedAt && t.id !== idea.topicId)
     .map((t) => ({ t, at: lastActivity(t, s.ideas) }))
     .sort((a, b) => b.at.localeCompare(a.at))
-    .slice(0, TOPICS_MAX - inbox.length)
     .map(({ t }) => ({ key: t.id, label: upper(t.title) }));
   return [...topics, ...inbox];
 };
@@ -123,7 +120,7 @@ export const quickIdeaView = (s: QuickSnapshot, colors: ColorMap, target: { id: 
         { key: 'toTask', label: 'В ДЕЛА', primary: true },
         { key: 'copy', label: 'КОПИЯ' },
       ],
-      ...(segments.length ? { section: { label: 'В ТЕМУ', segments } } : null),
+      ...(segments.length ? { section: { label: 'В ТЕМУ', segments, dropdown: { current: topic ? upper(topic.title) : 'БЕЗ ТЕМЫ' } } } : null),
       deletable: own,
     },
   };

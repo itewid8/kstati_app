@@ -132,8 +132,10 @@ export const quickIdeaFixture: QuickFixture = {
       segments: [
         { key: 't-vacation', label: 'ОТПУСК' },
         { key: 't-gifts', label: 'ПОДАРКИ' },
+        { key: 't-books', label: 'КНИГИ' },
         { key: 'inbox', label: 'БЕЗ ТЕМЫ' },
       ],
+      dropdown: { current: 'РЕМОНТ' },
     },
     deletable: true,
   },

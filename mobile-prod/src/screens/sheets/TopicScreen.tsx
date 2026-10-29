@@ -61,6 +61,8 @@ export type TopicScreenProps = {
     active: number | null;
     caret?: (NoteCaret & { nonce: number }) | null;
     onTool?: (tool: NoteTool) => void;
+    /** Перейти к тексту (клавиша «Далее» в названии) */
+    onStart?: () => void;
   };
   /** Цвет владельца — полоса строк; null — нейтральная */
   color: PersonColor | null;
@@ -75,7 +77,7 @@ export type TopicScreenProps = {
   onShare?: () => void;
   onAdd?: () => void;
   onMore?: () => void;
-  /** Скопировать текст темы */
+  /** Скопировать тему целиком: название, текст и заметки внутри */
   onCopy?: () => void;
   onOpenIdea?: (id: ID) => void;
   onHoldIdea?: (id: ID, lift: LiftTarget) => void;
@@ -177,6 +179,9 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
     return out;
   }, [shared, onShare, onAdd, onMore, props.onCopy, c.text, c.bg]);
 
+  // Пустой текст темы при заметках внутри не занимает места: писать — «Далее» в названии
+  const hideBody = !!body && ideas.length > 0 && body.active === null && body.blocks.every((b) => !b.text.trim());
+
   const bottom = typing ? overlap + KB_GAP + NOTE_TOOL + BAR_PAD : insets.bottom + S.contentBottom;
 
   return (
@@ -187,6 +192,7 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
           value={title}
           onChange={props.onChangeTitle}
           autoFocus={props.focusTitle}
+          onNext={body?.editable ? body.onStart : undefined}
           placeholder="Новая тема"
           maxLength={80}
           textStyle={T.h1}
@@ -199,12 +205,12 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {body ? (
+        {body && !hideBody ? (
           <NoteLines
             blocks={body.blocks}
             editable={body.editable}
             caret={body.caret}
-            fill={{ minHeight: ideas.length ? 24 : 160, grow: !ideas.length }}
+            fill={{ minHeight: ideas.length ? 8 : 160, grow: !ideas.length }}
             onChangeText={body.onChangeText}
             onBackspace={body.onBackspace}
             onToggleCheck={body.onToggleCheck}
@@ -245,7 +251,7 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
 });
 
 /** Текст темы — сразу под названием; панель над клавиатурой: отступы 16 и 8 */
-const BODY_TOP = 122;
+const BODY_TOP = 120;
 const BAR_PAD = 16;
 const KB_GAP = 8;
 

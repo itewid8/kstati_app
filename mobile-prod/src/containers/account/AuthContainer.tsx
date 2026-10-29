@@ -13,7 +13,7 @@ import { resetTo, useInsets } from '../common';
 type Step = 'email' | 'code' | 'password';
 
 /**
- * Вход через VK ID в «Кстати β» скрыт: у сервера одна схема APP_SCHEME=kstati, и /auth/vk/start ответит bad_redirect
+ * Вход через VK ID в «Кстати» скрыт: у сервера одна схема APP_SCHEME=kstati, и /auth/vk/start ответит bad_redirect
  * на kstatiapp://auth (docs/redesign/INTEGRATION.md, риск 6.2). Включать — только после серверной правки со списком схем
  */
 const VK_LOGIN = false;
