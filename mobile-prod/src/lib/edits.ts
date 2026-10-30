@@ -61,15 +61,16 @@ function keepDuration(old: Task, next: Task, p: { date?: string | null; time?: s
   return out;
 }
 
-/** Все подзадачи плана сделаны — план отмечается сам; подзадачу вернули — план снова открыт */
+/** План сам не закрывается, даже когда все подзадачи сделаны; подзадачу вернули — закрытый план снова открыт */
 export function syncParent(tasks: Task[], parentId: ID | null | undefined): Task[] {
   if (!parentId) return tasks;
   const kids = tasks.filter((t) => t.parentId === parentId);
   if (!kids.length) return tasks;
+  // Все подзадачи сделаны — общее дело само не закрывается (закрывают его вручную);
+  // подзадачу вернули в работу — закрытое общее дело снова открыто
   const all = kids.every((t) => t.doneAt);
   return tasks.map((t) => {
     if (t.id !== parentId || t.repeat) return t;
-    if (all && !t.doneAt) return { ...t, doneAt: new Date().toISOString() };
     if (!all && t.doneAt) return { ...t, doneAt: null };
     return t;
   });

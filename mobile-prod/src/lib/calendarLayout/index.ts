@@ -33,6 +33,7 @@ export {
 } from './busy';
 export { monthCellItems, type MonthCell } from './monthCell';
 export { fitRows, fitTextLines, linesOf, textRoom, type TextFit, type TextSegment } from './textFit';
+export { monoWidth, syllables, timeLines, timeOptions, titlePlan, type TimeRow, type TitlePlan } from './weekText';
 export {
   GRID,
   MONTH_GRID,

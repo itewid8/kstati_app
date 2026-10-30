@@ -11,11 +11,13 @@
  * По высоте рисуются только строки, которые влезают в блок целиком (fitTextLines): у короткого дела нет
  * обрезанного по высоте куска текста, а если не влезает и строка названия — блок без текста.
  */
-import { memo } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { memo, useMemo } from 'react';
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { ClipPath, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
-import { COLUMN, fitTextLines, textRoom, type ColumnBlock } from '@/lib/calendarLayout';
-import { useHatchId, HatchPattern, Icon, LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { COLUMN, fitTextLines, textRoom, timeOptions, titlePlan, type ColumnBlock, type TimeRow } from '@/lib/calendarLayout';
+import type { TaskKind } from '@/lib/types';
+import { useHatchId, HatchPattern, LONG_PRESS_MS, Marquee, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { EventMarks } from './EventMarks';
 import { hardStops, useSvgId } from './PeopleColor';
 import { useTextLines } from './useTextLines';
 
@@ -27,37 +29,35 @@ const EPS = 1e-3;
 /** Название 8px Geist 600: пробел 0.236em плюс трекинг −0.08 — расстояние между словами */
 const TITLE_SIZE = 8;
 const TITLE_TRACKING = -0.08;
-const WORD_GAP = TITLE_SIZE * 0.236 + TITLE_TRACKING;
-const SPACES = / +/;
+/** Время 7px Geist Mono, трекинг −0.14; значки 7px через 2 */
+const MONO_SIZE = 7;
+const MONO_TRACKING = -0.14;
+const MARK = 7;
+const MARK_GAP = 2;
 /** Строки: название 9.5, время и кто 8.5, зазор 1 */
 const LINE = { title: 9.5, mono: 8.5 } as const;
 const LINE_HEIGHTS = [LINE.title, LINE.mono, LINE.mono] as const;
 const GAP = 1;
-/** react-native-web не знает ellipsizeMode и ставит многоточие — на вебе (стенд сверки) обрезаем так же, как на телефоне */
-const WORD = Platform.OS === 'web' ? { flexShrink: 1, textOverflow: 'clip' } : { flexShrink: 1 };
 
 /**
- * Название переносится только по пробелам, а слово шире колонки обрезается её краем — как в макете
- * (CSS без переноса внутри слова, overflow: hidden). Обычный Text на телефоне ломал бы такое слово по буквам.
- * Слова — строки одной строкой в ряду с переносом: зазор колонок (columnGap) — ширина пробела, на краю строки его нет
+ * Название (titlePlan): переносится по словам, слово шире колонки — по слогам с дефисом (мягкие переносы);
+ * если и слог не влезает — одна бегущая строка. Обычный перенос телефона по буквам не нужен — ширина считается заранее
  */
-type TitleWordsProps = { title: string; color: string; done?: boolean; check?: string; onLayout?: (e: LayoutChangeEvent) => void };
+type TitleProps = { title: string; width: number; color: string; done?: boolean; onLayout?: (e: LayoutChangeEvent) => void };
 
-const TitleWords = memo(function TitleWords({ title, color, done, check, onLayout }: TitleWordsProps) {
-  const words = title.split(SPACES).filter(Boolean);
+const Title = memo(function Title({ title, width, color, done, onLayout }: TitleProps) {
+  const plan = useMemo(() => titlePlan(title, width, TITLE_SIZE, TITLE_TRACKING), [title, width]);
+  const style = [styles.title, { color }, done && styles.done];
+  if (plan.marquee)
+    return (
+      <View onLayout={onLayout}>
+        <Marquee style={style}>{title}</Marquee>
+      </View>
+    );
   return (
-    <View onLayout={onLayout} style={styles.words}>
-      {done && check ? (
-        <View style={styles.check}>
-          <Icon name="check" size={8} color={check} />
-        </View>
-      ) : null}
-      {words.map((w, i) => (
-        <Text key={i} numberOfLines={1} ellipsizeMode="clip" style={[styles.title, WORD, { color }, done && styles.done]}>
-          {w}
-        </Text>
-      ))}
-    </View>
+    <Text onLayout={onLayout} android_hyphenationFrequency="normal" style={style}>
+      {plan.text}
+    </Text>
   );
 });
 
@@ -72,6 +72,9 @@ type Props = {
   /** «Карина · Казань» */
   who: string;
   done?: boolean;
+  /** Значки в строке времени: тип и повтор (и галочка «сделано») */
+  kind?: TaskKind;
+  repeat?: boolean;
   colors: readonly string[];
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
@@ -82,7 +85,7 @@ type Props = {
 
 export const WeekEventBlock = memo(function WeekEventBlock(props: Props) {
   const { colX, gridY, block, title, time, who, done, colors, onPress, onLongPress } = props;
-  const { c, person } = useTheme();
+  const { c } = useTheme();
   // Копия — в начале координат рамки: колонка и сетка сдвинуты на положение блока
   const lift = useLift(onLongPress, 'block', () => (
     <WeekEventBlock {...props} colX={-block.x} gridY={-block.y} onPress={undefined} onLongPress={undefined} />
@@ -96,20 +99,45 @@ export const WeekEventBlock = memo(function WeekEventBlock(props: Props) {
   const textWidth = Math.max(0, w - textInsetLeft - TEXT_RIGHT);
 
   const [lines, measure] = useTextLines(LINE_HEIGHTS);
-  const fit = fitTextLines(textRoom(bands, textInsetTop, COLUMN.STRIP), [
-    { lineHeight: LINE.title, lines: lines[0] },
-    { lineHeight: LINE.mono, lines: time ? lines[1] : 0, gapBefore: GAP },
-    { lineHeight: LINE.mono, lines: who ? lines[2] : 0, gapBefore: GAP },
-  ]);
+  // Время: целиком, двумя строками (начало / конец) или никак — значки стоят перед первой строкой
+  const marks = [done, props.kind && props.kind !== 'task', props.repeat].filter(Boolean).length;
+  const marksW = marks ? marks * MARK + (marks - 1) * MARK_GAP + MARK_GAP : 0;
+  const options = useMemo(() => timeOptions(time, textWidth, marksW, MONO_SIZE, MONO_TRACKING), [time, textWidth, marksW]);
+  const room = textRoom(bands, textInsetTop, COLUMN.STRIP);
+  const segs = (timeN: number) => [
+    { lineHeight: LINE.title, lines: lines[0] ?? 1 },
+    { lineHeight: LINE.mono, lines: timeN, gapBefore: GAP },
+    { lineHeight: LINE.mono, lines: who ? (lines[2] ?? 1) : 0, gapBefore: GAP },
+  ];
+  // Первый вариант строк времени, что влезает по высоте целиком; ни один — время не показываем, а не обрезаем
+  let rows: TimeRow[] = [];
+  let fit = fitTextLines(room, segs(0));
+  for (const opt of options) {
+    const f = fitTextLines(room, segs(opt.length));
+    if (f.lines[1] === opt.length) {
+      rows = opt;
+      fit = f;
+      break;
+    }
+  }
   /** Текст рисуется в каждой широкой полосе; меряется только в первой */
   const firstText = bands.findIndex((b) => b.right - b.left > COLUMN.STRIP + EPS);
   const text = (measured: boolean) => (
     <View style={[styles.text, { width: textWidth, height: fit.height }]}>
-      <TitleWords title={title} color={c.text} done={done} check={person('green')} onLayout={measured ? measure[0] : undefined} />
-      {fit.lines[1] ? (
-        <Text onLayout={measured ? measure[1] : undefined} style={[styles.mono, { color: c.text }]}>
-          {time}
-        </Text>
+      <Title title={title} width={textWidth} color={c.text} done={done} onLayout={measured ? measure[0] : undefined} />
+      {rows.length && fit.lines[1] ? (
+        <View>
+          {rows.map((r, i) => (
+            <View key={i} style={[styles.timeRow, { height: LINE.mono }]}>
+              {r.marks ? <EventMarks done={done} kind={props.kind} repeat={props.repeat} size={MARK} lineHeight={LINE.mono} /> : null}
+              {r.text ? (
+                <Text numberOfLines={1} style={[styles.mono, { color: c.text }]}>
+                  {r.text}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+        </View>
       ) : null}
       {fit.lines[2] ? (
         <Text onLayout={measured ? measure[2] : undefined} style={[styles.mono, { color: c.muted }]}>
@@ -182,9 +210,8 @@ const styles = StyleSheet.create({
   shift: { position: 'absolute' },
   /** Окно текста высотой в целые строки: что ниже — не видно */
   text: { overflow: 'hidden', gap: GAP },
-  words: { flexShrink: 0, flexDirection: 'row', flexWrap: 'wrap', columnGap: WORD_GAP },
   title: { fontFamily: fonts.sans600, fontSize: TITLE_SIZE, lineHeight: LINE.title, letterSpacing: TITLE_TRACKING },
   done: { textDecorationLine: 'line-through' },
-  check: { height: LINE.title, justifyContent: 'center' },
+  timeRow: { flexShrink: 0, flexDirection: 'row', alignItems: 'flex-start', gap: MARK_GAP },
   mono: { flexShrink: 0, fontFamily: fonts.mono400, fontSize: 7, lineHeight: LINE.mono, letterSpacing: -0.14 },
 });

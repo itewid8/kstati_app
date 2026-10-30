@@ -7,7 +7,8 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fitTextLines } from '@/lib/calendarLayout';
 import type { TaskKind } from '@/lib/types';
-import { Hatch, Icon, KIND_ICON, LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { Hatch, LONG_PRESS_MS, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { EventMarks } from './EventMarks';
 import { PeopleFill, PeopleTip } from './PeopleColor';
 import { useTextLines } from './useTextLines';
 
@@ -32,8 +33,9 @@ type Props = {
   colors: readonly string[];
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
-  /** Тип — мини-иконка перед названием */
+  /** Значки в строке времени: сделано, тип, повтор */
   kind?: TaskKind;
+  repeat?: boolean;
   onPress?: () => void;
   /** Удержание: блок отдаёт своё место в окне и копию (быстрые действия) */
   onLongPress?: LiftHandler;
@@ -41,7 +43,7 @@ type Props = {
 
 export const DayEventBlock = memo(function DayEventBlock(props: Props) {
   const { x, y, width, height, title, time, note, who, done, colors, onPress, onLongPress } = props;
-  const { c, person } = useTheme();
+  const { c } = useTheme();
   const lift = useLift(onLongPress, 'block', () => <DayEventBlock {...props} x={0} y={0} onPress={undefined} onLongPress={undefined} />);
   const [lines, measure] = useTextLines(LINE_HEIGHTS);
   const fit = fitTextLines(height - PAD_TOP, [
@@ -66,21 +68,14 @@ export const DayEventBlock = memo(function DayEventBlock(props: Props) {
         <View style={[styles.text, { height: fit.height }]}>
           <View onLayout={measure[0]} style={styles.head}>
             <View style={styles.titleRow}>
-              {props.kind ? (
-                <View style={styles.kind}>
-                  <Icon name={KIND_ICON[props.kind]} size={11} color={c.text} />
-                </View>
-              ) : null}
-              {done ? (
-                <View style={styles.kind}>
-                  <Icon name="check" size={11} color={person('green')} />
-                </View>
-              ) : null}
               <Text style={[styles.title, { color: c.text }, done && styles.done]}>{title}</Text>
             </View>
-            <Text numberOfLines={1} style={[styles.time, { color: c.text }]}>
-              {time}
-            </Text>
+            <View style={styles.timeRow}>
+              <EventMarks done={done} kind={props.kind} repeat={props.repeat} size={10} lineHeight={LINE.head} />
+              <Text numberOfLines={1} style={[styles.time, { color: c.text }]}>
+                {time}
+              </Text>
+            </View>
           </View>
           {fit.lines[1] ? (
             <Text onLayout={measure[1]} style={[styles.note, { color: c.muted }]}>
@@ -104,7 +99,7 @@ const styles = StyleSheet.create({
   text: { overflow: 'hidden', gap: GAP },
   head: { flexShrink: 0, flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
   titleRow: { flexShrink: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 3 },
-  kind: { marginTop: 1.5 },
+  timeRow: { flexShrink: 0, flexDirection: 'row', alignItems: 'flex-start', gap: 3 },
   title: { flexShrink: 1, fontFamily: fonts.sans600, fontSize: 12, lineHeight: LINE.head },
   done: { textDecorationLine: 'line-through' },
   time: { flexShrink: 0, fontFamily: fonts.mono400, fontSize: 9.5, lineHeight: LINE.head },

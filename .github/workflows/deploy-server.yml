@@ -9,8 +9,8 @@
 # Настройки (GitHub → Settings → Secrets and variables → Actions):
 #   Secrets:   YC_SA_JSON_KEY — ключ сервисного аккаунта kstati-deployer (JSON целиком)
 #   Variables: FOLDER_ID, REGISTRY_ID, SA_ID, LOCKBOX_ID, CONTAINER_NAME, PUBLIC_URL,
-#              YDB_DOCAPI_ENDPOINT, YANDEX_MODEL, APP_SCHEME, VK_CLIENT_ID, MAIL_FROM, FEEDBACK_EMAIL, VOICE_DAILY_LIMIT
-# Секреты самого сервера (JWT, ключи Яндекса, POISKKINO_API_KEY) лежат в Lockbox — в GitHub их нет.
+#              YDB_DOCAPI_ENDPOINT, YANDEX_MODEL, APP_SCHEME, VK_CLIENT_ID, MAIL_FROM, FEEDBACK_EMAIL, FEEDBACK_REPO, VOICE_DAILY_LIMIT
+# Секреты самого сервера (JWT, ключи Яндекса, POISKKINO_API_KEY, GITHUB_FEEDBACK_TOKEN) лежат в Lockbox — в GitHub их нет.
 name: Выкладка сервера
 
 on:
@@ -69,12 +69,13 @@ jobs:
             --core-fraction 100 \
             --concurrency 8 \
             --execution-timeout 60s \
-            --environment "NODE_ENV=production,LOG_DIR=stdout,YANDEX_FOLDER_ID=${{ vars.FOLDER_ID }},YANDEX_MODEL=${{ vars.YANDEX_MODEL }},PUBLIC_URL=${{ vars.PUBLIC_URL }},APP_SCHEME=${{ vars.APP_SCHEME }},YDB_DOCAPI_ENDPOINT=${{ vars.YDB_DOCAPI_ENDPOINT }},VK_CLIENT_ID=${{ vars.VK_CLIENT_ID }},MAIL_FROM=${{ vars.MAIL_FROM }},FEEDBACK_EMAIL=${{ vars.FEEDBACK_EMAIL }},VOICE_DAILY_LIMIT=${{ vars.VOICE_DAILY_LIMIT }}" \
+            --environment "NODE_ENV=production,LOG_DIR=stdout,YANDEX_FOLDER_ID=${{ vars.FOLDER_ID }},YANDEX_MODEL=${{ vars.YANDEX_MODEL }},PUBLIC_URL=${{ vars.PUBLIC_URL }},APP_SCHEME=${{ vars.APP_SCHEME }},YDB_DOCAPI_ENDPOINT=${{ vars.YDB_DOCAPI_ENDPOINT }},VK_CLIENT_ID=${{ vars.VK_CLIENT_ID }},MAIL_FROM=${{ vars.MAIL_FROM }},FEEDBACK_EMAIL=${{ vars.FEEDBACK_EMAIL }},FEEDBACK_REPO=${{ vars.FEEDBACK_REPO }},VOICE_DAILY_LIMIT=${{ vars.VOICE_DAILY_LIMIT }}" \
             --secret "environment-variable=JWT_SECRET,id=${{ vars.LOCKBOX_ID }},key=JWT_SECRET" \
             --secret "environment-variable=YANDEX_API_KEY,id=${{ vars.LOCKBOX_ID }},key=YANDEX_API_KEY" \
             --secret "environment-variable=AWS_ACCESS_KEY_ID,id=${{ vars.LOCKBOX_ID }},key=AWS_ACCESS_KEY_ID" \
             --secret "environment-variable=AWS_SECRET_ACCESS_KEY,id=${{ vars.LOCKBOX_ID }},key=AWS_SECRET_ACCESS_KEY" \
-            --secret "environment-variable=POISKKINO_API_KEY,id=${{ vars.LOCKBOX_ID }},key=POISKKINO_API_KEY"
+            --secret "environment-variable=POISKKINO_API_KEY,id=${{ vars.LOCKBOX_ID }},key=POISKKINO_API_KEY" \
+            --secret "environment-variable=GITHUB_FEEDBACK_TOKEN,id=${{ vars.LOCKBOX_ID }},key=GITHUB_FEEDBACK_TOKEN"
 
       - name: Проверка /health
         run: |

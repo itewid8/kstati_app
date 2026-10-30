@@ -45,6 +45,9 @@ export const config = {
   poiskkinoUrl: (env('POISKKINO_URL') || 'https://api.poiskkino.dev').replace(/\/$/, ''),
   /** Запросов к ПоискКино в сутки (бесплатный тариф — 200) */
   poiskkinoDaily: Number(env('POISKKINO_DAILY', '190')),
+  /** Отзывы задачами в закрытый репозиторий GitHub («владелец/репозиторий»); пусто — не отправляются */
+  feedbackRepo: env('FEEDBACK_REPO'),
+  githubFeedbackToken: env('GITHUB_FEEDBACK_TOKEN'),
   /** Сколько отзывов в сутки на человека */
   feedbackDailyLimit: Number(env('FEEDBACK_DAILY_LIMIT', '20')),
 

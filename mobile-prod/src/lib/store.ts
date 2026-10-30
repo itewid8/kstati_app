@@ -183,6 +183,8 @@ type State = {
    * «watch.watched», «ideas.topics», «ideas.archive». Нет ключа — раздел открыт
    */
   collapsedSections: string[];
+  /** Планы в списке дел, раскрытые до подзадач (остальные свёрнуты); помнится между запусками */
+  expandedPlans: string[];
   menu: Menu | null;
   /** Выбранный день календаря — общий для экрана «Дела» и ответа ассистента */
   calendarDate: string;
@@ -320,6 +322,7 @@ type Actions = {
   setServerApi: (api: number | null) => void;
   setEditorSeed: (seed: EditorSeed | null) => void;
   toggleSection: (key: string) => void;
+  togglePlanOpen: (id: string) => void;
   /** Короткое сообщение внизу экрана без кнопки */
   notice: (label: string) => void;
   clearUndo: () => void;
@@ -376,6 +379,7 @@ const initial: State = {
   tasksView: 'week',
   calendarView: 'week' as Exclude<TasksView, 'list'>,
   collapsedSections: ['past', 'done'],
+  expandedPlans: [],
   menu: null,
   calendarDate: toISODate(new Date()),
   voiceTopicId: null,
@@ -899,6 +903,10 @@ export const useStore = create<State & Actions>()(
     setVoiceQuota: (voiceQuota) => set({ voiceQuota, voiceQuotaDay: voiceQuota ? toISODate(new Date()) : '' }),
     setServerApi: (serverApi) => get().serverApi !== serverApi && set({ serverApi }),
     setEditorSeed: (editorSeed) => set({ editorSeed }),
+    togglePlanOpen: (id) => {
+      const cur = get().expandedPlans;
+      set({ expandedPlans: cur.includes(id) ? cur.filter((k) => k !== id) : [...cur, id].slice(-100) });
+    },
     toggleSection: (key) => {
       const cur = get().collapsedSections;
       set({ collapsedSections: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key] });
@@ -1025,6 +1033,7 @@ export const useStore = create<State & Actions>()(
       theme: s.theme,
       micMode: s.micMode,
       collapsedSections: s.collapsedSections,
+      expandedPlans: s.expandedPlans,
       activity: s.activity,
       activitySeen: s.activitySeen,
       calendarHidden: s.calendarHidden,

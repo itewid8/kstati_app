@@ -26,9 +26,13 @@ type Props = {
   done: boolean;
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
-  /** Тип дела — мини-иконка перед названием */
+  /** Тип дела и повтор — значки после названия (приглушённые) */
   taskType?: TaskKind;
+  repeat?: boolean;
   onToggle?: () => void;
+  /** План: раскрыт ли (подзадачи под ним) — справа стрелка; undefined — стрелки нет */
+  expanded?: boolean;
+  onExpand?: () => void;
   onPress?: () => void;
   /** Удержание: строка отдаёт своё место в окне и копию (быстрые действия) */
   onLongPress?: LiftHandler;
@@ -90,18 +94,34 @@ export const TaskRow = memo(function TaskRow(props: Props) {
         </View>
       )}
       <Checkbox checked={done} onPress={onToggle} accessibilityLabel="Готово" emptyFill="none" checkedFill={person('green')} />
-      {props.taskType ? <Icon name={KIND_ICON[props.taskType]} size={step ? 11 : 12} color={ink} /> : null}
-      <Marquee
-        style={[
-          step ? styles.stepTitle : styles.title,
-          kind === 'plan' && styles.planTitle,
-          { color: ink },
-          done && styles.done,
-        ]}
-      >
-        {title}
-      </Marquee>
+      <View style={styles.titleBox}>
+        <Marquee
+          style={[
+            step ? styles.stepTitle : styles.title,
+            styles.titleShrink,
+            kind === 'plan' && styles.planTitle,
+            { color: ink },
+            done && styles.done,
+          ]}
+        >
+          {title}
+        </Marquee>
+        {props.taskType && props.taskType !== 'task' ? <Icon name={KIND_ICON[props.taskType]} size={11} color={c.muted} /> : null}
+        {props.repeat ? <Icon name="repeat" size={11} color={c.muted} /> : null}
+      </View>
       <Text style={[styles.time, step && styles.stepTime, { color: ink }]}>{time}</Text>
+      {props.expanded !== undefined ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={props.expanded ? 'Свернуть подзадачи' : 'Показать подзадачи'}
+          accessibilityState={{ expanded: props.expanded }}
+          onPress={props.onExpand}
+          hitSlop={10}
+          style={styles.expand}
+        >
+          <Icon name={props.expanded ? 'chevronUp' : 'chevronDown'} size={12} color={ink} />
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 });
@@ -122,6 +142,9 @@ const styles = StyleSheet.create({
   planTitle: { fontFamily: fonts.sans600 },
   stepTitle: { flex: 1, minWidth: 0, fontFamily: fonts.sans500, fontSize: 12, lineHeight: 16 },
   done: { textDecorationLine: 'line-through' },
+  titleBox: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  titleShrink: { flex: 0, flexShrink: 1 },
+  expand: { width: 22, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: -6 },
   time: { fontFamily: fonts.mono600, fontSize: 12, letterSpacing: -0.24 },
   stepTime: { fontSize: 11, letterSpacing: -0.22 },
 });

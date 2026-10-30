@@ -95,7 +95,7 @@ export function barMeta(t: Pick<Task, 'date' | 'time' | 'endDate' | 'endTime'>):
   return t.endTime && t.endTime > t.time ? ` ${hourShort(t.time)}–${hourShort(t.endTime)}` : ` ${hourShort(t.time)}`;
 }
 
-export function toBar(t: Task): CalendarBar | null {
+export function toBar(t: Task, plans?: PlanIndex): CalendarBar | null {
   if (!t.date) return null;
   const meta = barMeta(t);
   return {
@@ -107,6 +107,9 @@ export function toBar(t: Task): CalendarBar | null {
     people: peopleOf(t),
     ...(t.hidden && { hidden: true }),
     ...(t.kind && t.kind !== 'task' && { kind: t.kind }),
+    ...(isDone(t) && { done: true }),
+    ...(plans?.ids.has(t.id) && { plan: true }),
+    ...(t.repeat && { repeat: true }),
   };
 }
 
@@ -131,13 +134,14 @@ export function toTimed(t: Task, day: IsoDate, plans: PlanIndex): TimedEvent | n
     ...(toNextDay ? { toNextDay } : {}),
     ...(t.hidden && { hidden: true }),
     ...(t.kind && t.kind !== 'task' && { kind: t.kind }),
+    ...(t.repeat && { repeat: true }),
   };
 }
 
 /** Полосы среди разов: план с подзадачами, без времени, длиннее суток */
 export function barsOf(instances: readonly Task[], plans: PlanIndex): CalendarBar[] {
   return instances.flatMap((t) => {
-    const bar = isBar(t, plans) ? toBar(t) : null;
+    const bar = isBar(t, plans) ? toBar(t, plans) : null;
     return bar ? [bar] : [];
   });
 }
