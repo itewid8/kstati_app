@@ -122,6 +122,13 @@ export function toTask(v: unknown, groupId: ID): Task | null {
   };
 }
 
+/** Подсказка «похоже, имели в виду» с сервера: название обязательно */
+function suggestionOf(v: unknown): { title: string; year: number | null } | null {
+  const r = obj(v);
+  const title = str(r.title).trim();
+  return title ? { title, year: numOrNull(r.year) } : null;
+}
+
 export function toWatch(v: unknown, groupId: ID): WatchItem | null {
   const r = obj(v);
   const id = strOrNull(r.id);
@@ -135,6 +142,8 @@ export function toWatch(v: unknown, groupId: ID): WatchItem | null {
     origin: oneOf(r.origin, ORIGINS),
     year: numOrNull(r.year),
     ...(typeof r.rating === 'number' && r.rating > 0 && { rating: r.rating }),
+    ...(typeof r.description === 'string' && r.description.trim() && { description: r.description.trim() }),
+    ...(suggestionOf(r.suggestion) && { suggestion: suggestionOf(r.suggestion) }),
     addedBy: str(r.addedBy),
     watchedAt: strOrNull(r.watchedAt),
     createdAt: str(r.createdAt),

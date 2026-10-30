@@ -77,7 +77,15 @@ export const FieldInput = memo(function FieldInput({ value, onChangeText, access
   );
 });
 
+/** Значение только для чтения: моноширинной строкой (бежит, если длинное) или обычным текстом в несколько строк (plain) */
+export const FieldText = memo(function FieldText({ text, plain }: { text: string; plain?: boolean }) {
+  const { c } = useTheme();
+  if (plain) return <Text style={[valueStyles.plain, styles.flex, { color: c.text }]}>{text}</Text>;
+  return <Marquee style={[valueStyles.text, styles.flex, { color: c.text }]}>{text}</Marquee>;
+});
+
 const valueStyles = StyleSheet.create({
+  plain: { fontFamily: fonts.sans400, fontSize: 13, lineHeight: 18, paddingVertical: 8 },
   tag: { fontFamily: fonts.mono600, fontSize: 11 },
   title: { fontFamily: fonts.sans600, fontSize: 13 },
   text: { fontFamily: fonts.mono500, fontSize: 11 },

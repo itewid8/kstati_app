@@ -3,10 +3,11 @@
  * карточка с полем названия вверху, ниже — таблица полей и плитки выбора. Дело правится в полном окне дела.
  */
 import { memo, useCallback, useMemo } from 'react';
+import { Pressable } from 'react-native';
 import { GENRE_LABEL, KIND_LABEL, ORIGIN_LABEL, type Genre, type IdeaDraft, type Kind, type Origin, type PersonColor, type TopicDraft, type WatchDraft, type WishDraft } from '@/lib/types';
 import type { ChipItem } from '../editors/components/ChipGrid';
 import { ChoiceSection } from './components/ChoiceSection';
-import { FieldBox, FieldInput, FieldLine } from './components/FieldRows';
+import { FieldBox, FieldInput, FieldLine, FieldText } from './components/FieldRows';
 import { SheetCard } from './components/SheetCard';
 
 /** Карточка записи: ярлык типа, подпись (кто и когда добавил), цвет автора, «×» — убрать из ответа */
@@ -57,7 +58,10 @@ const KINDS = keysOf<Kind>(KIND_LABEL);
 const GENRES = keysOf<Genre>(GENRE_LABEL);
 const ORIGINS = keysOf<Origin>(ORIGIN_LABEL);
 
-export const WatchDraftEditor = memo(function WatchDraftEditor({ head, value, onChange }: EditorProps<WatchDraft>) {
+/** Фильм с Кинопоиска (подтягивает сервер): рейтинг, описание, «похоже, имели в виду» */
+export type WatchFilm = { rating: number | null; description: string; suggestion: { title: string; year: number | null } | null };
+
+export const WatchDraftEditor = memo(function WatchDraftEditor({ head, value, film, onChange }: EditorProps<WatchDraft> & { film?: WatchFilm }) {
   const set = useCallback((p: Partial<WatchDraft>) => onChange({ ...value, ...p }), [value, onChange]);
   const kinds = useMemo<ChipItem<Kind>[]>(
     () => KINDS.map((k) => ({ key: k, label: upper(KIND_LABEL[k]), state: value.kind === k ? 'selected' : 'normal' })),
@@ -93,6 +97,31 @@ export const WatchDraftEditor = memo(function WatchDraftEditor({ head, value, on
         onRemove={head.onRemove}
         input={{ value: value.title, onChangeText: (title) => set({ title }), accessibilityLabel: 'Название', autoFocus: head.autoFocus, maxLength: TITLE_MAX }}
       />
+      {film && (film.rating || film.description || film.suggestion) ? (
+        <FieldBox>
+          {film.suggestion ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Исправить на «${film.suggestion.title}»`}
+              onPress={() => set({ title: film.suggestion!.title, year: film.suggestion!.year ?? value.year })}
+            >
+              <FieldLine label="ВОЗМОЖНО" first>
+                <FieldText text={`«${film.suggestion.title}»${film.suggestion.year ? `, ${film.suggestion.year}` : ''} · ИСПРАВИТЬ`} />
+              </FieldLine>
+            </Pressable>
+          ) : null}
+          {film.rating ? (
+            <FieldLine label="РЕЙТИНГ" first={!film.suggestion}>
+              <FieldText text={`КИНОПОИСК ${film.rating.toFixed(1)}`} />
+            </FieldLine>
+          ) : null}
+          {film.description ? (
+            <FieldLine label="ОПИСАНИЕ" first={!film.suggestion && !film.rating}>
+              <FieldText text={film.description} plain />
+            </FieldLine>
+          ) : null}
+        </FieldBox>
+      ) : null}
       <ChoiceSection label="ВИД" items={kinds} onPress={(k) => set({ kind: value.kind === k ? null : k })} />
       <ChoiceSection label="ЖАНРЫ" items={genres} onPress={toggleGenre} />
       <ChoiceSection label="СТРАНА" items={origins} columns={2} onPress={(o) => set({ origin: value.origin === o ? null : o })} />

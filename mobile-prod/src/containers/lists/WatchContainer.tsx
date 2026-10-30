@@ -1,5 +1,5 @@
 import { Redirect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { openMenu } from '@/components/ActionMenu';
@@ -7,7 +7,9 @@ import { emptyDraft } from '@/components/CardSheet';
 import { FILTER_META, FilterSheet, type FilterKey } from '@/components/FilterSheet';
 import { WATCH_SECTIONS, hasExtraFilters, kindsOf, watchProps, type WatchSnapshot } from '@/adapters/lists/watch';
 import type { Snapshot } from '@/adapters/snapshot';
+import { enrichWatch } from '@/lib/api';
 import { useStore } from '@/lib/store';
+import { syncNow } from '@/lib/sync';
 import { emptyFilters, type ID } from '@/lib/types';
 import { WatchScreen, type WatchFilter, type WatchSection } from '@/screens/lists/WatchScreen';
 import { NO_ME, signedInOnly, useChrome, useClock, useInsets, usePersonColors, type StoreState } from '../common';
@@ -51,6 +53,22 @@ const pickWatch = (s: StoreState): WatchSnapshot & Pick<Snapshot, 'users'> => ({
   activitySeen: s.activitySeen,
 });
 
+/**
+ * Старые фильмы группы — дополнить рейтингом и описанием (сервер ищет в ПоискКино по 8 за раз).
+ * Раз за запуск приложения на группу; что-то дополнилось — забрать с сервера
+ */
+const enriched = new Set<ID>();
+async function enrichGroup(groupId: ID) {
+  if (enriched.has(groupId)) return;
+  enriched.add(groupId);
+  for (let i = 0; i < 5; i++) {
+    const r = await enrichWatch(groupId);
+    if (!r) return enriched.delete(groupId);
+    if (r.updated) void syncNow();
+    if (!r.updated || !r.left) return;
+  }
+}
+
 const addItem = () => useStore.getState().setCard({ source: 'manual', items: [emptyDraft('watch')], editing: true });
 const toggleSection = (section: WatchSection) => useStore.getState().toggleSection(WATCH_SECTIONS[section]);
 
@@ -65,6 +83,9 @@ export const WatchContainer = signedInOnly(function Watch() {
   const colors = usePersonColors(s);
   const data = useMemo(() => watchProps(s, colors, { today }, { filters, collapsed }), [s, colors, today, filters, collapsed]);
   const [field, setField] = useState<FilterKey | null>(null);
+  useEffect(() => {
+    if (s.currentGroupId) void enrichGroup(s.currentGroupId);
+  }, [s.currentGroupId]);
 
   const onOpenFilters = useCallback(() => {
     const f = useStore.getState().watchFilters;

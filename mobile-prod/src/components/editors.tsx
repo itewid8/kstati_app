@@ -40,6 +40,18 @@ export const DraftItemView = ({ item, editing, snapshot, colors, dup, onChange, 
   const topics = useMemo(() => ownTopics(snapshot), [snapshot]);
   const fields = useMemo(() => createFields(item, snapshot), [item, snapshot]);
   const openTask = useCallback(() => onOpenTask(item), [onOpenTask, item]);
+  // Фильм из списка: рейтинг, описание и подсказка названия (пока название не правили)
+  const film = useMemo(() => {
+    if (item.type !== 'watch' || !item.id) return undefined;
+    const w = snapshot.watch.find((x) => x.id === item.id);
+    if (!w) return undefined;
+    const same = w.title.trim() === item.data.title.trim();
+    return {
+      rating: same ? (w.rating ?? null) : null,
+      description: same ? (w.description ?? '') : '',
+      suggestion: same ? (w.suggestion ?? null) : null,
+    };
+  }, [item, snapshot.watch]);
 
   if (!editing || item.type === 'task') {
     return <DraftPreview fields={fields} dup={dup} onRemove={onRemove} onPress={item.type === 'task' ? openTask : undefined} />;
@@ -49,7 +61,7 @@ export const DraftItemView = ({ item, editing, snapshot, colors, dup, onChange, 
       {item.type === 'wish' ? (
         <WishDraftEditor head={head} value={item.data} onChange={(data) => onChange({ ...item, data })} />
       ) : item.type === 'watch' ? (
-        <WatchDraftEditor head={head} value={item.data} onChange={(data) => onChange({ ...item, data })} />
+        <WatchDraftEditor head={head} value={item.data} film={film} onChange={(data) => onChange({ ...item, data })} />
       ) : item.type === 'idea' ? (
         <IdeaDraftEditor head={head} value={item.data} topics={topics} onChange={(data) => onChange({ ...item, data })} />
       ) : (

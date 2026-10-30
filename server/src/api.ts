@@ -14,7 +14,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
 import { apiLevel } from './client.js';
-import { lookupFilm, type FilmDeps } from './films.js';
+import { lookupFilm, type FilmDeps, type FilmLookup } from './films.js';
 import { giftrev, grev, irev, migrated, PERSON_COLORS, publicUser, TASK_KINDS, trev, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type WatchItem, type Wish } from './store/index.js';
 import { CATEGORIES } from './types.js';
 import { ownerPart, PERSONAL, visibleIn } from './visibility.js';
@@ -188,6 +188,36 @@ export function wishView(w: Wish, viewerId: string, api: number): Wish {
   if (api < 2 && !w.receivedAt) return { ...w, receivedAt: giftedAt ?? w.updatedAt };
   return w;
 }
+
+/** Поля фильма из ПоискКино поверх записи: пустые год, жанры, вид и страна заполняются, свои — остаются */
+function withFilm(
+  w: { year: number | null; genres: string[]; kind: string | null; origin: string | null },
+  { film, suggest }: FilmLookup,
+  now: string,
+): Partial<WatchItem> {
+  return {
+    ...(film && {
+      year: w.year ?? film.year,
+      genres: w.genres.length ? w.genres : film.genres,
+      kind: w.kind ?? film.kind,
+      origin: w.origin ?? film.origin,
+    }),
+    rating: film?.rating ?? null,
+    kpId: film?.kpId ?? null,
+    description: film?.description ?? '',
+    suggestion: suggest,
+    kpAt: now,
+  };
+}
+
+/** Название не меняли — данные фильма как были */
+const keepFilm = (p: WatchItem): Partial<WatchItem> => ({
+  rating: p.rating ?? null,
+  kpId: p.kpId ?? null,
+  ...(p.description !== undefined && { description: p.description }),
+  suggestion: p.suggestion ?? null,
+  ...(p.kpAt && { kpAt: p.kpAt }),
+});
 
 export class Data {
   constructor(
@@ -531,18 +561,12 @@ export class Data {
         // Рейтинг Кинопоиска и пустые поля — из ПоискКино: для новой записи или нового названия; иначе как было
         const prev = old?.type === 'watch' ? old : null;
         const fresh = !prev || prev.title !== op.watch.title;
-        const film = fresh ? await lookupFilm(s, op.watch.title, op.watch.year, this.films) : null;
+        const found = fresh ? await lookupFilm(s, op.watch.title, op.watch.year, this.films) : null;
         const item: Item = {
           type: 'watch',
           ...op.watch,
-          ...(film && {
-            year: op.watch.year ?? film.year,
-            genres: op.watch.genres.length ? op.watch.genres : film.genres,
-            kind: op.watch.kind ?? film.kind,
-            origin: op.watch.origin ?? film.origin,
-          }),
-          rating: fresh ? (film?.rating ?? null) : (prev?.rating ?? null),
-          kpId: fresh ? (film?.kpId ?? null) : (prev?.kpId ?? null),
+          // Новое название, но поиск не состоялся — данные прежнего фильма убираем, запись дополнится позже (/watch/enrich)
+          ...(found ? withFilm(op.watch, found, now) : fresh ? { rating: null, kpId: null, description: '', suggestion: null } : prev ? keepFilm(prev) : {}),
           addedBy: old?.type === 'watch' ? old.addedBy : user.id,
           createdAt: old?.createdAt ?? now,
           updatedAt: now,
@@ -822,6 +846,26 @@ export class Data {
     return { topics: own ? topics : topics.map((t) => ({ ...t, groupIds: t.groupIds.filter((g) => common.has(g)) })), ideas };
   }
 
+  /**
+   * «Смотреть» группы: записи, которые ещё не искали в ПоискКино (старые, или поиск тогда не состоялся), — дополнить.
+   * За раз не больше limit; left — сколько осталось. Поиск не состоялся (нет ключа, лимит) — останавливаемся
+   */
+  async enrichWatch(user: User, groupId: string, limit = 8): Promise<{ updated: number; left: number }> {
+    await this.memberGroup(user, groupId);
+    const s = this.store;
+    const todo = (await s.listItems(groupId)).filter((x): x is WatchItem => x.type === 'watch' && !x.kpAt);
+    let updated = 0;
+    for (const w of todo.slice(0, limit)) {
+      const found = await lookupFilm(s, w.title, w.year, this.films);
+      if (!found) break;
+      const now = new Date().toISOString();
+      await s.putItem({ ...w, ...withFilm(w, found, now), updatedAt: now });
+      updated++;
+    }
+    if (updated) await s.incr(grev(groupId));
+    return { updated, left: todo.length - updated };
+  }
+
   async sync(user: User, known: { groups: Record<string, number>; owners: Record<string, number>; ideas?: Record<string, string> }, api = 1) {
     const s = this.store;
     const groups = await s.getGroups(await s.listMemberships(user.id));
@@ -925,6 +969,13 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
       .object({ groups: z.record(z.number()).default({}), owners: z.record(z.number()).default({}), ideas: z.record(z.string().max(2000)).optional() })
       .parse(req.body ?? {});
     return data.sync(user, known, apiLevel(req));
+  });
+
+  /** Дополнить «Смотреть» группы рейтингом и описанием из ПоискКино (старые записи) */
+  app.post('/watch/enrich', async (req) => {
+    const user = await requireUser(req, store);
+    const body = z.object({ groupId: z.string().min(1).max(64) }).parse(req.body ?? {});
+    return data.enrichWatch(user, body.groupId);
   });
 
   /** Лента активности: что сделали другие за последние 30 дней (или с since) */

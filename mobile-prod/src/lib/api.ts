@@ -155,3 +155,15 @@ export async function transcribeFeedback(uri: string): Promise<{ text: string } 
     return { problem: String((e as Error)?.message ?? e) };
   }
 }
+
+/** POST /watch/enrich — дополнить старые фильмы группы рейтингом и описанием (ПоискКино). Нет связи — null */
+export async function enrichWatch(groupId: string): Promise<{ updated: number; left: number } | null> {
+  const token = useStore.getState().session?.token;
+  if (!token) return null;
+  try {
+    const r = await request<{ updated?: unknown; left?: unknown }>('/watch/enrich', { token, body: { groupId }, timeoutMs: 60_000 });
+    return { updated: typeof r.updated === 'number' ? r.updated : 0, left: typeof r.left === 'number' ? r.left : 0 };
+  } catch {
+    return null;
+  }
+}
