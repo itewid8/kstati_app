@@ -39,9 +39,10 @@ export const hasExtraFilters = (f: WatchFilters) =>
   f.genre.length > 0 || f.origin.length > 0 || f.fresh.length > 0 || (f.kind.length > 0 && segmentOf(f.kind) === 'all');
 
 /** «ФИЛЬМ · ФАНТАСТИКА · ЗАРУБЕЖНОЕ»; несколько жанров — через запятую */
-export function watchMeta(w: Pick<Item, 'kind' | 'genres' | 'origin'>): string {
+export function watchMeta(w: Pick<Item, 'kind' | 'genres' | 'origin' | 'rating'>): string {
   const genres = w.genres.map((g) => GENRE_LABEL[g]).join(', ');
-  return upper([w.kind ? KIND_LABEL[w.kind] : '', genres, w.origin ? ORIGIN_LABEL[w.origin] : ''].filter(Boolean).join(' · '));
+  const rating = w.rating ? `КП ${w.rating.toFixed(1)}` : '';
+  return upper([rating, w.kind ? KIND_LABEL[w.kind] : '', genres, w.origin ? ORIGIN_LABEL[w.origin] : ''].filter(Boolean).join(' · '));
 }
 
 export type WatchSnapshot = Pick<Snapshot, 'me' | 'groups' | 'currentGroupId' | 'watch' | 'activity' | 'activitySeen'>;

@@ -1,7 +1,7 @@
 /**
  * Тема заметок (C-Topic, src/screens/sheets/TopicScreen). Тема — сама заметка: своя пишется сразу (название в заголовке,
- * текст — строками заметки, useNoteEditor), сохраняется сама. Новая тема (id NEW_NOTE) появляется с первым словом
- * названия или текста; нет названия — берётся первая строка текста. «+» — заметка внутри темы (C-Note),
+ * текст — строками заметки, useNoteEditor), сохраняется по ГОТОВО (уйти с правками — «Сохранить изменения?»).
+ * Новая тема (id NEW_NOTE) появляется при сохранении; нет названия — берётся первая строка текста. «+» — заметка внутри темы (C-Note),
  * своя тема — удалять заметки смахиванием, открывать группам, меню «⋯». Чужая открытая тема — только читать.
  * Пока экран открыт, голосовая заметка без названной темы ложится сюда. Потянуть вниз — обновить.
  */
@@ -13,6 +13,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { topicProps, type TopicSnapshot } from '@/adapters/lists/topic';
 import { PullScreen, PullScrollView } from '@/components/PullRefresh';
 import { TopicShareSheet } from '@/components/TopicShareSheet';
+import { openMenu } from '@/components/ActionMenu';
 import { topicMenu } from '@/lib/ideas';
 import { uid } from '@/lib/ids';
 import { notePlain, parseNote, plainLine } from '@/lib/note';
@@ -23,6 +24,7 @@ import type { LiftTarget } from '@/ui';
 import { NEW_NOTE, NO_ME, nav, signedInOnly, useChrome, useInsets, usePersonColors, type StoreState } from '../common';
 import { holdIdea } from '../quick/quickStore';
 import { useNoteEditor } from './useNoteEditor';
+import { useUnsavedGuard } from './useUnsavedGuard';
 
 const pickTopic = (s: StoreState): TopicSnapshot & { groups: StoreState['groups'] } => ({
   me: s.me ?? NO_ME,
@@ -58,29 +60,33 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
 
   const [title, setTitle] = useState(() => topic?.title ?? '');
   const titleRef = useRef(title);
-  const bodyRef = useRef(topic?.body ?? '');
-  const saveTopic = useCallback(() => {
-    if (!editable) return;
-    const name = titleOf(titleRef.current, bodyRef.current);
-    if (name) useStore.getState().putTopic(id, name, bodyRef.current);
-  }, [editable, id]);
-  const saveBody = useCallback(
-    (text: string) => {
-      bodyRef.current = text;
-      saveTopic();
-    },
-    [saveTopic],
-  );
-  const ed = useNoteEditor(data.bodyText ?? '', saveBody);
-  const onChangeTitle = useCallback(
-    (t: string) => {
-      const one = t.replace(/\s*\n\s*/g, ' ');
-      titleRef.current = one;
-      setTitle(one);
-      saveTopic();
-    },
-    [saveTopic],
-  );
+  const savedTitle = useRef(title);
+  const ed = useNoteEditor(data.bodyText ?? '');
+  const onChangeTitle = useCallback((t: string) => {
+    const one = t.replace(/\s*\n\s*/g, ' ');
+    titleRef.current = one;
+    setTitle(one);
+  }, []);
+  const dirty = useCallback(() => editable && (ed.dirty() || titleRef.current !== savedTitle.current), [editable, ed]);
+  /** Сохранить тему — по ГОТОВО (и перед заметкой внутри): без названия — первая строка текста; пустая не создаётся */
+  const commit = useCallback(() => {
+    if (!dirty()) return;
+    const body = ed.text();
+    const name = titleOf(titleRef.current, body);
+    if (name) useStore.getState().putTopic(id, name, body);
+    ed.markSaved();
+    savedTitle.current = titleRef.current;
+  }, [dirty, ed, id]);
+  const discard = useCallback(() => {
+    ed.revert();
+    titleRef.current = savedTitle.current;
+    setTitle(savedTitle.current);
+  }, [ed]);
+  useUnsavedGuard(dirty, commit, discard);
+  const done = useCallback(() => {
+    Keyboard.dismiss();
+    commit();
+  }, [commit]);
 
   // Голос, начатый на этом экране, кладёт заметки в эту тему
   const voiceTopic = own && !inbox && topic ? topic.id : null;
@@ -96,23 +102,40 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
   // Заметка внутри: новой темы ещё может не быть — сохраняем (без названия — «Новая тема»)
   const add = useCallback(() => {
     if (inbox) return router.push(nav.note(NEW_NOTE, null));
-    ed.flush();
-    if (!useStore.getState().topics.some((t) => t.id === id)) {
-      if (!titleRef.current.trim() && !titleOf('', bodyRef.current)) titleRef.current = 'Новая тема';
-      saveTopic();
+    if (!useStore.getState().topics.some((t) => t.id === id) && !titleOf(titleRef.current, ed.text())) {
+      titleRef.current = 'Новая тема';
+      setTitle('Новая тема');
+    }
+    // Заметка внутри — тема должна быть: сохраняем
+    if (dirty() || !useStore.getState().topics.some((t) => t.id === id)) {
+      const body = ed.text();
+      useStore.getState().putTopic(id, titleOf(titleRef.current, body), body);
+      ed.markSaved();
+      savedTitle.current = titleRef.current;
     }
     router.push(nav.note(NEW_NOTE, id));
-  }, [inbox, id, ed, saveTopic]);
+  }, [inbox, id, ed, dirty]);
+  // Выбор заметок — удалить несколько разом
+  const [selected, setSelected] = useState<ID[] | null>(null);
+  const startSelect = useCallback(() => setSelected([]), []);
+  const cancelSelect = useCallback(() => setSelected(null), []);
+  const toggleSelect = useCallback((ideaId: ID) => setSelected((cur) => (cur ? (cur.includes(ideaId) ? cur.filter((x) => x !== ideaId) : [...cur, ideaId]) : cur)), []);
+  const deleteSelected = useCallback(() => {
+    if (selected?.length) useStore.getState().deleteIdeas(selected);
+    setSelected(null);
+  }, [selected]);
+  const hasIdeas = data.ideas.length > 0;
   const more = useCallback(() => {
     Keyboard.dismiss();
-    if (topic) topicMenu(topic, share);
-  }, [topic, share]);
+    if (topic) topicMenu(topic, share, hasIdeas ? startSelect : undefined);
+    else if (inbox && hasIdeas) openMenu({ title: 'Без темы', actions: [{ label: 'Выбрать заметки', onPress: startSelect }] });
+  }, [topic, share, hasIdeas, startSelect, inbox]);
   const open = useCallback((ideaId: ID) => router.push(nav.note(ideaId)), []);
   // Тема целиком: название, её текст и заметки внутри (в порядке списка), через пустую строку
   const copy = useCallback(() => {
-    ed.flush();
-    const name = titleOf(titleRef.current, bodyRef.current);
-    const head = notePlain([name, bodyRef.current].filter((x) => x.trim()).join('\n'));
+    const body = ed.text();
+    const name = titleOf(titleRef.current, body);
+    const head = notePlain([name, body].filter((x) => x.trim()).join('\n'));
     const all = useStore.getState().ideas;
     const notes = data.ideas.flatMap((r) => {
       const idea = all.find((x) => x.id === r.id);
@@ -158,7 +181,12 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
           onBack={back}
           onShare={own && topic ? share : undefined}
           onAdd={own && exists ? add : undefined}
-          onMore={own && topic ? more : undefined}
+          onMore={(own && topic) || (inbox && hasIdeas) ? more : undefined}
+          selected={selected}
+          onToggleSelect={toggleSelect}
+          onCancelSelect={cancelSelect}
+          onDeleteSelected={deleteSelected}
+          onDone={editable ? done : undefined}
           onCopy={data.bodyText !== null || isNew ? copy : undefined}
           onOpenIdea={open}
           onHoldIdea={hold}

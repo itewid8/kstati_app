@@ -78,6 +78,13 @@ export type IdeasScreenProps = {
   /** В архив (true) или вернуть из архива (false) */
   onToggleArchive?: (id: ID, archived: boolean) => void;
   onOpenTopic?: (id: ID) => void;
+  /** Удержание темы — выбор нескольких (удалить разом) */
+  onLongPressTopic?: (id: ID) => void;
+  /** Выбор тем: выбранные id; null — выбора нет */
+  selected?: readonly ID[] | null;
+  onToggleSelect?: (id: ID) => void;
+  onCancelSelect?: () => void;
+  onDeleteSelected?: () => void;
   onToggleSection?: (section: IdeasSection) => void;
   onAddTopic?: () => void;
   onOpenFeed?: () => void;
@@ -90,12 +97,31 @@ const NO_INSETS = { top: 0, bottom: 0 };
 
 type TopicRowProps = {
   topic: IdeaTopic;
+  /** Режим выбора: отмечена ли; undefined — выбора нет */
+  selected?: boolean;
+  onLongPress?: (id: ID) => void;
+  onToggleSelect?: (id: ID) => void;
   onToggleArchive?: (id: ID, archived: boolean) => void;
   onOpenTopic?: (id: ID) => void;
 };
 
-const TopicRow = memo(function TopicRow({ topic, onToggleArchive, onOpenTopic }: TopicRowProps) {
+const TopicRow = memo(function TopicRow({ topic, selected, onLongPress, onToggleSelect, onToggleArchive, onOpenTopic }: TopicRowProps) {
   const { c, person } = useTheme();
+  if (selected !== undefined) {
+    const toggle = onToggleSelect ? () => onToggleSelect(topic.id) : undefined;
+    return (
+      <AccessoryListRow
+        title={topic.title}
+        meta={`${topic.updated} · ${topic.last}`}
+        strip={topic.ownerColor ? person(topic.ownerColor) : c.hairStrong}
+        checked={selected}
+        checkLabel="Выбрать"
+        onToggle={toggle}
+        onPress={toggle}
+        right={<Text style={[T.rowValue, { color: c.text }]}>{topic.count}</Text>}
+      />
+    );
+  }
   return (
     <AccessoryListRow
       title={topic.title}
@@ -106,6 +132,7 @@ const TopicRow = memo(function TopicRow({ topic, onToggleArchive, onOpenTopic }:
       checkLabel="В архив"
       onToggle={onToggleArchive ? () => onToggleArchive(topic.id, true) : undefined}
       onPress={onOpenTopic ? () => onOpenTopic(topic.id) : undefined}
+      onLongPress={onLongPress ? () => onLongPress(topic.id) : undefined}
       right={<Text style={[T.rowValue, { color: c.text }]}>{topic.count}</Text>}
     />
   );
@@ -135,9 +162,12 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
     onRec,
   } = props;
   const { c, person, personInk } = useTheme();
+  const selecting = !!props.selected;
+  const picked = useMemo(() => new Set(props.selected ?? []), [props.selected]);
+  const { onDeleteSelected } = props;
 
   const actions = useMemo<TopBarAction[]>(
-    () => [
+    () => selecting ? (picked.size && onDeleteSelected ? [{ key: 'delete', icon: 'trash', accessibilityLabel: 'Удалить выбранные', onPress: onDeleteSelected }] : []) : [
       { key: 'add', icon: 'plus', accessibilityLabel: 'Новая тема', onPress: onAddTopic },
       { key: 'feed', icon: 'bell', accessibilityLabel: 'Лента', onPress: onOpenFeed, badge: hasNews },
       {
@@ -149,7 +179,7 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
         onPress: onOpenSettings,
       },
     ],
-    [onAddTopic, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
+    [onAddTopic, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk, selecting, picked, onDeleteSelected],
   );
 
   const tabs = useMemo<TabItem<ID>[]>(
@@ -162,14 +192,24 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
 
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
-      <TopBar lead={{ kind: 'caption', text: caption }} actions={actions} style={[styles.abs, { top: insets.top + S.topBarTop }]} />
+      <TopBar
+        lead={selecting ? { kind: 'back', label: `ВЫБРАНО ${pad2(picked.size)}`, onBack: props.onCancelSelect } : { kind: 'caption', text: caption }}
+        actions={actions} style={[styles.abs, { top: insets.top + S.topBarTop }]} />
       <ScreenTitle title="Заметки" style={[styles.abs, { top: insets.top + S.titleTop }]} />
       <Tabs items={tabs} value={selectedPersonId} onChange={onSelectPerson} style={[styles.abs, { top: insets.top + S.tabsTop }]} />
 
       <View style={[styles.abs, { top: insets.top + S.contentTop, bottom: insets.bottom + S.contentBottom }]}>
         <SectionBox title="ТЕМЫ" count={pad2(topics.length)} collapsed={!topicsOpen} onToggle={toggleTopics} scrollable>
           {topics.map((t) => (
-            <TopicRow key={t.id} topic={t} onToggleArchive={onToggleArchive} onOpenTopic={onOpenTopic} />
+            <TopicRow
+              key={t.id}
+              topic={t}
+              selected={selecting ? picked.has(t.id) : undefined}
+              onToggleSelect={props.onToggleSelect}
+              onLongPress={props.onLongPressTopic}
+              onToggleArchive={onToggleArchive}
+              onOpenTopic={onOpenTopic}
+            />
           ))}
         </SectionBox>
         <View style={styles.spacer} />

@@ -20,6 +20,7 @@ const ICONS = {
   calendar: { d: 'M4 5h16v15H4zM4 10h16M9 3v4M15 3v4', strokeWidth: 2 },
   /** Скопировать и перенести в тему (заметка) */
   copy: { d: 'M9 9h11v11H9zM5 15H4V4h11v1', strokeWidth: 2 },
+  trash: { d: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', strokeWidth: 2 },
   folder: { d: 'M3 6h7l2 2h9v11H3z', strokeWidth: 2 },
   /** Типы дел (мини-иконки): дело, день рождения, важный день, путешествие */
   kindTask: { d: 'M5 5h14v14H5zM9 12l2 2 4-4', strokeWidth: 2 },

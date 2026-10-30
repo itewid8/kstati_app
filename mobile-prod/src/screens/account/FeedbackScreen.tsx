@@ -1,5 +1,5 @@
 /**
- * Отзыв: ошибка или предложение — тип, текст, снизу ОТМЕНА / ОТПРАВИТЬ.
+ * Отзыв: ошибка или предложение — тип, текст (печатать или надиктовать), снизу ОТМЕНА / ОТПРАВИТЬ.
  * Презентационный экран: черновик, отправка и ошибка — у вызывающего.
  */
 import { memo } from 'react';
@@ -9,12 +9,19 @@ import { SectionBox, fonts, useInputColors, useTheme } from '@/ui';
 import { AccountPage, type PageInsets } from './components/AccountPage';
 import { ErrorLine } from './components/ErrorLine';
 import { OptionGrid, type Option } from './components/OptionGrid';
+import { WideButton } from './components/WideButton';
+
+/** Диктовка: idle — можно начать, recording — идёт запись, working — распознаём */
+export type DictateState = 'idle' | 'recording' | 'working';
 
 export type FeedbackScreenProps = {
   kind: FeedbackKind;
   text: string;
   error?: string | null;
   busy?: boolean;
+  dictate?: DictateState;
+  /** Начать / остановить диктовку; нет — кнопки нет */
+  onDictate?: () => void;
   insets?: PageInsets;
   onBack?: () => void;
   onChangeKind?: (kind: FeedbackKind) => void;
@@ -33,7 +40,7 @@ const KINDS: Option<FeedbackKind>[] = [
 const NO_INSETS: PageInsets = { top: 0, bottom: 0 };
 
 export const FeedbackScreen = memo(function FeedbackScreen(props: FeedbackScreenProps) {
-  const { kind, text, error, busy = false, insets = NO_INSETS, onBack, onChangeKind, onChangeText, onCancel, onSend } = props;
+  const { kind, text, error, busy = false, dictate = 'idle', insets = NO_INSETS, onBack, onChangeKind, onChangeText, onCancel, onSend } = props;
   const { c } = useTheme();
   const ic = useInputColors();
   return (
@@ -53,7 +60,7 @@ export const FeedbackScreen = memo(function FeedbackScreen(props: FeedbackScreen
           onChangeText={onChangeText}
           multiline
           autoFocus
-          editable={!busy}
+          editable={!busy && dictate === 'idle'}
           maxLength={FEEDBACK_MAX}
           textAlignVertical="top"
           underlineColorAndroid="transparent"
@@ -63,6 +70,14 @@ export const FeedbackScreen = memo(function FeedbackScreen(props: FeedbackScreen
           style={[styles.input, { color: c.text, backgroundColor: c.panel }]}
         />
       </SectionBox>
+      {props.onDictate ? (
+        <WideButton
+          label={dictate === 'recording' ? '■ ГОТОВО, РАСПОЗНАТЬ' : dictate === 'working' ? 'РАСПОЗНАЮ…' : '● НАДИКТОВАТЬ'}
+          variant={dictate === 'recording' ? 'primary' : 'outline'}
+          disabled={busy || dictate === 'working'}
+          onPress={props.onDictate}
+        />
+      ) : null}
       <ErrorLine text={error} />
     </AccountPage>
   );

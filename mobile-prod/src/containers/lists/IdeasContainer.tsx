@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { ALL_IDEAS, IDEAS_SECTIONS, ideasProps, type IdeasSnapshot } from '@/adapters/lists/ideas';
+import { deleteTopicsAsk } from '@/lib/ideas';
 import { DEMO, useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { IdeasScreen, type IdeasSection } from '@/screens/lists/IdeasScreen';
@@ -43,6 +44,26 @@ export const IdeasContainer = signedInOnly(function Ideas() {
   const archive = useStore((st) => archiveOn(st.serverApi));
   const [personId, setPersonId] = useState<ID>(ALL_IDEAS);
   const colors = usePersonColors(s);
+  // Выбор тем (удержание темы): только свои, «Без темы» не выбирается
+  const [selected, setSelected] = useState<ID[] | null>(null);
+  const canPick = useCallback((id: ID) => {
+    const st = useStore.getState();
+    return st.topics.some((t) => t.id === id && t.ownerId === st.me?.id);
+  }, []);
+  const longPress = useCallback((id: ID) => {
+    if (canPick(id)) setSelected([id]);
+  }, [canPick]);
+  const toggleSelect = useCallback(
+    (id: ID) => {
+      if (!canPick(id)) return;
+      setSelected((cur) => (cur ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : cur));
+    },
+    [canPick],
+  );
+  const cancelSelect = useCallback(() => setSelected(null), []);
+  const deleteSelected = useCallback(() => {
+    if (selected?.length) deleteTopicsAsk(selected, () => setSelected(null));
+  }, [selected]);
   const data = useMemo(() => ideasProps(s, colors, { today }, { personId, collapsed }), [s, colors, today, personId, collapsed]);
 
   return (
@@ -52,6 +73,11 @@ export const IdeasContainer = signedInOnly(function Ideas() {
       onSelectPerson={setPersonId}
       onToggleArchive={archive ? toggleArchive : undefined}
       onOpenTopic={openTopic}
+      onLongPressTopic={longPress}
+      selected={selected}
+      onToggleSelect={toggleSelect}
+      onCancelSelect={cancelSelect}
+      onDeleteSelected={deleteSelected}
       onToggleSection={toggleSection}
       onAddTopic={addTopic}
       onOpenFeed={onOpenFeed}

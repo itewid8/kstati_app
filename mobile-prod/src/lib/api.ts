@@ -134,3 +134,24 @@ export async function sendFeedback(kind: FeedbackKind, text: string, device: str
     return String((e as Error)?.message ?? e);
   }
 }
+
+/** POST /feedback/voice — отзыв голосом: запись → текст (без разбора). Ошибка — { problem } */
+export async function transcribeFeedback(uri: string): Promise<{ text: string } | { problem: string }> {
+  let audio: string;
+  try {
+    audio = toBase64(await new File(fileUriOf(uri)).arrayBuffer());
+  } catch (e) {
+    return { problem: `Не прочиталась запись: ${(e as Error).message ?? e}` };
+  } finally {
+    deleteRecording(uri);
+  }
+  try {
+    const s = useStore.getState();
+    const r = await request<{ text?: unknown }>('/feedback/voice', { token: s.session?.token, body: { audio, lang: s.voiceLang }, timeoutMs: 60_000 });
+    return { text: typeof r.text === 'string' ? r.text : '' };
+  } catch (e) {
+    if (e instanceof ApiError) return { problem: e.message };
+    if (e instanceof NetError) return { problem: 'Нет связи с сервером' };
+    return { problem: String((e as Error)?.message ?? e) };
+  }
+}

@@ -2,7 +2,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { NoteBlock } from './note';
-import { applyTool, backspaceEmpty, changeText, startBlocks, toggleCheck } from './noteEdit';
+import { applyTool, backspaceAt, backspaceEmpty, changeText, startBlocks, toggleCheck } from './noteEdit';
 
 const B = (kind: NoteBlock['kind'], text: string, extra: Partial<NoteBlock> = {}): NoteBlock => ({ kind, text, ...extra });
 
@@ -50,5 +50,19 @@ describe('noteEdit', () => {
     assert.deepEqual(applyTool([B('text', 'a', { bold: true })], 0, 'bold'), [B('text', 'a')]);
     assert.deepEqual(applyTool([B('heading', 'a')], 0, 'bold'), [B('heading', 'a')]);
     assert.deepEqual(startBlocks([]), [B('text', '')]);
+  });
+});
+
+describe('backspaceAt — Backspace в начале строки', () => {
+  test('склеивает с предыдущей, пустая предыдущая исчезает, первая пустая удаляется', () => {
+    const r = backspaceAt([B('text', 'Мол'), B('text', 'око')], 1);
+    assert.deepEqual([r.blocks, r.caret, r.list], [[B('text', 'Молоко')], { index: 0, at: 3 }, false]);
+    assert.deepEqual(backspaceAt([B('text', ''), B('check', 'Хлеб')], 1).blocks, [B('check', 'Хлеб')]);
+    assert.deepEqual(backspaceAt([B('text', ''), B('text', 'а')], 0).blocks, [B('text', 'а')]);
+    assert.equal(backspaceAt([B('text', 'а')], 0).caret, null);
+  });
+  test('пункт списка сначала становится обычной строкой — с паузой', () => {
+    const r = backspaceAt([B('text', 'а'), B('number', 'Два')], 1);
+    assert.deepEqual([r.blocks, r.list], [[B('text', 'а'), B('text', 'Два')], true]);
   });
 });

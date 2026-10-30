@@ -29,7 +29,7 @@ export const NOTE_TOOL = 48;
 
 export type NoteHandlers = {
   onChangeText?: (index: number, text: string) => void;
-  /** Backspace в пустой строке */
+  /** Backspace в начале строки (курсор на 0): склеить с предыдущей, пункт списка — в обычную строку */
   onBackspace?: (index: number) => void;
   onToggleCheck?: (index: number) => void;
   onFocus?: (index: number) => void;
@@ -70,6 +70,8 @@ const Line = memo(function Line(props: LineProps) {
   const { c } = useTheme();
   const ic = useInputColors();
   const input = useRef<TextInput | null>(null);
+  // Где курсор: пока поле не сообщило — в конце текста (Backspace не склеивает строки по ошибке)
+  const sel = useRef<{ start: number; end: number } | null>(null);
   const heading = b.kind === 'heading';
   const done = b.kind === 'check' && !!b.checked;
   const style = [heading ? styles.heading : b.bold ? styles.bold : styles.text, { color: done ? c.muted : c.text }, done && styles.done];
@@ -89,9 +91,14 @@ const Line = memo(function Line(props: LineProps) {
         returnKeyType="next"
         onSubmitEditing={() => onEnter(index)}
         onChangeText={(t) => onChangeText?.(index, t)}
-        onSelectionChange={(e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => setCaretAt(index, e.nativeEvent.selection.end)}
+        onSelectionChange={(e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+          sel.current = e.nativeEvent.selection;
+          setCaretAt(index, e.nativeEvent.selection.end);
+        }}
         onKeyPress={(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-          if (e.nativeEvent.key === 'Backspace' && !b.text) onBackspace?.(index);
+          if (e.nativeEvent.key !== 'Backspace') return;
+          const atStart = !b.text || (sel.current !== null && sel.current.start === 0 && sel.current.end === 0);
+          if (atStart) onBackspace?.(index);
         }}
         onFocus={() => onFocus?.(index)}
         selectionColor={ic.selectionColor}
@@ -182,7 +189,7 @@ export const NoteLines = memo(function NoteLines(props: LinesProps) {
     <>
       {blocks.map((b, i) => (
         <Line
-          key={i}
+          key={b.key ?? i}
           b={b}
           index={i}
           number={b.kind === 'number' ? numberOf(blocks, i) : 0}

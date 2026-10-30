@@ -10,7 +10,7 @@
 #   Secrets:   YC_SA_JSON_KEY — ключ сервисного аккаунта kstati-deployer (JSON целиком)
 #   Variables: FOLDER_ID, REGISTRY_ID, SA_ID, LOCKBOX_ID, CONTAINER_NAME, PUBLIC_URL,
 #              YDB_DOCAPI_ENDPOINT, YANDEX_MODEL, APP_SCHEME, VK_CLIENT_ID, MAIL_FROM, FEEDBACK_EMAIL, VOICE_DAILY_LIMIT
-# Секреты самого сервера (JWT, ключи Яндекса) лежат в Lockbox — в GitHub их нет.
+# Секреты самого сервера (JWT, ключи Яндекса, POISKKINO_API_KEY) лежат в Lockbox — в GitHub их нет.
 name: Выкладка сервера
 
 on:
@@ -73,7 +73,8 @@ jobs:
             --secret "environment-variable=JWT_SECRET,id=${{ vars.LOCKBOX_ID }},key=JWT_SECRET" \
             --secret "environment-variable=YANDEX_API_KEY,id=${{ vars.LOCKBOX_ID }},key=YANDEX_API_KEY" \
             --secret "environment-variable=AWS_ACCESS_KEY_ID,id=${{ vars.LOCKBOX_ID }},key=AWS_ACCESS_KEY_ID" \
-            --secret "environment-variable=AWS_SECRET_ACCESS_KEY,id=${{ vars.LOCKBOX_ID }},key=AWS_SECRET_ACCESS_KEY"
+            --secret "environment-variable=AWS_SECRET_ACCESS_KEY,id=${{ vars.LOCKBOX_ID }},key=AWS_SECRET_ACCESS_KEY" \
+            --secret "environment-variable=POISKKINO_API_KEY,id=${{ vars.LOCKBOX_ID }},key=POISKKINO_API_KEY"
 
       - name: Проверка /health
         run: |

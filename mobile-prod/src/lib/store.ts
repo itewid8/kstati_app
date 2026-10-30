@@ -283,11 +283,15 @@ type Actions = {
   deleteWatch: (id: ID) => void;
   /** Идеи: удалить идею, тему (вместе с её идеями), переименовать / открыть группам */
   deleteIdea: (id: ID) => void;
+  /** Несколько заметок разом — одна отмена на всё */
+  deleteIdeas: (ids: readonly ID[]) => void;
   /** Заметка из окна C-Note: новая (своя, в теме topicId) или новый текст своей */
   putNote: (id: ID, topicId: ID | null, text: string) => void;
   /** Удалить без «ВЕРНУТЬ» (заметку очистили и вышли) */
   dropIdea: (id: ID) => void;
   deleteTopic: (id: ID) => void;
+  /** Несколько тем разом вместе с заметками внутри — одна отмена на всё */
+  deleteTopics: (ids: readonly ID[]) => void;
   updateTopic: (id: ID, patch: Partial<Pick<Topic, 'title' | 'groupIds'>>) => void;
   /** Своя тема: в архив / из архива */
   archiveTopic: (id: ID, archived: boolean) => void;
@@ -819,6 +823,18 @@ export const useStore = create<State & Actions>()(
       const before = { ideas: get().ideas };
       set({ ideas: before.ideas.filter((x) => x.id !== id) });
       withUndo('Заметка удалена', before);
+    },
+    deleteIdeas: (ids) => {
+      const gone = new Set(ids);
+      const before = { ideas: get().ideas };
+      set({ ideas: before.ideas.filter((x) => !gone.has(x.id)) });
+      withUndo(ids.length === 1 ? 'Заметка удалена' : `Удалено заметок: ${ids.length}`, before);
+    },
+    deleteTopics: (ids) => {
+      const gone = new Set(ids);
+      const before = { topics: get().topics, ideas: get().ideas };
+      set({ topics: before.topics.filter((t) => !gone.has(t.id)), ideas: before.ideas.filter((x) => !x.topicId || !gone.has(x.topicId)) });
+      withUndo(ids.length === 1 ? 'Тема удалена' : `Удалено тем: ${ids.length}`, before);
     },
     deleteTopic: (id) => {
       const before = { topics: get().topics, ideas: get().ideas };
