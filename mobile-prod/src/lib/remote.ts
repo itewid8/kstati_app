@@ -134,6 +134,7 @@ export function toWatch(v: unknown, groupId: ID): WatchItem | null {
     genres: strs(r.genres).filter((g): g is Genre => (GENRES as readonly string[]).includes(g)),
     origin: oneOf(r.origin, ORIGINS),
     year: numOrNull(r.year),
+    ...(typeof r.rating === 'number' && r.rating > 0 && { rating: r.rating }),
     addedBy: str(r.addedBy),
     watchedAt: strOrNull(r.watchedAt),
     createdAt: str(r.createdAt),

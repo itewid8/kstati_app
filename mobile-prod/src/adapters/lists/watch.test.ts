@@ -52,6 +52,7 @@ describe('watchProps (C-Watch)', () => {
       fx.queue.map((q) => [q.title, CHANGED.has(q.title) ? '' : q.meta, q.year, q.addedByColor]),
     );
     assert.equal(watchMeta({ kind: 'movie', genres: ['detective'], origin: 'ru' }), 'ФИЛЬМ · ДЕТЕКТИВ · НАШЕ');
+    assert.equal(watchMeta({ kind: 'movie', genres: ['scifi'], origin: 'foreign', rating: 7.77 }), 'КП 7.8 · ФИЛЬМ · ФАНТАСТИКА · ЗАРУБЕЖНОЕ');
     assert.deepEqual(got.watched.map(({ id: _, ...w }) => w), fx.watched.map(({ id: _, ...w }) => w));
     assert.deepEqual([got.queueOpen, got.watchedOpen], [true, true]);
     assert.equal(watchProps(s, colors, CLOCK, { filters: emptyFilters, collapsed: ['watch.watched'] }).watchedOpen, watchFixture('dark').watchedOpen);

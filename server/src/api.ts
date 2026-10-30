@@ -14,6 +14,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
 import { apiLevel } from './client.js';
+import { lookupFilm, type FilmDeps } from './films.js';
 import { giftrev, grev, irev, migrated, PERSON_COLORS, publicUser, TASK_KINDS, trev, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type WatchItem, type Wish } from './store/index.js';
 import { CATEGORIES } from './types.js';
 import { ownerPart, PERSONAL, visibleIn } from './visibility.js';
@@ -189,7 +190,10 @@ export function wishView(w: Wish, viewerId: string, api: number): Wish {
 }
 
 export class Data {
-  constructor(private store: Store) {}
+  constructor(
+    private store: Store,
+    private films: FilmDeps = {},
+  ) {}
 
   /** Запись в ленту активности. Ошибка ленты не должна ломать саму правку */
   private async log(user: User, a: Omit<Activity, 'id' | 'at' | 'actor'>) {
@@ -524,9 +528,21 @@ export class Data {
         await this.memberGroup(user, op.watch.groupId);
         const old = await s.getItem(op.watch.groupId, op.watch.id);
         if (old && old.type !== 'watch') throw new HttpError(409, 'conflict');
+        // Рейтинг Кинопоиска и пустые поля — из ПоискКино: для новой записи или нового названия; иначе как было
+        const prev = old?.type === 'watch' ? old : null;
+        const fresh = !prev || prev.title !== op.watch.title;
+        const film = fresh ? await lookupFilm(s, op.watch.title, op.watch.year, this.films) : null;
         const item: Item = {
           type: 'watch',
           ...op.watch,
+          ...(film && {
+            year: op.watch.year ?? film.year,
+            genres: op.watch.genres.length ? op.watch.genres : film.genres,
+            kind: op.watch.kind ?? film.kind,
+            origin: op.watch.origin ?? film.origin,
+          }),
+          rating: fresh ? (film?.rating ?? null) : (prev?.rating ?? null),
+          kpId: fresh ? (film?.kpId ?? null) : (prev?.kpId ?? null),
           addedBy: old?.type === 'watch' ? old.addedBy : user.id,
           createdAt: old?.createdAt ?? now,
           updatedAt: now,

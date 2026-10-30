@@ -24,7 +24,7 @@ export function changeText(blocks: readonly NoteBlock[], i: number, text: string
   const [head = '', ...rest] = text.replace(/\r\n?/g, '\n').split('\n');
   // Enter в пустом пункте списка — выход из списка
   if (!head && rest.length === 1 && !rest[0] && b.kind !== 'text' && b.kind !== 'heading' && !b.text) {
-    return { blocks: blocks.map((x, j) => (j === i ? { kind: 'text', text: '' } : x)), caret: { index: i, at: 0 } };
+    return { blocks: blocks.map((x, j) => (j === i ? { kind: 'text', text: '', ...(b.key && { key: b.key }) } : x)), caret: { index: i, at: 0 } };
   }
   const added = rest.map((line, k): NoteBlock => {
     // Первая новая строка — продолжение текущей (её хвост после курсора); вставленные с разметкой — по разметке
@@ -46,6 +46,39 @@ export function backspaceEmpty(blocks: readonly NoteBlock[], i: number): NoteEdi
   if (b.kind !== 'text') return { blocks: blocks.map((x, j) => (j === i ? { kind: 'text', text: '' } : x)), caret: { index: i, at: 0 } };
   if (i === 0 || blocks.length === 1) return { blocks: [...blocks], caret: null };
   return { blocks: blocks.filter((_, j) => j !== i), caret: { index: i - 1, at: 'end' } };
+}
+
+/**
+ * Backspace в начале строки i (курсор на 0):
+ *  пункт списка или заголовок — сначала становится обычной строкой (list: true — у вызывающего пауза, чтобы успеть отпустить);
+ *  обычная строка — склеивается с предыдущей (пустая предыдущая просто исчезает); первая пустая при других строках — удаляется.
+ */
+export function backspaceAt(blocks: readonly NoteBlock[], i: number): NoteEdit & { list: boolean } {
+  const b = blocks[i];
+  const same = { blocks: [...blocks], caret: null, list: false };
+  if (!b) return same;
+  // Пустая строка выше — уходит она, строка (с её видом) поднимается на её место
+  const above = i > 0 ? blocks[i - 1] : undefined;
+  // (поле с курсором остаётся тем же — строка с её ключом просто поднимается)
+  if (above && !above.text && above.kind === 'text') return { blocks: blocks.filter((_, j) => j !== i - 1), caret: { index: i - 1, at: 0 }, list: false };
+  if (b.kind !== 'text') {
+    // Курсор не трогаем: он и так в начале строки, а повторная установка обрывает зажатую клавишу
+    const line: NoteBlock = { kind: 'text', text: b.text, ...(b.bold && { bold: true }), ...(b.key && { key: b.key }) };
+    return { blocks: blocks.map((x, j) => (j === i ? line : x)), caret: null, list: true };
+  }
+  if (i === 0) {
+    if (b.text || blocks.length === 1) return same;
+    return { blocks: blocks.slice(1), caret: { index: 0, at: 0 }, list: false };
+  }
+  const prev = blocks[i - 1]!;
+  // Склеенная строка берёт ключ текущей: поле с курсором не пересоздаётся и зажатый Backspace удаляет дальше
+  const { key: _k, ...rest } = prev;
+  const merged: NoteBlock = { ...rest, text: prev.text + b.text, ...(b.key && { key: b.key }) };
+  return {
+    blocks: blocks.flatMap((x, j) => (j === i ? [] : j === i - 1 ? [merged] : [x])),
+    caret: { index: i - 1, at: prev.text.length },
+    list: false,
+  };
 }
 
 export function toggleCheck(blocks: readonly NoteBlock[], i: number): NoteBlock[] {

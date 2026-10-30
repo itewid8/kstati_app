@@ -5,7 +5,7 @@
  */
 import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Checkbox, Icon, Marquee, size as S, type as T, useTheme, type IconName } from '@/ui';
+import { Checkbox, Icon, LONG_PRESS_MS, Marquee, size as S, type as T, useTheme, type IconName } from '@/ui';
 
 type Props = {
   title: string;
@@ -19,6 +19,7 @@ type Props = {
   onToggle?: () => void;
   checkLabel: string;
   onPress?: () => void;
+  onLongPress?: () => void;
   right?: ReactNode;
   style?: StyleProp<ViewStyle>;
 };
@@ -33,6 +34,7 @@ export const AccessoryListRow = memo(function AccessoryListRow({
   onToggle,
   checkLabel,
   onPress,
+  onLongPress,
   right,
   style,
 }: Props) {
@@ -40,7 +42,9 @@ export const AccessoryListRow = memo(function AccessoryListRow({
   return (
     <Pressable
       onPress={onPress}
-      disabled={!onPress}
+      onLongPress={onLongPress}
+      delayLongPress={LONG_PRESS_MS}
+      disabled={!onPress && !onLongPress}
       style={[styles.row, { backgroundColor: c.panel, borderTopColor: c.hair }, style]}
     >
       {strip ? <View style={[styles.strip, { backgroundColor: strip }]} /> : null}

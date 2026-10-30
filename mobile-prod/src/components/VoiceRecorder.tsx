@@ -11,7 +11,7 @@ import { useStore } from '@/lib/store';
 import { registerRecorder, stopRecording, useVoiceLevel } from '@/lib/voice';
 
 /** AAC/m4a, моно, 16 кГц — речь, небольшой файл (7 с ≈ 30 КБ) */
-const OPTIONS: RecordingOptions = {
+export const RECORD_OPTIONS: RecordingOptions = {
   ...RecordingPresets.HIGH_QUALITY,
   sampleRate: 16000,
   numberOfChannels: 1,
@@ -24,7 +24,7 @@ const SILENCE_STOP_MS = 2000; // после речи 2 с тишины — ав�
 
 /** Невидимый компонент: держит микрофон и отдаёт управление в lib/voice.ts */
 export function VoiceRecorder() {
-  const rec = useAudioRecorder(OPTIONS);
+  const rec = useAudioRecorder(RECORD_OPTIONS);
   const state = useAudioRecorderState(rec, 100);
   const phase = useStore((s) => s.voice);
   const spoke = useRef(false);

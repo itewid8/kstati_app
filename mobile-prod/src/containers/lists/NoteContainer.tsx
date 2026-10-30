@@ -1,6 +1,6 @@
 /**
  * Заметка внутри темы (C-Note, src/screens/lists/NoteScreen). Своя — название и строки правятся (useNoteEditor),
- * сохраняется сама; очистили и вышли — заметка удаляется. Новая (id NEW_NOTE) появляется в теме topicId с первым словом.
+ * сохраняется по ГОТОВО (назад с правками — «Сохранить изменения?»); очистили и вышли — заметка удаляется. Новая (id NEW_NOTE) появляется в теме topicId с первым словом.
  * Чужая — только читать. «Скопировать» — текст без разметки в буфер обмена, «В тему» — перенос (своя),
  * «⋯» — быстрые действия (в дела, копия, удалить).
  */
@@ -17,6 +17,7 @@ import { NoteScreen } from '@/screens/lists/NoteScreen';
 import { NEW_NOTE, nav, signedInOnly, useInsets } from '../common';
 import { holdIdea } from '../quick/quickStore';
 import { useNoteEditor } from './useNoteEditor';
+import { useUnsavedGuard } from './useUnsavedGuard';
 
 const back = (topicId: ID | null) => (router.canGoBack() ? router.back() : router.navigate(topicId ? nav.topic(topicId) : nav.tab('ideas')));
 
@@ -36,38 +37,34 @@ export const NoteContainer = signedInOnly(function Note({ id: routeId, topicId: 
   const [parts] = useState(() => splitTitle(idea?.text ?? ''));
   const [title, setTitle] = useState(parts.title);
   const titleRef = useRef(title);
-  const bodyRef = useRef(parts.body);
 
-  /** В хранилище (оттуда — на сервер): пустая новая не создаётся, очищенная удаляется */
-  const store = useCallback(() => {
-    if (!editable) return;
+  // Сохранённое название — с ним сравниваем «правили ли» и к нему возвращаемся без сохранения
+  const savedTitle = useRef(parts.title);
+  const ed = useNoteEditor(parts.body);
+  const onChangeTitle = useCallback((t: string) => {
+    titleRef.current = t;
+    setTitle(t);
+  }, []);
+  const dirty = useCallback(() => editable && (ed.dirty() || titleRef.current !== savedTitle.current), [editable, ed]);
+  /** В хранилище (оттуда — на сервер) — только по ГОТОВО: пустая новая не создаётся, очищенная удаляется */
+  const commit = useCallback(() => {
+    if (!dirty()) return;
     const st = useStore.getState();
-    const text = joinTitle(titleRef.current, bodyRef.current);
+    const text = joinTitle(titleRef.current, ed.text());
     if (isBlankNote(parseNote(text))) {
       if (st.ideas.some((x) => x.id === id)) st.dropIdea(id);
-      return;
-    }
-    st.putNote(id, topicId, text);
-  }, [editable, id, topicId]);
-  const save = useCallback(
-    (body: string) => {
-      bodyRef.current = body;
-      store();
-    },
-    [store],
-  );
-  const ed = useNoteEditor(parts.body, save);
-  const onChangeTitle = useCallback(
-    (t: string) => {
-      titleRef.current = t;
-      setTitle(t);
-      store();
-    },
-    [store],
-  );
+    } else st.putNote(id, topicId, text);
+    ed.markSaved();
+    savedTitle.current = titleRef.current;
+  }, [dirty, ed, id, topicId]);
+  const discard = useCallback(() => {
+    ed.revert();
+    titleRef.current = savedTitle.current;
+    setTitle(savedTitle.current);
+  }, [ed]);
+  useUnsavedGuard(dirty, commit, discard);
   const onCopy = useCallback(() => {
-    ed.flush();
-    const text = notePlain(joinTitle(titleRef.current, bodyRef.current));
+    const text = notePlain(joinTitle(titleRef.current, ed.text()));
     if (!text) return;
     Clipboard.setStringAsync(text)
       .then(() => useStore.getState().notice('Скопировано'))
@@ -79,15 +76,18 @@ export const NoteContainer = signedInOnly(function Note({ id: routeId, topicId: 
     if (existed.current && !idea) back(topicId);
   }, [idea, topicId]);
 
+  // ГОТОВО — сохранить и выйти; назад с правками — вопрос (useUnsavedGuard)
   const onDone = useCallback(() => {
     Keyboard.dismiss();
+    commit();
     back(topicId);
-  }, [topicId]);
+  }, [topicId, commit]);
+  const onBack = useCallback(() => back(topicId), [topicId]);
   const onMore = useCallback(() => {
     Keyboard.dismiss();
-    ed.flush();
+    commit();
     if (useStore.getState().ideas.some((x) => x.id === id)) holdIdea(id);
-  }, [id, ed]);
+  }, [id, commit]);
 
   const caption = useMemo(() => `ЗАМЕТКА · ${upper(topicTitle ?? 'Без темы')}`, [topicTitle]);
 
@@ -102,7 +102,7 @@ export const NoteContainer = signedInOnly(function Note({ id: routeId, topicId: 
       active={ed.active}
       caret={ed.caret}
       insets={insets}
-      onBack={onDone}
+      onBack={onBack}
       onMore={idea ? onMore : undefined}
       onCopy={onCopy}
       onChangeText={ed.onChangeText}

@@ -40,6 +40,11 @@ export const config = {
   mailFrom: env('MAIL_FROM'),
   /** Куда пересылать «Сообщить об ошибке / предложить»; пусто — отзывы только сохраняются на сервере */
   feedbackEmail: env('FEEDBACK_EMAIL'),
+  /** ПоискКино (данные Кинопоиска): ключ из Lockbox; пусто — рейтинг и жанры фильмов не подтягиваются */
+  poiskkinoKey: env('POISKKINO_API_KEY'),
+  poiskkinoUrl: (env('POISKKINO_URL') || 'https://api.poiskkino.dev').replace(/\/$/, ''),
+  /** Запросов к ПоискКино в сутки (бесплатный тариф — 200) */
+  poiskkinoDaily: Number(env('POISKKINO_DAILY', '190')),
   /** Сколько отзывов в сутки на человека */
   feedbackDailyLimit: Number(env('FEEDBACK_DAILY_LIMIT', '20')),
 

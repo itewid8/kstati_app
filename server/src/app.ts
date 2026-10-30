@@ -182,6 +182,20 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     return { ok: true };
   });
 
+  /**
+   * Отзыв голосом: запись → текст для поля отзыва (без разбора моделью — только распознавание).
+   * Голосовые команды не тратит; своё ограничение — FEEDBACK_DAILY_LIMIT × 3 записей в сутки
+   */
+  app.post('/feedback/voice', async (req) => {
+    const user = await requireUser(req, store);
+    const body = z.object({ audio: z.string().min(1).max(1_500_000), lang: z.enum(STT_LANGS).optional() }).parse(req.body);
+    const n = await store.incrUpTo(`feedback-voice#${user.id}#${mskDay()}`, config.feedbackDailyLimit * 3);
+    if (n === null) throw new HttpError(429, 'daily_limit', 'На сегодня записей достаточно — допишите текстом.');
+    const conv = await toOgg(Buffer.from(body.audio, 'base64'));
+    const text = (await stt(conv.ogg, body.lang ?? 'ru-RU')).trim();
+    return { text };
+  });
+
   /** Разбор текста — «Разобрать заново» */
   app.post('/voice/text', async (req) => {
     const user = await requireUser(req, store);

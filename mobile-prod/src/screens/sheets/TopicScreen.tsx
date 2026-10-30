@@ -13,6 +13,7 @@ import type { NoteCaret, NoteTool } from '@/lib/noteEdit';
 import type { ID, PersonColor } from '@/lib/types';
 import {
   BottomNav,
+  Checkbox,
   Icon,
   LONG_PRESS_MS,
   ListMotion,
@@ -77,8 +78,15 @@ export type TopicScreenProps = {
   onShare?: () => void;
   onAdd?: () => void;
   onMore?: () => void;
+  /** ГОТОВО на панели над клавиатурой — сохранить (правки темы сохраняются только так); нет — просто убрать клавиатуру */
+  onDone?: () => void;
   /** Скопировать тему целиком: название, текст и заметки внутри */
   onCopy?: () => void;
+  /** Выбор заметок (удалить несколько): выбранные id; null — выбора нет */
+  selected?: readonly ID[] | null;
+  onToggleSelect?: (id: ID) => void;
+  onCancelSelect?: () => void;
+  onDeleteSelected?: () => void;
   onOpenIdea?: (id: ID) => void;
   onHoldIdea?: (id: ID, lift: LiftTarget) => void;
   onDeleteIdea?: (id: ID) => void;
@@ -91,12 +99,14 @@ const NO_INSETS = { top: 0, bottom: 0 };
 type RowProps = {
   idea: TopicIdea;
   strip: string;
+  /** Режим выбора: отмечена ли строка; undefined — выбора нет */
+  selected?: boolean;
   onOpen?: (id: ID) => void;
   onHold?: (id: ID, lift: LiftTarget) => void;
 };
 
 const IdeaRow = memo(function IdeaRow(props: RowProps) {
-  const { idea, strip, onOpen, onHold } = props;
+  const { idea, strip, selected, onOpen, onHold } = props;
   const { c } = useTheme();
   const hold = useCallback<LiftHandler>((lift) => onHold?.(idea.id, lift), [onHold, idea.id]);
   const lift = useLift(onHold ? hold : undefined, 'row', () => <IdeaRow idea={idea} strip={strip} />);
@@ -109,9 +119,13 @@ const IdeaRow = memo(function IdeaRow(props: RowProps) {
       onLongPress={lift.onLongPress}
       delayLongPress={LONG_PRESS_MS}
       disabled={!onOpen && !lift.onLongPress}
-      style={[styles.row, { backgroundColor: c.panel, borderTopColor: c.hair }]}
+      style={[styles.row, selected !== undefined && styles.selRow, { backgroundColor: c.panel, borderTopColor: c.hair }]}
     >
       <View style={[styles.strip, { backgroundColor: strip }]} />
+      {selected !== undefined ? (
+        <Checkbox checked={selected} onPress={onOpen ? () => onOpen(idea.id) : undefined} accessibilityLabel="Выбрать" emptyFill="none" style={styles.selCheck} />
+      ) : null}
+      <View style={styles.rowText}>
       <Text numberOfLines={1} style={[styles.noteTitle, { color: c.text }]}>
         {idea.title}
       </Text>
@@ -130,6 +144,7 @@ const IdeaRow = memo(function IdeaRow(props: RowProps) {
             <Text style={[styles.checksText, { color: c.text }]}>{idea.checks}</Text>
           </View>
         ) : null}
+      </View>
       </View>
     </Pressable>
   );
@@ -162,8 +177,14 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
   // Клавиатура открыта (правят текст или название) — снизу панель заметки вместо навигации
   const typing = overlap > 0 && !!body?.editable;
 
+  const selecting = !!props.selected;
+  const picked = useMemo(() => new Set(props.selected ?? []), [props.selected]);
   const actions = useMemo<TopBarAction[]>(() => {
     const out: TopBarAction[] = [];
+    if (selecting) {
+      if (picked.size && props.onDeleteSelected) out.push({ key: 'delete', icon: 'trash', accessibilityLabel: 'Удалить выбранные', onPress: props.onDeleteSelected });
+      return out;
+    }
     if (shared !== null && onShare) {
       out.push({
         key: 'share',
@@ -177,7 +198,7 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
     if (onAdd) out.push({ key: 'add', icon: 'plus', accessibilityLabel: 'Новая заметка', onPress: onAdd });
     if (onMore) out.push({ key: 'more', icon: 'dots', accessibilityLabel: 'Ещё', onPress: onMore });
     return out;
-  }, [shared, onShare, onAdd, onMore, props.onCopy, c.text, c.bg]);
+  }, [shared, onShare, onAdd, onMore, props.onCopy, c.text, c.bg, selecting, picked, props.onDeleteSelected]);
 
   // Пустой текст темы при заметках внутри не занимает места: писать — «Далее» в названии
   const hideBody = !!body && ideas.length > 0 && body.active === null && body.blocks.every((b) => !b.text.trim());
@@ -186,7 +207,9 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
 
   return (
     <View ref={root} style={[styles.screen, { backgroundColor: c.bg }]}>
-      <TopBar lead={{ kind: 'back', label: caption, onBack }} actions={actions} style={[styles.abs, { top: insets.top + S.topBarTop }]} />
+      <TopBar
+        lead={selecting ? { kind: 'back', label: `ВЫБРАНО ${pad2(picked.size)}`, onBack: props.onCancelSelect } : { kind: 'back', label: caption, onBack }}
+        actions={actions} style={[styles.abs, { top: insets.top + S.topBarTop }]} />
       <View style={[styles.abs, styles.title, { top: insets.top + S.titleTop }]}>
         <TitleField
           value={title}
@@ -226,9 +249,13 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
             <ListMotion>
               {ideas.map((idea) => (
                 <RowMotion key={idea.id}>
-                  <SwipeDelete onDelete={onDeleteIdea ? () => onDeleteIdea(idea.id) : undefined}>
-                    <IdeaRow idea={idea} strip={strip} onOpen={onOpenIdea} onHold={onHoldIdea} />
-                  </SwipeDelete>
+                  {selecting ? (
+                    <IdeaRow idea={idea} strip={strip} selected={picked.has(idea.id)} onOpen={props.onToggleSelect} />
+                  ) : (
+                    <SwipeDelete onDelete={onDeleteIdea ? () => onDeleteIdea(idea.id) : undefined}>
+                      <IdeaRow idea={idea} strip={strip} onOpen={onOpenIdea} onHold={onHoldIdea} />
+                    </SwipeDelete>
+                  )}
                 </RowMotion>
               ))}
             </ListMotion>
@@ -240,7 +267,7 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
         <>
           <View style={[styles.bar, { height: overlap + KB_GAP + NOTE_TOOL + BAR_PAD + S.hairline, backgroundColor: c.bg, borderTopColor: c.hair }]} />
           <View style={[styles.abs, { bottom: overlap + KB_GAP }]}>
-            <NoteTools current={body.active !== null ? body.blocks[body.active] : undefined} onTool={body.onTool} onDone={Keyboard.dismiss} />
+            <NoteTools current={body.active !== null ? body.blocks[body.active] : undefined} onTool={body.onTool} onDone={props.onDone ?? Keyboard.dismiss} />
           </View>
         </>
       ) : (
@@ -270,7 +297,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  row: { borderTopWidth: S.hairline, paddingVertical: 9, paddingLeft: 12, paddingRight: 10, gap: 3 },
+  row: { borderTopWidth: S.hairline, paddingVertical: 9, paddingLeft: 12, paddingRight: 10 },
+  selRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 4 },
+  selCheck: { marginRight: 4 },
+  rowText: { flex: 1, minWidth: 0, gap: 3 },
   noteTitle: { fontFamily: fonts.sans600, fontSize: 13, lineHeight: 16 },
   noteLine: { fontFamily: fonts.sans400, fontSize: 12.5, lineHeight: 16 },
   meta: { height: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

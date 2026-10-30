@@ -231,6 +231,8 @@ export type WatchItem = {
   genres: Genre[];
   origin: Origin | null;
   year: number | null;
+  /** Рейтинг Кинопоиска — подтягивает сервер (ПоискКино); нет — не нашёлся */
+  rating?: number | null;
   addedBy: ID;
   watchedAt: string | null;
   createdAt: string;

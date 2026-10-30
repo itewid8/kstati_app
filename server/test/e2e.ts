@@ -399,6 +399,9 @@ async function scenario(name: string, store: Store) {
   assert.deepEqual(await ok('POST', '/feedback', { kind: 'bug', text: 'Зависает при правке заметки', device: 'iOS 18' }, T1), { ok: true });
   assert.equal((await call('POST', '/feedback', { kind: 'idea', text: '  ' }, T1)).status, 400);
   assert.equal((await call('POST', '/feedback', { kind: 'idea', text: 'x' })).status, 401);
+  const fv = await ok('POST', '/feedback/voice', { audio: Buffer.from('m4a').toString('base64') }, T1);
+  assert.equal(typeof fv.text, 'string', 'отзыв голосом — текст распознавания');
+  assert.equal((await call('POST', '/feedback/voice', { audio: 'AAAA' })).status, 401);
   config.voiceDailyLimit = savedLimit;
   ip = '127.0.0.3';
 

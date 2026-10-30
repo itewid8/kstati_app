@@ -101,6 +101,10 @@ export type WatchItem = {
   genres: string[];
   origin: string | null;
   year: number | null;
+  /** Рейтинг Кинопоиска (ПоискКино, films.ts); нет — не нашли или не искали */
+  rating?: number | null;
+  /** id фильма на Кинопоиске */
+  kpId?: number | null;
   addedBy: string;
   watchedAt: string | null;
   createdAt: string;
