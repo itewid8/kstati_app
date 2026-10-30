@@ -105,6 +105,12 @@ export type WatchItem = {
   rating?: number | null;
   /** id фильма на Кинопоиске */
   kpId?: number | null;
+  /** Короткое описание с Кинопоиска */
+  description?: string;
+  /** Точно такого названия нет — похоже, имели в виду этот фильм */
+  suggestion?: { title: string; year: number | null } | null;
+  /** Когда искали в ПоискКино; нет — ещё не искали (старые записи дополняются через /watch/enrich) */
+  kpAt?: string;
   addedBy: string;
   watchedAt: string | null;
   createdAt: string;

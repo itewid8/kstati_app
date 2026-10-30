@@ -233,6 +233,10 @@ export type WatchItem = {
   year: number | null;
   /** Рейтинг Кинопоиска — подтягивает сервер (ПоискКино); нет — не нашёлся */
   rating?: number | null;
+  /** Короткое описание с Кинопоиска */
+  description?: string;
+  /** Точно такого названия на Кинопоиске нет — похоже, имели в виду этот фильм */
+  suggestion?: { title: string; year: number | null } | null;
   addedBy: ID;
   watchedAt: string | null;
   createdAt: string;
