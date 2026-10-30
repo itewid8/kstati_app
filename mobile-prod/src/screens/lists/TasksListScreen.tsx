@@ -40,8 +40,10 @@ export type TaskItem = {
   done: boolean;
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
-  /** Тип дела (мини-иконка); нет — обычное */
+  /** Тип дела (значок после названия); нет — обычное */
   taskType?: TaskKind;
+  /** Повторяется — значок ↻ после названия */
+  repeat?: boolean;
 };
 
 export type PlanStep = {
@@ -62,6 +64,8 @@ export type PlanItem = {
   range: string;
   /** Цвет плана: полоса и заливка */
   color: PersonColor;
+  /** План закрыт (вручную: сам по подзадачам не закрывается) */
+  done?: boolean;
   steps: PlanStep[];
 };
 
@@ -92,6 +96,10 @@ export type TasksListScreenProps = {
 
   onPickGroup?: () => void;
   onChangeView?: (view: TasksView) => void;
+  /** Раскрытые планы (подзадачи видны); остальные свёрнуты */
+  expandedPlans?: readonly ID[];
+  /** Раскрыть или свернуть подзадачи плана */
+  onTogglePlan?: (id: ID) => void;
   /** Свернуть или раскрыть раздел */
   onToggleSection?: (id: ID) => void;
   /** Дело или шаг плана отмечен/снят */
@@ -128,6 +136,7 @@ const TaskEntry = memo(function TaskEntry({ task, onToggleTask, onOpenTask, onLo
       done={task.done}
       hidden={task.hidden}
       taskType={task.taskType}
+      repeat={task.repeat}
       onToggle={onToggleTask ? () => onToggleTask(task.id, !task.done) : undefined}
       onPress={onOpenTask ? () => onOpenTask(task.id) : undefined}
       onLongPress={onLongPressTask ? (lift) => onLongPressTask(task.id, lift) : undefined}
@@ -135,11 +144,14 @@ const TaskEntry = memo(function TaskEntry({ task, onToggleTask, onOpenTask, onLo
   );
 });
 
-const PlanEntry = memo(function PlanEntry({ plan, onToggleTask, onOpenTask, onOpenPlan, onLongPressTask }: { plan: PlanItem } & RowCallbacks) {
+type PlanProps = { plan: PlanItem; expanded: boolean; onExpand?: (id: ID) => void } & RowCallbacks;
+
+/** План и его подзадачи: подзадачи видны, только когда план раскрыт (по умолчанию свёрнут) */
+const PlanEntry = memo(function PlanEntry({ plan, expanded, onExpand, onToggleTask, onOpenTask, onOpenPlan, onLongPressTask }: PlanProps) {
   const { scheme, person } = useTheme();
   const color = person(plan.color);
   const fill = tint(color, PLAN_ALPHA[scheme]);
-  const allDone = plan.steps.length > 0 && plan.steps.every((s) => s.done);
+  const done = !!plan.done;
   return (
     <>
       <TaskRow
@@ -148,11 +160,14 @@ const PlanEntry = memo(function PlanEntry({ plan, onToggleTask, onOpenTask, onOp
         time={plan.range}
         strip={color}
         fill={fill}
-        done={allDone}
+        done={done}
+        onToggle={onToggleTask ? () => onToggleTask(plan.id, !done) : undefined}
+        expanded={plan.steps.length ? expanded : undefined}
+        onExpand={onExpand ? () => onExpand(plan.id) : undefined}
         onPress={onOpenPlan ? () => onOpenPlan(plan.id) : undefined}
         onLongPress={onLongPressTask ? (lift) => onLongPressTask(plan.id, lift) : undefined}
       />
-      {plan.steps.map((s) => (
+      {(expanded ? plan.steps : []).map((s) => (
         <TaskRow
           key={s.id}
           kind="step"
@@ -201,18 +216,27 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
     ],
     [onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
   );
+  const expandedSet = useMemo(() => new Set(props.expandedPlans ?? []), [props.expandedPlans]);
   const renderEntry = useCallback(
     (e: TaskListEntry) =>
       e.kind === 'plan' ? (
         <RowMotion key={e.id}>
-          <PlanEntry plan={e} onToggleTask={onToggleTask} onOpenTask={onOpenTask} onOpenPlan={onOpenPlan} onLongPressTask={onLongPressTask} />
+          <PlanEntry
+            plan={e}
+            expanded={expandedSet.has(e.id)}
+            onExpand={props.onTogglePlan}
+            onToggleTask={onToggleTask}
+            onOpenTask={onOpenTask}
+            onOpenPlan={onOpenPlan}
+            onLongPressTask={onLongPressTask}
+          />
         </RowMotion>
       ) : (
         <RowMotion key={e.id}>
           <TaskEntry task={e} onToggleTask={onToggleTask} onOpenTask={onOpenTask} onLongPressTask={onLongPressTask} />
         </RowMotion>
       ),
-    [onToggleTask, onOpenTask, onOpenPlan, onLongPressTask],
+    [onToggleTask, onOpenTask, onOpenPlan, onLongPressTask, expandedSet, props.onTogglePlan],
   );
 
   return (

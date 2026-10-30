@@ -9,6 +9,8 @@ import { HttpError, registerAuth, requireUser } from './auth.js';
 import { API_LEVEL, apiLevel, appVersion } from './client.js';
 import { config } from './config.js';
 import { sendMail } from './mail.js';
+import { createFeedbackIssue, type GithubDeps } from './githubFeedback.js';
+import { randomUUID } from 'node:crypto';
 import { writeLog } from './log.js';
 import { parseText } from './parse.js';
 import { normalizeTimes } from './spoken.js';
@@ -46,6 +48,8 @@ export type Deps = {
   recognize?: (ogg: Buffer, lang?: SttLang) => Promise<string>;
   parse?: typeof parseText;
   toOgg?: typeof toOggOpus;
+  /** Отзывы в GitHub — для тестов подменяется сеть */
+  github?: GithubDeps;
 };
 
 export async function buildApp(deps: Deps): Promise<FastifyInstance> {
@@ -165,6 +169,10 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     kind: z.enum(['bug', 'idea']),
     text: z.string().trim().min(1).max(4000),
     device: z.string().max(200).optional(),
+    /** Снимок экрана: JPEG в base64 (кнопка-жучок) */
+    screenshot: z.string().max(1_400_000).optional(),
+    /** Сведения из приложения: экран, связь, журнал событий */
+    context: z.record(z.unknown()).optional(),
   });
   app.post('/feedback', async (req) => {
     const user = await requireUser(req, store);
@@ -172,11 +180,21 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     const n = await store.incrUpTo(`feedback#${user.id}#${mskDay()}`, config.feedbackDailyLimit);
     if (n === null) throw new HttpError(429, 'daily_limit', 'На сегодня отзывов достаточно — спасибо! Завтра можно снова.');
     const ts = new Date().toISOString();
-    const entry = { ts, userId: user.id, name: user.name, email: user.email ?? null, kind: body.kind, text: body.text, app: appVersion(req) ?? null, api: apiLevel(req), device: body.device ?? null };
-    await store.claimKey(`feedback#${ts}#${user.id}`, JSON.stringify(entry));
+    const id = randomUUID().slice(0, 8);
+    const context = body.context && JSON.stringify(body.context).length <= 40_000 ? body.context : null;
+    const entry = { id, ts, userId: user.id, name: user.name, email: user.email ?? null, kind: body.kind, text: body.text, app: appVersion(req) ?? null, api: apiLevel(req), device: body.device ?? null };
+    // Задача в GitHub (со снимком); не вышло — отзыв всё равно сохранён и уйдёт письмом
+    const issue = await createFeedbackIssue(
+      { id, kind: body.kind, text: body.text, user: { id: user.id, name: user.name, email: user.email ?? null }, app: entry.app, api: entry.api, device: entry.device, ts, context, screenshot: body.screenshot ?? null },
+      deps.github,
+    ).catch((e) => {
+      req.log.error({ err: errText(e) }, 'Отзыв не отправлен в GitHub');
+      return null;
+    });
+    await store.claimKey(`feedback#${ts}#${user.id}`, JSON.stringify({ ...entry, context, issue, screenshot: !!body.screenshot }));
     if (config.feedbackEmail) {
       const subject = `${body.kind === 'bug' ? 'Ошибка' : 'Предложение'} от ${user.name || user.id}`;
-      const text = [body.text, '', `Кто: ${user.name} (${user.email ?? user.id})`, `Приложение: ${entry.app ?? '—'} · API ${entry.api}`, `Устройство: ${entry.device ?? '—'}`, `Когда: ${ts}`].join('\n');
+      const text = [body.text, '', `Кто: ${user.name} (${user.email ?? user.id})`, `Приложение: ${entry.app ?? '—'} · API ${entry.api}`, `Устройство: ${entry.device ?? '—'}`, `Когда: ${ts}`, ...(issue ? [`Задача: ${issue}`] : [])].join('\n');
       await sendMail(config.feedbackEmail, subject, text).catch((e) => req.log.error({ err: errText(e) }, 'Отзыв не отправлен письмом'));
     }
     return { ok: true };

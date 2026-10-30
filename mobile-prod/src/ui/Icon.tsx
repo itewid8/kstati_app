@@ -20,6 +20,9 @@ const ICONS = {
   calendar: { d: 'M4 5h16v15H4zM4 10h16M9 3v4M15 3v4', strokeWidth: 2 },
   /** Скопировать и перенести в тему (заметка) */
   copy: { d: 'M9 9h11v11H9zM5 15H4V4h11v1', strokeWidth: 2 },
+  repeat: { d: 'M17 3l3 3-3 3M4 11V9a3 3 0 0 1 3-3h13M7 21l-3-3 3-3M20 13v2a3 3 0 0 1-3 3H4', strokeWidth: 2.2 },
+  plan: { d: 'M4 5h16v14H4zM4 10h16M10 10v9', strokeWidth: 2.2 },
+  mic: { d: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3', strokeWidth: 2 },
   trash: { d: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', strokeWidth: 2 },
   folder: { d: 'M3 6h7l2 2h9v11H3z', strokeWidth: 2 },
   /** Типы дел (мини-иконки): дело, день рождения, важный день, путешествие */

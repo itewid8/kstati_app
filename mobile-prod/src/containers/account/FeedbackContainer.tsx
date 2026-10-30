@@ -1,7 +1,7 @@
 import { AudioModule, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, Platform } from 'react-native';
 import { RECORD_OPTIONS } from '@/components/VoiceRecorder';
 import { sendFeedback, transcribeFeedback, type FeedbackKind } from '@/lib/api';
@@ -27,14 +27,24 @@ export function FeedbackContainer() {
   const [error, setError] = useState<string | null>(null);
   const rec = useAudioRecorder(RECORD_OPTIONS);
   const [dictate, setDictate] = useState<DictateState>('idle');
+  // Идёт ли запись — своим флагом: у уже освобождённого рекордера свойства читать нельзя (из-за этого падало при уходе)
+  const recording = useRef(false);
+  const mounted = useRef(true);
 
   // Ушли с экрана посреди записи — остановить микрофон
-  useEffect(
-    () => () => {
-      if (rec.isRecording) rec.stop().catch(() => {});
-    },
-    [rec],
-  );
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (!recording.current) return;
+      recording.current = false;
+      try {
+        rec.stop().catch(() => {});
+      } catch {
+        /* рекордер уже освобождён */
+      }
+    };
+  }, [rec]);
 
   /** Первое нажатие — запись, второе — стоп и распознавание; текст дописывается в поле */
   const onDictate = useCallback(async () => {
@@ -47,6 +57,7 @@ export function FeedbackContainer() {
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
         await rec.prepareToRecordAsync();
         rec.record();
+        recording.current = true;
         setDictate('recording');
       } catch {
         setError('Микрофон не включился');
@@ -57,16 +68,19 @@ export function FeedbackContainer() {
     setDictate('working');
     let uri: string | null = null;
     try {
+      recording.current = false;
       await rec.stop();
       uri = rec.uri ?? null;
     } catch {
       uri = null;
     }
+    if (!mounted.current) return;
     if (!uri) {
       setDictate('idle');
       return setError('Запись не получилась');
     }
     const r = await transcribeFeedback(uri);
+    if (!mounted.current) return;
     setDictate('idle');
     if ('problem' in r) return setError(r.problem);
     if (!r.text) return setError('Не расслышал — попробуйте ещё раз');
@@ -78,8 +92,10 @@ export function FeedbackContainer() {
     setBusy(true);
     setError(null);
     const problem = await sendFeedback(kind, text.trim(), DEVICE);
+    if (!mounted.current) return;
     setBusy(false);
     if (problem) return setError(problem);
+    Keyboard.dismiss();
     useStore.getState().notice('Спасибо, отправлено');
     back();
   }, [kind, text, busy, dictate]);

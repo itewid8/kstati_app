@@ -7,7 +7,8 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fitTextLines } from '@/lib/calendarLayout';
 import type { TaskKind } from '@/lib/types';
-import { Hatch, Icon, KIND_ICON, LONG_PRESS_MS, Marquee, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { Hatch, LONG_PRESS_MS, Marquee, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { EventMarks } from './EventMarks';
 import { PeopleFill, PeopleTip } from './PeopleColor';
 
 export type AllDayBarSize = {
@@ -37,8 +38,11 @@ type Props = {
   colors: readonly string[];
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
-  /** Тип — мини-иконка перед названием */
+  /** Значки перед названием: сделано (зелёная галочка), тип, общее дело, повтор */
   kind?: TaskKind;
+  done?: boolean;
+  plan?: boolean;
+  repeat?: boolean;
   onPress?: () => void;
   /** Удержание: полоса отдаёт своё место в окне и копию (быстрые действия) */
   onLongPress?: LiftHandler;
@@ -65,8 +69,8 @@ export const AllDayBar = memo(function AllDayBar(props: Props) {
       <PeopleTip colors={colors} width={TIP} />
       {fits ? (
         <View style={styles.row}>
-          {props.kind ? <Icon name={KIND_ICON[props.kind]} size={Math.round(fontSize + 1)} color={c.text} /> : null}
-          <Marquee style={[styles.title, styles.flex, { fontSize, letterSpacing, lineHeight: height, color: c.text }]}>
+          <EventMarks done={props.done} kind={props.kind} plan={props.plan} repeat={props.repeat} size={Math.round(fontSize + 1)} lineHeight={height} />
+          <Marquee style={[styles.title, styles.flex, { fontSize, letterSpacing, lineHeight: height, color: props.done ? c.muted : c.text }, props.done && styles.done]}>
             {title}
             {meta ? <Text style={[styles.meta, { color: c.muted }]}>{meta}</Text> : null}
           </Marquee>
@@ -82,4 +86,5 @@ const styles = StyleSheet.create({
   row: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3 },
   flex: { flex: 1, minWidth: 0 },
   meta: { fontFamily: fonts.mono400 },
+  done: { textDecorationLine: 'line-through' },
 });

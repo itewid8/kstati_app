@@ -88,6 +88,7 @@ function planItem(plan: Task, kids: Task[], colors: ColorMap): PlanItem {
     progress: steps.length ? `${done}/${steps.length}` : undefined,
     range: plan.date ? rangeDays(plan.date, lastDay(plan) ?? plan.date) : '—',
     color: colorOf(colors, owner),
+    ...(plan.doneAt && { done: true }),
     steps,
   };
 }
@@ -101,6 +102,7 @@ const taskItem = (t: Task, section: ListSection, colors: ColorMap): TaskItem => 
   done: !!t.doneAt,
   ...(t.hidden && { hidden: true }),
   ...(t.kind && t.kind !== 'task' && { taskType: t.kind }),
+  ...(t.repeat && { repeat: true }),
 });
 
 /** Разделы списка: пустые не показываются. id строки дела — taskKey («id@дата» у раза серии), шага плана — id подзадачи */

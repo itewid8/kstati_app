@@ -12,9 +12,10 @@ export const weekBars: CalendarBar[] = [
     startDate: '2026-10-07',
     endDate: '2026-10-09',
     people: ['k'],
+    plan: true,
   },
   { id: 'mom', title: 'Мама в гостях', meta: ' · 8–10 окт', startDate: '2026-10-08', endDate: '2026-10-10', people: ['s', 'k'] },
-  { id: 'dacha', title: 'Дача', meta: ' 09–20', startDate: '2026-10-10', endDate: '2026-10-10', people: ['s', 'k'] },
+  { id: 'dacha', title: 'Дача', meta: ' 09–20', startDate: '2026-10-10', endDate: '2026-10-10', people: ['s', 'k'], plan: true },
 ];
 
 const ev = (id: string, a: number, b: number, title: string, people: string[], extra: Partial<TimedEvent> = {}): TimedEvent => ({
@@ -27,7 +28,7 @@ const ev = (id: string, a: number, b: number, title: string, people: string[], e
 });
 
 export const weekEvents: Record<string, TimedEvent[]> = {
-  '2026-10-05': [ev('dent', 9.5, 10.5, 'Стоматолог', ['s']), ev('yoga', 19, 20, 'Йога', ['k'])],
+  '2026-10-05': [ev('dent', 9.5, 10.5, 'Стоматолог', ['s']), ev('yoga', 19, 20, 'Йога', ['k'], { repeat: true })],
   '2026-10-06': [ev('mfc', 16, 17, 'МФЦ', ['s']), ev('dinner', 19, 20.5, 'Ужин с Леной', ['s', 'k'])],
   '2026-10-07': [
     ev('train1', 7, 9, 'Поезд в Казань', ['k'], { parentTitle: 'Казань' }),

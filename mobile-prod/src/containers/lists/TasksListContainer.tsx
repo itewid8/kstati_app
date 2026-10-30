@@ -16,6 +16,7 @@ const changeView = (v: TasksView) => {
 };
 
 const toggleSection = (id: ID) => useStore.getState().toggleSection(id);
+const togglePlan = (id: ID) => useStore.getState().togglePlanOpen(id);
 
 /** Отметка по ключу строки: «id@дата» — раз серии */
 const toggleTask = (key: ID) => {
@@ -47,6 +48,7 @@ export const TasksListContainer = signedInOnly(function TasksList() {
   // Список меняется раз в день, а не каждую минуту
   const { today } = useClock();
   const insets = useInsets();
+  const expandedPlans = useStore((st) => st.expandedPlans);
   const { onPickGroup, onOpenFeed, onOpenSettings, onNavigate, onRec } = useChrome('tasks');
   const colors = usePersonColors(s);
   const data = useMemo(() => tasksListProps(s, colors, { today }), [s, colors, today]);
@@ -59,6 +61,8 @@ export const TasksListContainer = signedInOnly(function TasksList() {
       onPickGroup={onPickGroup}
       onChangeView={changeView}
       onToggleSection={toggleSection}
+      expandedPlans={expandedPlans}
+      onTogglePlan={togglePlan}
       onToggleTask={toggleTask}
       onOpenTask={openTask}
       onOpenPlan={toPlanGrid}

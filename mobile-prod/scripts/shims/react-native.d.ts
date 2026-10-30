@@ -201,6 +201,7 @@ declare module 'react-native' {
   }
   export class KeyboardAvoidingView extends Component<KeyboardAvoidingViewProps> {}
   export class Modal extends Component<ModalProps> {}
+  export const ActivityIndicator: ComponentType<Loose & { size?: "small" | "large" | number; color?: string }>;
   export const Pressable: ComponentType<PressableProps & { ref?: Ref<View> }>;
 
   type NamedStyles<T> = { [P in keyof T]: ViewStyle | TextStyle | ImageStyle };
