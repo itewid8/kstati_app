@@ -19,6 +19,7 @@ import { DEFAULT_REMINDERS, migrateRules } from './remind';
 import * as M from './mock';
 import { NO_PHONE_SETTINGS, type PhoneCal, type PhoneCalSettings, type PhoneDraft, type PhoneEvent, type PhoneExt } from './phoneCalendar';
 import { uid as newUid } from './ids';
+import type { IncomingNote } from './noteImport';
 import { PERSONAL as PERSONAL_VIEW, newTaskShare as shareFor } from './visibility';
 import { applyChangeList, ownTopic, saveDraftItems, skipOcc, syncParent, toggleOcc, type Lists, type SavedIds } from './edits';
 import { captureList, isEmptyUndo, revertList, type ListUndo } from './undo';
@@ -195,6 +196,10 @@ type State = {
   phoneCal: PhoneCalSettings;
   /** Открытое событие телефона (шторка) */
   phoneSheet: { ev: PhoneEvent; cal: PhoneCal } | null;
+  /** Пришло через «Поделиться» (одна заметка — шторка, несколько — экран переноса); from — «GOOGLE KEEP» */
+  noteInbox: { notes: IncomingNote[]; from: string | null; skipped: number } | null;
+  /** Тема, куда переносили заметку в прошлый раз (null — «Без темы») */
+  noteTopicLast: ID | null;
   menu: Menu | null;
   /** Выбранный день календаря — общий для экрана «Дела» и ответа ассистента */
   calendarDate: string;
@@ -339,7 +344,15 @@ type Actions = {
   setPhoneCal: (id: string, patch: { on?: boolean; dest?: string }) => void;
   setPhoneSheet: (v: { ev: PhoneEvent; cal: PhoneCal } | null) => void;
   /** Перенести события телефона в дела (dest: 'me' — только мне, иначе id группы); «ВЕРНУТЬ» снимает все разом */
-  importPhone: (items: readonly { draft: PhoneDraft; ext: PhoneExt; dest: string }[]) => number;
+  importPhone: (items: readonly { draft: PhoneDraft; ext: PhoneExt; dest: string }[]) => ID[];
+  /** Убрать дела по id (отмена переноса), с «ВЕРНУТЬ» */
+  dropTasks: (ids: readonly ID[], label: string) => void;
+  setNoteInbox: (v: { notes: IncomingNote[]; from: string | null; skipped: number } | null) => void;
+  /**
+   * Перенести заметки: тема — своя по id, новая/своя по названию или null («Без темы»). Одна «ВЕРНУТЬ» на всё.
+   * Возвращает, сколько перенесено
+   */
+  importNotes: (items: readonly { text: string; topic: { id: ID } | { title: string } | null }[]) => number;
   /** Перенесённое дело — заново из изменённого в телефоне события (видимость и отметки остаются) */
   refreshPhoneTask: (id: ID, draft: PhoneDraft, ext: PhoneExt) => void;
   /** Удалить все перенесённые из телефона дела (с «ВЕРНУТЬ») */
@@ -405,6 +418,8 @@ const initial: State = {
   bugPos: null,
   phoneCal: NO_PHONE_SETTINGS,
   phoneSheet: null,
+  noteInbox: null,
+  noteTopicLast: null,
   menu: null,
   calendarDate: toISODate(new Date()),
   voiceTopicId: null,
@@ -938,7 +953,7 @@ export const useStore = create<State & Actions>()(
     setPhoneSheet: (phoneSheet) => set({ phoneSheet }),
     importPhone: (items) => {
       const meId = get().me?.id;
-      if (!meId || !items.length) return 0;
+      if (!meId || !items.length) return [];
       const before = { tasks: get().tasks };
       const now = new Date().toISOString();
       const added: Task[] = items.map(({ draft, ext, dest }) => {
@@ -959,6 +974,37 @@ export const useStore = create<State & Actions>()(
       });
       set({ tasks: [...before.tasks, ...added] });
       withUndo(`Перенесено: ${added.length}`, before);
+      return added.map((t) => t.id);
+    },
+    dropTasks: (ids, label) => {
+      const gone = new Set(ids);
+      const before = { tasks: get().tasks };
+      set({ tasks: before.tasks.filter((t) => !gone.has(t.id)) });
+      withUndo(label, before);
+    },
+    setNoteInbox: (noteInbox) => set({ noteInbox }),
+    importNotes: (items) => {
+      const me = get().me;
+      if (!me || !items.length) return 0;
+      const before = { ideas: get().ideas, topics: get().topics };
+      const now = new Date().toISOString();
+      let topics = before.topics;
+      const topicId = (t: { id: ID } | { title: string } | null): ID | null => {
+        if (!t) return null;
+        if ('id' in t) return t.id;
+        const name = t.title.trim().slice(0, 200);
+        if (!name) return null;
+        const found = ownTopic(topics, me.id, name);
+        if (found) return found.id;
+        const created: Topic = { id: newUid(), ownerId: me.id, title: name, groupIds: [], createdAt: now };
+        topics = [...topics, created];
+        return created.id;
+      };
+      const added: Idea[] = items
+        .filter((it) => it.text.trim())
+        .map((it) => ({ id: newUid(), ownerId: me.id, topicId: topicId(it.topic), text: it.text, createdAt: now, updatedAt: now }));
+      set({ ideas: [...added, ...before.ideas], topics });
+      withUndo(`Перенесено заметок: ${added.length}`, before);
       return added.length;
     },
     refreshPhoneTask: (id, draft, ext) => {
@@ -1115,6 +1161,7 @@ export const useStore = create<State & Actions>()(
       bugButton: s.bugButton,
       bugPos: s.bugPos,
       phoneCal: s.phoneCal,
+      noteTopicLast: s.noteTopicLast,
       activity: s.activity,
       activitySeen: s.activitySeen,
       calendarHidden: s.calendarHidden,

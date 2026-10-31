@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ActionMenu } from '@/components/ActionMenu';
 import { BugHost } from '@/components/BugHost';
+import { ShareHost } from '@/components/ShareHost';
 import { ErrorScreen } from '@/components/ErrorScreen';
 import { CardSheet } from '@/components/CardSheet';
 import { GroupSheet } from '@/components/GroupSheet';
@@ -129,6 +130,7 @@ export default function RootLayout() {
           <GroupSheet />
           <ActionMenu />
           {/* Кнопка-жучок и окно отчёта — поверх всего */}
+          <ShareHost />
           <BugHost />
         </RecButtonContext.Provider>
       </SafeAreaProvider>
