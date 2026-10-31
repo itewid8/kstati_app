@@ -85,7 +85,15 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   });
 
   // api — самый новый уровень API сервера (S5): новое приложение проверяет api >= 2
-  app.get('/health', async () => ({ ok: true, model: config.model, db: config.db, api: API_LEVEL }));
+  // feedback — настроена ли отправка отзывов (без самих ключей): удобно проверить после выкладки
+  app.get('/health', async () => ({
+    ok: true,
+    model: config.model,
+    db: config.db,
+    api: API_LEVEL,
+    feedback: { github: !!(config.feedbackRepo && config.githubFeedbackToken), repo: config.feedbackRepo || null, email: !!config.feedbackEmail },
+    films: !!config.poiskkinoKey,
+  }));
 
   registerAuth(app, store);
   registerData(app, store, data);
@@ -197,7 +205,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       const text = [body.text, '', `Кто: ${user.name} (${user.email ?? user.id})`, `Приложение: ${entry.app ?? '—'} · API ${entry.api}`, `Устройство: ${entry.device ?? '—'}`, `Когда: ${ts}`, ...(issue ? [`Задача: ${issue}`] : [])].join('\n');
       await sendMail(config.feedbackEmail, subject, text).catch((e) => req.log.error({ err: errText(e) }, 'Отзыв не отправлен письмом'));
     }
-    return { ok: true };
+    return { ok: true, issue };
   });
 
   /**

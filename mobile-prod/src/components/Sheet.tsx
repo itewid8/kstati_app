@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { BugButton } from './BugButton';
 import {
   Animated,
   Easing,
@@ -124,6 +125,7 @@ export function Sheet({ visible, onClose, children, footer, inset = false, locke
           {footer ? <View style={inset ? styles.footerInset : undefined}>{footer}</View> : null}
         </Animated.View>
       </KeyboardAvoidingView>
+      <BugButton />
     </Modal>
   );
 }

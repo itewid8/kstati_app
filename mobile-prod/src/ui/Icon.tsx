@@ -22,6 +22,7 @@ const ICONS = {
   copy: { d: 'M9 9h11v11H9zM5 15H4V4h11v1', strokeWidth: 2 },
   repeat: { d: 'M17 3l3 3-3 3M4 11V9a3 3 0 0 1 3-3h13M7 21l-3-3 3-3M20 13v2a3 3 0 0 1-3 3H4', strokeWidth: 2.2 },
   plan: { d: 'M4 5h16v14H4zM4 10h16M10 10v9', strokeWidth: 2.2 },
+  bug: { d: 'M8 9h8v6a4 4 0 0 1-8 0zM9.5 9V7.5a2.5 2.5 0 0 1 5 0V9M3.5 12.5H8M16 12.5h4.5M5 7.5l3 2M19 7.5l-3 2M5 19l3-2.5M19 19l-3-2.5M12 11v8', strokeWidth: 2 },
   mic: { d: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3', strokeWidth: 2 },
   trash: { d: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', strokeWidth: 2 },
   folder: { d: 'M3 6h7l2 2h9v11H3z', strokeWidth: 2 },

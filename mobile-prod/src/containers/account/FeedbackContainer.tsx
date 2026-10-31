@@ -1,16 +1,15 @@
-import { AudioModule, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, Platform } from 'react-native';
-import { RECORD_OPTIONS } from '@/components/VoiceRecorder';
-import { sendFeedback, transcribeFeedback, type FeedbackKind } from '@/lib/api';
+import { sendFeedback, type FeedbackKind } from '@/lib/api';
 import { useStore } from '@/lib/store';
-import { FeedbackScreen, type DictateState } from '@/screens/account/FeedbackScreen';
+import { FeedbackScreen } from '@/screens/account/FeedbackScreen';
 import { useInsets } from '../common';
+import { appendText, useDictation } from './useDictation';
 
 /** К отзыву прикладывается устройство и версия: «android 34 · 0.1.0 (12)» */
-const DEVICE = (() => {
+export const DEVICE = (() => {
   const cfg = Constants.expoConfig;
   const build = Platform.OS === 'ios' ? cfg?.ios?.buildNumber : cfg?.android?.versionCode;
   return `${Platform.OS} ${String(Platform.Version)} · ${cfg?.version ?? '0'} (${build ?? '0'})${Constants.deviceName ? ` · ${Constants.deviceName}` : ''}`.slice(0, 200);
@@ -18,77 +17,24 @@ const DEVICE = (() => {
 
 const back = () => (router.canGoBack() ? router.back() : router.replace('/settings'));
 
-/** Отзыв из настроек: ошибка или предложение, текстом или голосом — уходит на сервер (и письмом разработчикам) */
+/** Отзыв из настроек: ошибка или предложение, текстом или голосом — уходит на сервер (задачей в GitHub и письмом) */
 export function FeedbackContainer() {
   const insets = useInsets();
   const [kind, setKind] = useState<FeedbackKind>('bug');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const rec = useAudioRecorder(RECORD_OPTIONS);
-  const [dictate, setDictate] = useState<DictateState>('idle');
-  // Идёт ли запись — своим флагом: у уже освобождённого рекордера свойства читать нельзя (из-за этого падало при уходе)
-  const recording = useRef(false);
   const mounted = useRef(true);
-
-  // Ушли с экрана посреди записи — остановить микрофон
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
+  useEffect(
+    () => () => {
       mounted.current = false;
-      if (!recording.current) return;
-      recording.current = false;
-      try {
-        rec.stop().catch(() => {});
-      } catch {
-        /* рекордер уже освобождён */
-      }
-    };
-  }, [rec]);
-
-  /** Первое нажатие — запись, второе — стоп и распознавание; текст дописывается в поле */
-  const onDictate = useCallback(async () => {
-    setError(null);
-    if (dictate === 'idle') {
-      try {
-        const perm = await AudioModule.requestRecordingPermissionsAsync();
-        if (!perm.granted) return setError('Нет доступа к микрофону — разрешите его в настройках телефона');
-        Keyboard.dismiss();
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-        await rec.prepareToRecordAsync();
-        rec.record();
-        recording.current = true;
-        setDictate('recording');
-      } catch {
-        setError('Микрофон не включился');
-      }
-      return;
-    }
-    if (dictate !== 'recording') return;
-    setDictate('working');
-    let uri: string | null = null;
-    try {
-      recording.current = false;
-      await rec.stop();
-      uri = rec.uri ?? null;
-    } catch {
-      uri = null;
-    }
-    if (!mounted.current) return;
-    if (!uri) {
-      setDictate('idle');
-      return setError('Запись не получилась');
-    }
-    const r = await transcribeFeedback(uri);
-    if (!mounted.current) return;
-    setDictate('idle');
-    if ('problem' in r) return setError(r.problem);
-    if (!r.text) return setError('Не расслышал — попробуйте ещё раз');
-    setText((cur) => (cur.trim() ? `${cur.trimEnd()} ${r.text}` : r.text));
-  }, [dictate, rec]);
+    },
+    [],
+  );
+  const dictation = useDictation((t) => setText((cur) => appendText(cur, t)), setError);
 
   const onSend = useCallback(async () => {
-    if (!text.trim() || busy || dictate !== 'idle') return;
+    if (!text.trim() || busy || dictation.state !== 'idle') return;
     setBusy(true);
     setError(null);
     const problem = await sendFeedback(kind, text.trim(), DEVICE);
@@ -98,7 +44,7 @@ export function FeedbackContainer() {
     Keyboard.dismiss();
     useStore.getState().notice('Спасибо, отправлено');
     back();
-  }, [kind, text, busy, dictate]);
+  }, [kind, text, busy, dictation.state]);
 
   return (
     <FeedbackScreen
@@ -106,12 +52,12 @@ export function FeedbackContainer() {
       text={text}
       error={error}
       busy={busy}
-      dictate={dictate}
+      dictate={dictation.state}
       insets={insets}
       onBack={back}
       onChangeKind={setKind}
       onChangeText={setText}
-      onDictate={onDictate}
+      onDictate={dictation.toggle}
       onCancel={back}
       onSend={onSend}
     />

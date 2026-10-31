@@ -219,9 +219,11 @@ declare module 'react-native' {
     OS: PlatformOSType;
     Version: number | string;
     select<T>(specifics: { [K in PlatformOSType | 'default' | 'native']?: T }): T;
+    constants?: Record<string, unknown>;
   };
 
   export type ScaledSize = { width: number; height: number; scale: number; fontScale: number };
+  export const Dimensions: { get(dim: 'window' | 'screen'): ScaledSize };
   export function useWindowDimensions(): ScaledSize;
   export type ColorSchemeName = 'light' | 'dark' | 'unspecified' | null | undefined;
   export function useColorScheme(): ColorSchemeName;

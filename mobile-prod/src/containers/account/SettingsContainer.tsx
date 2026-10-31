@@ -22,6 +22,7 @@ const VERSION = (() => {
 
 const editReminders = () => router.push(nav.reminders());
 const openFeedback = () => router.push(accountRoutes.feedback());
+const toggleBug = (on: boolean) => useStore.getState().setBugButton(on);
 
 /** Выбор на экране, ещё не сохранённый: только то, что меняли */
 type Draft = { theme?: ThemePref; micMode?: MicMode; language?: RecognitionLang; remindersOn?: boolean };
@@ -44,6 +45,7 @@ export function SettingsContainer() {
     })),
   );
   const [draft, setDraft] = useState<Draft>({});
+  const bugButton = useStore((s) => s.bugButton);
   const saved = useMemo(() => settingsProps({ ...st, vpnOn, version: VERSION }), [st, vpnOn]);
   const data = useMemo(() => ({ ...saved, ...draft }), [saved, draft]);
   const canSave =
@@ -90,6 +92,8 @@ export function SettingsContainer() {
       onEditAllDayReminders={editReminders}
       onOpenWidget={OPEN_WIDGET}
       onOpenFeedback={openFeedback}
+      bugButton={bugButton}
+      onToggleBugButton={toggleBug}
       onCancel={backToProfile}
       onSave={onSave}
     />
