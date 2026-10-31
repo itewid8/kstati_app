@@ -76,6 +76,8 @@ const TaskIn = z.object({
   kind: z.enum(TASK_KINDS).optional(),
   /** Именинник: участник группы или имя; null — убрать; нет поля — как было */
   celebrant: z.object({ id: Id.optional(), name: z.string().trim().min(1).max(80) }).nullable().optional(),
+  /** Откуда перенесено (календарь телефона): календарь, событие, отпечаток содержимого; null — убрать; нет поля — как было */
+  ext: z.object({ cal: z.string().max(200), id: z.string().max(200), h: z.string().max(64) }).nullable().optional(),
 });
 const WatchIn = z.object({
   id: Id,
@@ -447,12 +449,12 @@ export class Data {
    * Старое приложение: одна группа (где создано, если видно там) — оно знает только дела групп
    */
   private taskView(t: Task, inGroups: string[], viewer: string, api: number): Task | null {
-    const { home, only, share, ...rest } = t;
+    const { home, only, share, ext, ...rest } = t;
     if (api < 3) {
       const g = home && inGroups.includes(home) ? home : inGroups[0];
       return g ? { ...rest, groupId: g } : null;
     }
-    if (t.createdBy === viewer) return { ...rest, groupId: home ?? PERSONAL, ...(only && { only }), ...(share && { share }), in: inGroups } as Task;
+    if (t.createdBy === viewer) return { ...rest, groupId: home ?? PERSONAL, ...(only && { only }), ...(share && { share }), ...(ext && { ext }), in: inGroups } as Task;
     return { ...rest, groupId: inGroups[0] ?? PERSONAL, in: inGroups } as Task;
   }
 
@@ -520,7 +522,9 @@ export class Data {
         // Конец раньше начала не бывает
         const endDate = inT.endDate && inT.date && inT.endDate > inT.date ? inT.endDate : null;
         const endTime = inT.endTime && (endDate || (inT.time && inT.endTime > inT.time)) ? inT.endTime : null;
-        const { ownerId: _o, only: _on, share: _sh, groupId: _g, kind: kindIn, celebrant: celebrantIn, ...fields } = inT;
+        const { ownerId: _o, only: _on, share: _sh, groupId: _g, kind: kindIn, celebrant: celebrantIn, ext: extIn, ...fields } = inT;
+        // Откуда перенесено — только у своего дела; нет поля — как было
+        const ext = role === 'owner' ? (extIn === undefined ? (old?.type === 'task' ? old.ext : undefined) : extIn) : old?.type === 'task' ? old.ext : undefined;
         // Тип: нет поля — как было; обычное дело не храним
         const kind = kindIn ?? (old?.type === 'task' ? old.kind : undefined);
         // Именинник — только у дня рождения; id — только человек из круга владельца
@@ -543,6 +547,7 @@ export class Data {
           ...(share && Object.keys(share).length && { share }),
           ...(kind && kind !== 'task' && { kind }),
           ...(celebrant && { celebrant }),
+          ...(ext && { ext }),
           createdBy: owner,
           createdAt: old?.createdAt ?? now,
           updatedAt: now,

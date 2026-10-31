@@ -26,6 +26,8 @@ type TaskOp = {
   parentId: string | null;
   kind?: 'task' | 'birthday' | 'important' | 'trip';
   celebrant?: { id?: string; name: string } | null;
+  /** Откуда перенесено (только своё дело); нет поля — сервер оставляет как было */
+  ext?: { cal: string; id: string; h: string } | null;
 };
 type WatchOp = {
   id: string;

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BugButton } from './BugButton';
+import { ModalShot } from './ModalShot';
 import {
   Animated,
   Easing,
@@ -92,6 +93,7 @@ export function Sheet({ visible, onClose, children, footer, inset = false, locke
 
   return (
     <Modal transparent visible statusBarTranslucent navigationBarTranslucent animationType="none" onRequestClose={onClose}>
+      <ModalShot>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim, opacity }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="Закрыть" style={styles.fill} onPress={onClose} />
@@ -126,6 +128,7 @@ export function Sheet({ visible, onClose, children, footer, inset = false, locke
         </Animated.View>
       </KeyboardAvoidingView>
       <BugButton />
+      </ModalShot>
     </Modal>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { shiftDay } from '@/adapters/calendar/events';
+import { mondayOf, shiftDay } from '@/adapters/calendar/events';
+import { phoneBarsIn, phoneSlotsOn } from '@/adapters/calendar/phone';
 import { weekProps } from '@/adapters/calendar/week';
 import type { IsoDate } from '@/lib/calendarLayout';
 import { toISODate } from '@/lib/dates';
@@ -9,6 +10,7 @@ import { WeekScreen } from '@/screens/calendar/WeekScreen';
 import { holdTask } from '../quick/quickStore';
 import { useClock, usePersonColors, type StoreState } from '../common';
 import { openTaskKey, togglePerson, useCalendarChrome, useCalendarSnapshot } from './useCalendar';
+import { openPhoneKey, usePhoneEvents } from './usePhone';
 
 const pickWeek = (s: StoreState) => ({ date: s.calendarDate, hidden: s.calendarHidden });
 
@@ -33,10 +35,25 @@ export const WeekContainer = () => {
   const clock = useClock();
   const { date, hidden } = useStore(useShallow(pickWeek));
   const data = useMemo(() => weekProps(snap, clock, colors, { date, hidden }), [snap, clock, colors, date, hidden]);
+  const from = mondayOf(date);
+  const to = shiftDay(from, 6);
+  const { events: phoneList } = usePhoneEvents(from, to, chrome.phoneOn);
+  const layer = useMemo(() => {
+    if (!phoneList.length) return null;
+    const phone: Record<IsoDate, ReturnType<typeof phoneSlotsOn>> = {};
+    for (let i = 0; i < 7; i++) {
+      const d = shiftDay(from, i);
+      const slots = phoneSlotsOn(phoneList, d);
+      if (slots.length) phone[d] = slots;
+    }
+    return { phone, bars: [...data.bars, ...phoneBarsIn(phoneList, from, to)] };
+  }, [phoneList, from, to, data.bars]);
   return (
     <WeekScreen
       {...chrome}
       {...data}
+      {...layer}
+      onOpenPhone={openPhoneKey}
       onPrev={prevWeek}
       onNext={nextWeek}
       onToday={goToday}

@@ -63,3 +63,4 @@ export {
 } from './zoom';
 export { dayNo, isoOf } from './days';
 export { MIN_DURATION, type AbsMinute, type BusyEvent, type ColumnEvent, type DayBar, type DayMinute, type IsoDate } from './types';
+export { PHONE, layoutPhoneColumn, type PhoneBlock, type PhoneLayerOptions, type PhoneSpan } from './phoneLayer';

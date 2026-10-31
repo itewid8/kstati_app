@@ -11,6 +11,7 @@ import { StyleSheet, View } from 'react-native';
 import {
   hourRange,
   layoutDayLanes,
+  layoutPhoneColumn,
   minuteToY,
   packAllDayBars,
   type DayMinute,
@@ -22,6 +23,7 @@ import { size as S, useTheme, type LiftTarget } from '@/ui';
 import { AllDayBar, DAY_BAR } from './components/AllDayBar';
 import { CAL, CalendarScaffold, NO_INSETS, useScreenSize } from './components/CalendarScaffold';
 import { DayEventBlock } from './components/DayEventBlock';
+import { DAY_PHONE, PhoneBlock } from './components/PhoneBlock';
 import { HourLines } from './components/HourLines';
 import { useLongPressId } from './components/longPress';
 import { NowMarker } from './components/NowMarker';
@@ -29,10 +31,13 @@ import { usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { PeriodArrows, PeriodNote, PeriodTitle, PeriodWeekday, TodayButton } from './components/PeriodBar';
 import { PersonTabs } from './components/PersonTabs';
 import { MONTHS_SHORT, WEEKDAYS, hhmm, namesOf, pad2, parts, peopleOf, timeRange, weekday } from './format';
-import type { CalendarBar, CalendarChromeProps, CalendarPerson, PersonFilterProps, TimedEvent } from './types';
+import type { CalendarBar, CalendarChromeProps, CalendarPerson, PersonFilterProps, PhoneLayerProps, PhoneSlot, TimedEvent } from './types';
 
 export type DayScreenProps = CalendarChromeProps &
-  PersonFilterProps & {
+  PersonFilterProps &
+  PhoneLayerProps & {
+    /** События календаря телефона со временем этого дня */
+    phone?: readonly PhoneSlot[];
     date: IsoDate;
     /** Сегодня: точка у дня недели, залитая «СЕГОДНЯ» и линия «сейчас» */
     today?: IsoDate;
@@ -52,6 +57,8 @@ export type DayScreenProps = CalendarChromeProps &
     onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
     onLongPressBar?: (id: ID, lift: LiftTarget) => void;
   };
+
+const NO_PHONE: readonly PhoneSlot[] = [];
 
 /** Вертикаль дня (px от верха экрана, без safe area) */
 const D = {
@@ -130,7 +137,9 @@ const DayBar = memo(function DayBar({
   byId,
   onOpenBar,
   onLongPressBar,
+  onOpenPhone,
 }: ItemProps & {
+  onOpenPhone?: (key: ID) => void;
   bar: CalendarBar;
   x: number;
   y: number;
@@ -139,14 +148,15 @@ const DayBar = memo(function DayBar({
   onLongPressBar?: (id: ID, lift: LiftTarget) => void;
 }) {
   const colors = usePeopleColors(bar.people, byId);
-  const open = useCallback(() => onOpenBar?.(bar.id), [onOpenBar, bar.id]);
-  const hold = useLongPressId(bar.id, onLongPressBar);
+  const open = useCallback(() => (bar.phone ? onOpenPhone : onOpenBar)?.(bar.id), [onOpenBar, onOpenPhone, bar.id, bar.phone]);
+  const hold = useLongPressId(bar.id, bar.phone ? undefined : onLongPressBar);
   return (
     <AllDayBar
       x={x}
       y={y}
       width={width}
       size={DAY_BAR}
+      phone={bar.phone}
       title={bar.title}
       meta={barMeta(bar, namesOf(peopleOf(bar.people, byId)))}
       colors={colors}
@@ -155,7 +165,7 @@ const DayBar = memo(function DayBar({
       done={bar.done}
       plan={bar.plan}
       repeat={bar.repeat}
-      onPress={onOpenBar ? open : undefined}
+      onPress={onOpenBar || onOpenPhone ? open : undefined}
       onLongPress={hold}
     />
   );
@@ -178,6 +188,8 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
     onOpenBar,
     onLongPressEvent,
     onLongPressBar,
+    phone = NO_PHONE,
+    onOpenPhone,
     insets = NO_INSETS,
     ...chrome
   } = props;
@@ -198,13 +210,18 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
   const gridY = hairY !== null ? hairY + D.gridGap : top + D.barsTop;
   const gridBottom = screen.height - insets.bottom - S.contentBottom;
 
-  const range = useMemo(() => hourRange(events, nowShown), [events, nowShown]);
+  const range = useMemo(() => hourRange([...events, ...phone], nowShown), [events, phone, nowShown]);
   const hourPx = Math.max(1, gridBottom - gridY) / (range.hEnd - range.h0);
   const lanes = useMemo(
     () => layoutDayLanes(events, { width: gw, hourPx, h0: range.h0, hEnd: range.hEnd, minHeight: D.minBlock }),
     [events, gw, hourPx, range],
   );
   const evById = useMemo(() => new Map(events.map((e) => [e.id, e])), [events]);
+  const phoneBlocks = useMemo(
+    () => layoutPhoneColumn(phone, events, { colWidth: gw, hourPx, h0: range.h0, hEnd: range.hEnd }),
+    [phone, events, gw, hourPx, range],
+  );
+  const phoneById = useMemo(() => new Map(phone.map((p) => [p.id, p])), [phone]);
 
   const { y, m, d } = parts(date);
   const period = (
@@ -239,6 +256,7 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
             byId={byId}
             onOpenBar={onOpenBar}
             onLongPressBar={onLongPressBar}
+            onOpenPhone={onOpenPhone}
           />
         ) : null;
       })}
@@ -270,6 +288,21 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
         ) : null;
       })}
 
+      {phoneBlocks.map((b) => {
+        const p = phoneById.get(b.id);
+        return p ? (
+          <PhoneBlock
+            key={b.id}
+            block={b}
+            left={gx}
+            top={gridY}
+            title={p.title}
+            time={timeRange(p)}
+            size={DAY_PHONE}
+            onPress={onOpenPhone ? () => onOpenPhone(p.id) : undefined}
+          />
+        ) : null;
+      })}
       {nowShown !== undefined ? (
         <NowMarker y={gridY + minuteToY(nowShown, { hourPx, h0: range.h0 })} left={gx} width={gw} label={hhmm(nowShown)} />
       ) : null}

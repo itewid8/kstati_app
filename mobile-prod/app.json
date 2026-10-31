@@ -11,13 +11,17 @@
       "versionCode": 1,
       "allowBackup": false,
       "permissions": [
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "READ_CALENDAR"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "monochromeImage": "./assets/monochrome-icon.png",
         "backgroundColor": "#1E1E1E"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.WRITE_CALENDAR"
+      ]
     },
     "ios": {
       "bundleIdentifier": "ru.kstati.app",
@@ -30,6 +34,12 @@
         "expo-audio",
         {
           "microphonePermission": "Микрофон нужен для голосовых команд"
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Календарь нужен, чтобы показать ваши события рядом с делами и перенести их в «Кстати»"
         }
       ],
       [

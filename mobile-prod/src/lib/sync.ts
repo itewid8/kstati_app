@@ -67,6 +67,7 @@ const taskOp = (t: Task): Op => ({
     parentId: t.parentId ?? null,
     kind: t.kind ?? 'task',
     celebrant: t.kind === 'birthday' ? (t.celebrant ?? null) : null,
+    ...(t.ext !== undefined && t.createdBy === useStore.getState().me?.id && { ext: t.ext }),
   },
 });
 const watchOp = (w: WatchItem): Op => ({

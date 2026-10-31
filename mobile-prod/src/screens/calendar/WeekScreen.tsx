@@ -11,6 +11,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   hourRange,
   layoutDayColumn,
+  layoutPhoneColumn,
   minuteToY,
   packAllDayBars,
   type ColumnBlock,
@@ -27,12 +28,16 @@ import { usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { PeriodArrows, PeriodNote, PeriodTitle, TodayButton } from './components/PeriodBar';
 import { PersonTabs } from './components/PersonTabs';
 import { useLongPressId } from './components/longPress';
+import { PhoneBlock, WEEK_PHONE } from './components/PhoneBlock';
 import { WeekEventBlock } from './components/WeekEventBlock';
 import { MONTHS_SHORT, WEEKDAYS, addDays, namesOf, pad2, parts, peopleOf, timeRange } from './format';
-import type { CalendarBar, CalendarChromeProps, CalendarPerson, PersonFilterProps, TimedEvent } from './types';
+import type { CalendarBar, CalendarChromeProps, CalendarPerson, PersonFilterProps, PhoneLayerProps, PhoneSlot, TimedEvent } from './types';
 
 export type WeekScreenProps = CalendarChromeProps &
-  PersonFilterProps & {
+  PersonFilterProps &
+  PhoneLayerProps & {
+    /** События календаря телефона со временем по дням */
+    phone?: Readonly<Record<IsoDate, readonly PhoneSlot[]>>;
     /** Понедельник недели */
     weekStart: IsoDate;
     /** Сегодня: красное число в шапке и линия «сейчас» в его колонке */
@@ -69,6 +74,8 @@ const W = {
 const DAYS = 7;
 const TODAY_INK = '#FFFFFF';
 const NO_EVENTS: readonly TimedEvent[] = [];
+const NO_PHONE: readonly PhoneSlot[] = [];
+const NO_PHONE_DAYS: Readonly<Record<IsoDate, readonly PhoneSlot[]>> = {};
 
 type DayEventsProps = {
   colX: number;
@@ -120,7 +127,9 @@ const WeekBar = memo(function WeekBar({
   byId,
   onOpenBar,
   onLongPressBar,
+  onOpenPhone,
 }: {
+  onOpenPhone?: (key: ID) => void;
   bar: CalendarBar;
   x: number;
   y: number;
@@ -130,14 +139,15 @@ const WeekBar = memo(function WeekBar({
   onLongPressBar?: (id: ID, lift: LiftTarget) => void;
 }) {
   const colors = usePeopleColors(bar.people, byId);
-  const open = useCallback(() => onOpenBar?.(bar.id), [onOpenBar, bar.id]);
-  const hold = useLongPressId(bar.id, onLongPressBar);
+  const open = useCallback(() => (bar.phone ? onOpenPhone : onOpenBar)?.(bar.id), [onOpenBar, onOpenPhone, bar.id, bar.phone]);
+  const hold = useLongPressId(bar.id, bar.phone ? undefined : onLongPressBar);
   return (
     <AllDayBar
       x={x}
       y={y}
       width={width}
       size={WEEK_BAR}
+      phone={bar.phone}
       title={bar.title}
       meta={bar.meta}
       colors={colors}
@@ -146,7 +156,7 @@ const WeekBar = memo(function WeekBar({
       done={bar.done}
       plan={bar.plan}
       repeat={bar.repeat}
-      onPress={onOpenBar ? open : undefined}
+      onPress={onOpenBar || onOpenPhone ? open : undefined}
       onLongPress={hold}
     />
   );
@@ -170,6 +180,8 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
     onOpenBar,
     onLongPressEvent,
     onLongPressBar,
+    phone = NO_PHONE_DAYS,
+    onOpenPhone,
     insets = NO_INSETS,
     ...chrome
   } = props;
@@ -191,11 +203,18 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
   const gridY = barsBottom + W.gridGap;
   const gridBottom = screen.height - insets.bottom - S.contentBottom;
 
-  const range = useMemo(() => hourRange(days.flatMap((d) => events[d] ?? NO_EVENTS), nowShown), [days, events, nowShown]);
+  const range = useMemo(
+    () => hourRange([...days.flatMap((d) => events[d] ?? NO_EVENTS), ...days.flatMap((d) => phone[d] ?? NO_PHONE)], nowShown),
+    [days, events, phone, nowShown],
+  );
   const hourPx = Math.max(1, gridBottom - gridY) / (range.hEnd - range.h0);
   const columns = useMemo(
     () => days.map((d) => layoutDayColumn(events[d] ?? NO_EVENTS, { colWidth: col, hourPx, h0: range.h0, hEnd: range.hEnd })),
     [days, events, col, hourPx, range],
+  );
+  const phoneColumns = useMemo(
+    () => days.map((d) => layoutPhoneColumn(phone[d] ?? NO_PHONE, events[d] ?? NO_EVENTS, { colWidth: col, hourPx, h0: range.h0, hEnd: range.hEnd })),
+    [days, phone, events, col, hourPx, range],
   );
 
   const first = parts(days[0]);
@@ -262,6 +281,7 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
             byId={byId}
             onOpenBar={onOpenBar}
             onLongPressBar={onLongPressBar}
+            onOpenPhone={onOpenPhone}
           />
         );
       })}
@@ -293,6 +313,25 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
               byId={byId}
               onOpenEvent={onOpenEvent}
               onLongPressEvent={onLongPressEvent}
+            />
+          ) : null;
+        });
+      })}
+
+      {days.map((d, i) => {
+        const slots = new Map((phone[d] ?? NO_PHONE).map((p) => [p.id, p]));
+        return phoneColumns[i].map((b) => {
+          const p = slots.get(b.id);
+          return p ? (
+            <PhoneBlock
+              key={`${d}:${b.id}`}
+              block={b}
+              left={gx + i * col}
+              top={gridY}
+              title={p.title}
+              time={timeRange(p)}
+              size={WEEK_PHONE}
+              onPress={onOpenPhone ? () => onOpenPhone(p.id) : undefined}
             />
           ) : null;
         });

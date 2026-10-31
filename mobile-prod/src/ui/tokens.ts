@@ -154,6 +154,9 @@ export const size = {
 
   /** Где начинается основной контент под вкладками */
   contentTop: 162,
+  /** Экраны с названием в верхней панели (Заметки, Хочу): вкладки — на месте заголовка, контент — на 50 выше */
+  tabsTopCompact: 70,
+  contentTopCompact: 112,
   /** Нижний край контента над навигацией */
   contentBottom: 98,
 
@@ -210,6 +213,8 @@ const mono = (fontFamily: string, fontSize: number, spacingEm = 0, lineHeight?: 
 export const type = {
   /** Заголовок экрана «Хочу» 40/42 */
   h1: { fontFamily: fonts.sans700, fontSize: 40, lineHeight: 42, letterSpacing: em(-0.05, 40) },
+  /** Название экрана в верхней панели (40px высотой) вместо отдельной строки заголовка */
+  barTitle: { fontFamily: fonts.sans700, fontSize: 34, lineHeight: 40, letterSpacing: em(-0.05, 34) },
   /** Заголовок карточки 24/28 */
   h2: { fontFamily: fonts.sans700, fontSize: 24, lineHeight: 28, letterSpacing: em(-0.04, 24) },
   /** Подпись в верхней панели «ВИШЛИСТЫ · 4 ЧЕЛОВЕКА» */

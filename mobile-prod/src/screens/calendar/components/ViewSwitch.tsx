@@ -1,6 +1,7 @@
 /**
  * Переключатель «Дела»: ≡ (список) | ДЕНЬ | НЕДЕЛЯ | МЕСЯЦ | ГОД — одна строка в списке и в календаре.
  * Рамки встык (margin-left −1.5), высота 28; «≡» — узкая клетка с иконкой.
+ * В календаре справа — «ТЕЛ»: слой событий календаря телефона (залита — показан).
  */
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
@@ -20,10 +21,13 @@ const VIEWS: ReadonlyArray<{ key: CalendarView; label: string }> = [
 type Props = {
   value: TasksSwitchValue;
   onChange?: (value: TasksSwitchValue) => void;
+  /** Ячейка «ТЕЛ»: есть onTogglePhone — показана, phoneOn — залита */
+  phoneOn?: boolean;
+  onTogglePhone?: () => void;
   style?: StyleProp<ViewStyle>;
 };
 
-export const ViewSwitch = memo(function ViewSwitch({ value, onChange, style }: Props) {
+export const ViewSwitch = memo(function ViewSwitch({ value, onChange, phoneOn, onTogglePhone, style }: Props) {
   const { c } = useTheme();
   const press = (key: TasksSwitchValue) => (onChange && key !== value ? () => onChange(key) : undefined);
   const listOn = value === 'list';
@@ -56,6 +60,19 @@ export const ViewSwitch = memo(function ViewSwitch({ value, onChange, style }: P
           </View>
         );
       })}
+      {onTogglePhone ? (
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: !!phoneOn }}
+          accessibilityLabel="Календарь телефона"
+          onPress={onTogglePhone}
+          style={[styles.phone, styles.overlap, { borderColor: c.border, backgroundColor: phoneOn ? c.text : c.panel }]}
+        >
+          <Text numberOfLines={1} style={[phoneOn ? styles.labelOn : styles.label, { color: phoneOn ? c.bg : c.text }]}>
+            ТЕЛ
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 });
@@ -64,6 +81,7 @@ const styles = StyleSheet.create({
   row: { height: S.viewSwitch, flexDirection: 'row' },
   list: { width: 40, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
   cell: { flex: 1, minWidth: 0 },
+  phone: { width: 44, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
   button: { flex: 1, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
   overlap: { marginLeft: -S.border },
   label: { fontFamily: fonts.mono400, fontSize: 10.5, letterSpacing: 0.84 },

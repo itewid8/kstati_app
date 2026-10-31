@@ -62,6 +62,23 @@ export type CalendarBar = {
   plan?: boolean;
   /** Повторяется */
   repeat?: boolean;
+  /** Событие календаря телефона: пунктир, без цвета людей */
+  phone?: boolean;
+};
+
+/** Событие календаря телефона в сетке дня: минуты от полуночи этого дня */
+export type PhoneSlot = {
+  /** Ключ раза: «<id события>@<начало>» */
+  id: ID;
+  title: string;
+  start: DayMinute;
+  end: DayMinute;
+};
+
+/** Слой календаря телефона в календаре: показан ли и действие по нажатию */
+export type PhoneLayerProps = {
+  /** Нажали событие телефона — шторка с переносом */
+  onOpenPhone?: (key: ID) => void;
 };
 
 /** Общее для всех видов: верхняя панель, переключатель вида, нижняя навигация */
@@ -80,6 +97,9 @@ export type CalendarChromeProps = {
   onOpenFeed?: () => void;
   onOpenSettings?: () => void;
   onChangeView?: (view: CalendarView) => void;
+  /** Слой календаря телефона: включён (ячейка ТЕЛ в переключателе); нет onTogglePhone — ячейки нет */
+  phoneOn?: boolean;
+  onTogglePhone?: () => void;
   onNavigate?: (tab: NavTab) => void;
   onRec?: () => void;
 };

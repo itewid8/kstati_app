@@ -224,6 +224,7 @@ declare module 'react-native' {
 
   export type ScaledSize = { width: number; height: number; scale: number; fontScale: number };
   export const Dimensions: { get(dim: 'window' | 'screen'): ScaledSize };
+  export const Linking: { openURL(url: string): Promise<void>; openSettings(): Promise<void>; canOpenURL(url: string): Promise<boolean> };
   export function useWindowDimensions(): ScaledSize;
   export type ColorSchemeName = 'light' | 'dark' | 'unspecified' | null | undefined;
   export function useColorScheme(): ColorSchemeName;

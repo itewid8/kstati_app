@@ -1,3 +1,4 @@
+import { PhoneEventSheet } from '@/components/PhoneEventSheet';
 import { useStore } from '@/lib/store';
 import { signedInOnly } from '../common';
 import { DayContainer } from './DayContainer';
@@ -13,7 +14,12 @@ import { CalendarZoom } from './CalendarZoom';
 export const CalendarContainer = signedInOnly(function Calendar() {
   const view = useStore((s) => s.tasksView);
   const zoomView = view === 'list' ? 'week' : view;
-  return <CalendarZoom view={zoomView}>{viewOf(zoomView)}</CalendarZoom>;
+  return (
+    <>
+      <CalendarZoom view={zoomView}>{viewOf(zoomView)}</CalendarZoom>
+      <PhoneEventSheet />
+    </>
+  );
 });
 
 const viewOf = (view: 'day' | 'week' | 'month' | 'year') => {

@@ -9,7 +9,6 @@ import type { ID, PersonColor } from '@/lib/types';
 import {
   BottomNav,
   DoneRow,
-  ScreenTitle,
   SectionBox,
   Tabs,
   TopBar,
@@ -140,7 +139,6 @@ const TopicRow = memo(function TopicRow({ topic, selected, onLongPress, onToggle
 
 export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
   const {
-    caption,
     me,
     people,
     selectedPersonId,
@@ -193,12 +191,11 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
       <TopBar
-        lead={selecting ? { kind: 'back', label: `ВЫБРАНО ${pad2(picked.size)}`, onBack: props.onCancelSelect } : { kind: 'caption', text: caption }}
+        lead={selecting ? { kind: 'back', label: `ВЫБРАНО ${pad2(picked.size)}`, onBack: props.onCancelSelect } : { kind: 'title', text: 'Заметки' }}
         actions={actions} style={[styles.abs, { top: insets.top + S.topBarTop }]} />
-      <ScreenTitle title="Заметки" style={[styles.abs, { top: insets.top + S.titleTop }]} />
-      <Tabs items={tabs} value={selectedPersonId} onChange={onSelectPerson} style={[styles.abs, { top: insets.top + S.tabsTop }]} />
+      <Tabs items={tabs} value={selectedPersonId} onChange={onSelectPerson} style={[styles.abs, { top: insets.top + S.tabsTopCompact }]} />
 
-      <View style={[styles.abs, { top: insets.top + S.contentTop, bottom: insets.bottom + S.contentBottom }]}>
+      <View style={[styles.abs, { top: insets.top + S.contentTopCompact, bottom: insets.bottom + S.contentBottom }]}>
         <SectionBox title="ТЕМЫ" count={pad2(topics.length)} collapsed={!topicsOpen} onToggle={toggleTopics} scrollable>
           {topics.map((t) => (
             <TopicRow

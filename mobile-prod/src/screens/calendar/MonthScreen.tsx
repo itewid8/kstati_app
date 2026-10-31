@@ -11,7 +11,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MONTH_GRID, dayNo, fitRows, monthCellItems, monthLayout, type IsoDate } from '@/lib/calendarLayout';
 import type { ID, PersonColor } from '@/lib/types';
-import { Hatch, LONG_PRESS_MS, Marquee, SectionBox, fonts, size as S, space, tint, useLift, useTheme, type LiftTarget } from '@/ui';
+import { Hatch, Icon, LONG_PRESS_MS, Marquee, SectionBox, fonts, size as S, space, tint, useLift, useTheme, type LiftTarget } from '@/ui';
 import { CalendarScaffold, NO_INSETS, frameOf, useScreenSize } from './components/CalendarScaffold';
 import { PeopleFill, PeopleTip, usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { useLongPressId } from './components/longPress';
@@ -30,7 +30,7 @@ import {
   tasksWord,
   weekday,
 } from './format';
-import type { CalendarChromeProps, CalendarPerson } from './types';
+import type { CalendarChromeProps, CalendarPerson, PhoneLayerProps } from './types';
 
 /** Дело в ячейке месяца: короткое название */
 export type MonthItem = {
@@ -39,6 +39,8 @@ export type MonthItem = {
   people: readonly ID[];
   /** Моё дело, скрытое от этой группы, — заштриховано */
   hidden?: boolean;
+  /** Событие календаря телефона — пунктир, серое */
+  phone?: boolean;
 };
 
 /** План (дело с подзадачами) — подсветка его дней */
@@ -56,9 +58,12 @@ export type AgendaRow = {
   time: string;
   title: string;
   people: readonly ID[];
+  /** Событие календаря телефона: нажатие — шторка переноса */
+  phone?: boolean;
 };
 
-export type MonthScreenProps = CalendarChromeProps & {
+export type MonthScreenProps = CalendarChromeProps &
+  PhoneLayerProps & {
   people: readonly CalendarPerson[];
   year: number;
   /** 1…12 */
@@ -81,7 +86,7 @@ export type MonthScreenProps = CalendarChromeProps & {
   onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
   /** Нажатие на «Октябрь 2026» — к году */
   onOpenYear?: () => void;
-};
+  };
 
 /** Вертикаль месяца — MONTH_GRID и monthLayout (общие со щипком) */
 const M = { agendaRow: 31 } as const;
@@ -113,6 +118,15 @@ const CellItem = memo(function CellItem({ item, byId, onPress, onLongPressEvent 
   const colors = usePeopleColors(item.people, byId);
   const hold = useLongPressId(item.id, onLongPressEvent);
   const lift = useLift(hold, 'block', () => <CellItem item={item} byId={byId} />);
+  if (item.phone) {
+    return (
+      <View style={[styles.item, styles.phoneItem, { borderColor: c.muted }]}>
+        <Marquee ellipsis={false} style={[styles.itemText, { color: c.muted }]}>
+          {item.title}
+        </Marquee>
+      </View>
+    );
+  }
   const body = (
     <>
       <PeopleFill colors={colors} alpha={c.tintAlpha} />
@@ -196,7 +210,9 @@ const AgendaItem = memo(function AgendaItem({
   byId,
   onOpenEvent,
   onLongPressEvent,
+  onOpenPhone,
 }: {
+  onOpenPhone?: (key: ID) => void;
   row: AgendaRow;
   byId: ReadonlyMap<ID, CalendarPerson>;
   onOpenEvent?: (id: ID) => void;
@@ -204,9 +220,23 @@ const AgendaItem = memo(function AgendaItem({
 }) {
   const { c } = useTheme();
   const colors = usePeopleColors(row.people, byId);
-  const open = useCallback(() => onOpenEvent?.(row.id), [onOpenEvent, row.id]);
-  const hold = useLongPressId(row.id, onLongPressEvent);
+  const open = useCallback(() => (row.phone ? onOpenPhone : onOpenEvent)?.(row.id), [onOpenEvent, onOpenPhone, row.id, row.phone]);
+  const hold = useLongPressId(row.id, row.phone ? undefined : onLongPressEvent);
   const lift = useLift(hold, 'row', () => <AgendaItem row={row} byId={byId} />);
+  if (row.phone) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Из телефона: ${row.time} ${row.title}`}
+        onPress={onOpenPhone ? open : undefined}
+        style={[styles.agenda, { backgroundColor: c.panel, borderTopColor: c.hair }]}
+      >
+        <Text style={[styles.agendaTime, { color: c.muted }]}>{row.time}</Text>
+        <Marquee style={[styles.agendaTitle, { color: c.muted }]}>{row.title}</Marquee>
+        <Icon name="phone" size={12} color={c.muted} />
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       ref={lift.ref}
@@ -244,6 +274,7 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
     onOpenEvent,
     onLongPressEvent,
     onOpenYear,
+    onOpenPhone,
     insets = NO_INSETS,
     ...chrome
   } = props;
@@ -335,7 +366,7 @@ export const MonthScreen = memo(function MonthScreen(props: MonthScreenProps) {
           style={[styles.side, styles.panel, { top: layout.panelTop, maxHeight: layout.panelMax }]}
         >
           {agenda.map((r) => (
-            <AgendaItem key={r.id} row={r} byId={byId} onOpenEvent={onOpenEvent} onLongPressEvent={onLongPressEvent} />
+            <AgendaItem key={r.id} row={r} byId={byId} onOpenEvent={onOpenEvent} onLongPressEvent={onLongPressEvent} onOpenPhone={onOpenPhone} />
           ))}
         </SectionBox>
       ) : null}
@@ -373,6 +404,7 @@ const styles = StyleSheet.create({
   numberText: { fontFamily: fonts.mono600, fontSize: 9.5, lineHeight: 14 },
   items: { position: 'absolute', left: 2, right: 2, top: CELL_ITEMS.top, gap: CELL_ITEMS.gap },
   item: { height: CELL_ITEMS.row, paddingLeft: 3, overflow: 'hidden' },
+  phoneItem: { borderWidth: 0.5, borderStyle: 'dashed', paddingLeft: 2 },
   /** Название обрезается краем ячейки без многоточия (как в макете), не влезает — бегущая строка */
   itemText: { fontFamily: fonts.sans600, fontSize: 6.5, lineHeight: 9, letterSpacing: -0.065 },
   more: { fontFamily: fonts.mono400, fontSize: 6.5, lineHeight: 8 },
