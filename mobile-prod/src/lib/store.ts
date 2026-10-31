@@ -17,6 +17,9 @@ import { shortDate, toISODate } from './dates';
 import { nextOpen } from './recur';
 import { DEFAULT_REMINDERS, migrateRules } from './remind';
 import * as M from './mock';
+import { NO_PHONE_SETTINGS, type PhoneCal, type PhoneCalSettings, type PhoneDraft, type PhoneEvent, type PhoneExt } from './phoneCalendar';
+import { uid as newUid } from './ids';
+import { PERSONAL as PERSONAL_VIEW, newTaskShare as shareFor } from './visibility';
 import { applyChangeList, ownTopic, saveDraftItems, skipOcc, syncParent, toggleOcc, type Lists, type SavedIds } from './edits';
 import { captureList, isEmptyUndo, revertList, type ListUndo } from './undo';
 import type { Revs } from './remote';
@@ -188,6 +191,10 @@ type State = {
   /** Кнопка-жучок поверх приложения и её место (доли ширины и высоты экрана); null — у правого края по центру */
   bugButton: boolean;
   bugPos: { x: number; y: number } | null;
+  /** Календарь телефона: слой в календаре и настройки календарей */
+  phoneCal: PhoneCalSettings;
+  /** Открытое событие телефона (шторка) */
+  phoneSheet: { ev: PhoneEvent; cal: PhoneCal } | null;
   menu: Menu | null;
   /** Выбранный день календаря — общий для экрана «Дела» и ответа ассистента */
   calendarDate: string;
@@ -328,6 +335,15 @@ type Actions = {
   togglePlanOpen: (id: string) => void;
   setBugButton: (on: boolean) => void;
   setBugPos: (pos: { x: number; y: number }) => void;
+  setPhoneShow: (on: boolean) => void;
+  setPhoneCal: (id: string, patch: { on?: boolean; dest?: string }) => void;
+  setPhoneSheet: (v: { ev: PhoneEvent; cal: PhoneCal } | null) => void;
+  /** Перенести события телефона в дела (dest: 'me' — только мне, иначе id группы); «ВЕРНУТЬ» снимает все разом */
+  importPhone: (items: readonly { draft: PhoneDraft; ext: PhoneExt; dest: string }[]) => number;
+  /** Перенесённое дело — заново из изменённого в телефоне события (видимость и отметки остаются) */
+  refreshPhoneTask: (id: ID, draft: PhoneDraft, ext: PhoneExt) => void;
+  /** Удалить все перенесённые из телефона дела (с «ВЕРНУТЬ») */
+  dropImported: () => number;
   /** Короткое сообщение внизу экрана без кнопки */
   notice: (label: string) => void;
   clearUndo: () => void;
@@ -387,6 +403,8 @@ const initial: State = {
   expandedPlans: [],
   bugButton: true,
   bugPos: null,
+  phoneCal: NO_PHONE_SETTINGS,
+  phoneSheet: null,
   menu: null,
   calendarDate: toISODate(new Date()),
   voiceTopicId: null,
@@ -912,6 +930,57 @@ export const useStore = create<State & Actions>()(
     setEditorSeed: (editorSeed) => set({ editorSeed }),
     setBugButton: (bugButton) => set({ bugButton }),
     setBugPos: (bugPos) => set({ bugPos }),
+    setPhoneShow: (show) => set({ phoneCal: { ...get().phoneCal, show } }),
+    setPhoneCal: (id, patch) => {
+      const cur = get().phoneCal;
+      set({ phoneCal: { ...cur, cals: { ...cur.cals, [id]: { ...cur.cals[id], ...patch } } } });
+    },
+    setPhoneSheet: (phoneSheet) => set({ phoneSheet }),
+    importPhone: (items) => {
+      const meId = get().me?.id;
+      if (!meId || !items.length) return 0;
+      const before = { tasks: get().tasks };
+      const now = new Date().toISOString();
+      const added: Task[] = items.map(({ draft, ext, dest }) => {
+        const { celebrant, kind, ...fields } = draft;
+        return {
+          id: newUid(),
+          ...(dest === 'me' ? { groupId: PERSONAL_VIEW, only: true } : shareFor(dest)),
+          ...fields,
+          ...(kind && { kind }),
+          ...(celebrant && { celebrant }),
+          ext,
+          createdBy: meId,
+          doneAt: null,
+          createdAt: now,
+          people: [],
+          parentId: null,
+        };
+      });
+      set({ tasks: [...before.tasks, ...added] });
+      withUndo(`Перенесено: ${added.length}`, before);
+      return added.length;
+    },
+    refreshPhoneTask: (id, draft, ext) => {
+      const before = { tasks: get().tasks };
+      const { celebrant, kind, ...fields } = draft;
+      set({
+        tasks: before.tasks.map((t) =>
+          t.id === id ? { ...t, ...fields, kind: kind ?? t.kind, ...(celebrant !== undefined && { celebrant }), ext } : t,
+        ),
+      });
+      withUndo('Обновлено из телефона', before);
+    },
+    dropImported: () => {
+      const meId = get().me?.id;
+      const before = { tasks: get().tasks };
+      const gone = before.tasks.filter((t) => t.ext && t.createdBy === meId);
+      if (!gone.length) return 0;
+      const ids = new Set(gone.map((t) => t.id));
+      set({ tasks: before.tasks.filter((t) => !ids.has(t.id) && !(t.parentId && ids.has(t.parentId))) });
+      withUndo(`Удалено перенесённых: ${gone.length}`, before);
+      return gone.length;
+    },
     togglePlanOpen: (id) => {
       const cur = get().expandedPlans;
       set({ expandedPlans: cur.includes(id) ? cur.filter((k) => k !== id) : [...cur, id].slice(-100) });
@@ -1045,6 +1114,7 @@ export const useStore = create<State & Actions>()(
       expandedPlans: s.expandedPlans,
       bugButton: s.bugButton,
       bugPos: s.bugPos,
+      phoneCal: s.phoneCal,
       activity: s.activity,
       activitySeen: s.activitySeen,
       calendarHidden: s.calendarHidden,

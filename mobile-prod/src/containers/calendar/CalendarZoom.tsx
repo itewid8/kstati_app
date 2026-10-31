@@ -25,6 +25,7 @@ import Animated, {
   type AnimatedStyle,
 } from 'react-native-reanimated';
 import type { ViewStyle } from 'react-native';
+import { mondayOf } from '@/adapters/calendar/events';
 import { zoomTarget } from '@/adapters/calendar/zoom';
 import {
   ZOOM_VIEWS,
@@ -67,6 +68,10 @@ const STEP: Record<ZoomView, readonly [() => void, () => void]> = {
   year: [prevYear, nextYear],
 };
 
+/** Какой период виден при этой дате: выбор другого дня внутри месяца/недели/года период не меняет — без въезда */
+export const periodOf = (view: ZoomView, date: string) =>
+  view === 'year' ? date.slice(0, 4) : view === 'month' ? date.slice(0, 7) : view === 'week' ? mondayOf(date) : date;
+
 const LayerStyle = createContext<AnimatedStyle<ViewStyle> | null>(null);
 
 /** Слой содержимого вида (CalendarScaffold оборачивает им сетку): на нём — масштаб, сдвиг, прозрачность */
@@ -102,7 +107,7 @@ export function CalendarZoom({ view, children }: Props) {
   useEffect(() => {
     const was = prev.current;
     prev.current = { view, date };
-    if (was.view === view && was.date === date) return;
+    if (was.view === view && periodOf(view, was.date) === periodOf(view, date)) return;
     const how = pending.current;
     pending.current = null;
     if (reduced) {

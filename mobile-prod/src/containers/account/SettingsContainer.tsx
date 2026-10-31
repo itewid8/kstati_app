@@ -12,6 +12,7 @@ import { useVpnActive } from '../../../modules/kstati-net';
 import { nav, useInsets } from '../common';
 import { backToProfile } from './back';
 import { accountRoutes } from './routes';
+import { phoneRoutes } from '../calendar/usePhone';
 
 /** «0.1.0 (1)»: версия и номер сборки из app.json */
 const VERSION = (() => {
@@ -22,6 +23,7 @@ const VERSION = (() => {
 
 const editReminders = () => router.push(nav.reminders());
 const openFeedback = () => router.push(accountRoutes.feedback());
+const openPhoneCalendars = () => router.push(phoneRoutes.calendars());
 const toggleBug = (on: boolean) => useStore.getState().setBugButton(on);
 
 /** Выбор на экране, ещё не сохранённый: только то, что меняли */
@@ -91,6 +93,7 @@ export function SettingsContainer() {
       onEditTimedReminders={editReminders}
       onEditAllDayReminders={editReminders}
       onOpenWidget={OPEN_WIDGET}
+      onOpenPhoneCalendars={openPhoneCalendars}
       onOpenFeedback={openFeedback}
       bugButton={bugButton}
       onToggleBugButton={toggleBug}

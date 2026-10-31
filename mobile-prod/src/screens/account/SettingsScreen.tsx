@@ -54,6 +54,8 @@ export type SettingsScreenProps = {
   /** Кнопка-жучок поверх приложения (меняется сразу, без СОХРАНИТЬ) */
   bugButton?: boolean;
   onToggleBugButton?: (on: boolean) => void;
+  /** Календари телефона: слой в календаре и перенос событий */
+  onOpenPhoneCalendars?: () => void;
   /** Настройки виджета на рабочем столе; нет — раздела нет (iOS без платного аккаунта) */
   onOpenWidget?: () => void;
   onCancel?: () => void;
@@ -185,6 +187,12 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
               </>
             ) : null}
           </SectionBox>
+
+          {props.onOpenPhoneCalendars ? (
+            <SectionBox title="КАЛЕНДАРЬ ТЕЛЕФОНА">
+              <AccountRow label="Календари телефона" onPress={props.onOpenPhoneCalendars} />
+            </SectionBox>
+          ) : null}
 
           {onOpenWidget ? (
             <SectionBox title="ВИДЖЕТ">

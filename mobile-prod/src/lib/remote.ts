@@ -84,6 +84,12 @@ export function toRepeat(v: unknown): Repeat | null {
 
 /** Дело с сервера; groupId — группа, под которой оно пришло (если в записи нет своей) */
 /** Именинник с сервера: имя обязательно, id — если есть */
+/** Откуда перенесено: все три поля строками */
+function extOf(v: unknown): { cal: string; id: string; h: string } | null {
+  const r = obj(v);
+  return typeof r.cal === 'string' && typeof r.id === 'string' && typeof r.h === 'string' ? { cal: r.cal, id: r.id, h: r.h } : null;
+}
+
 function celebrantOf(v: unknown): Celebrant | null {
   const r = obj(v);
   const name = str(r.name).trim();
@@ -116,6 +122,7 @@ export function toTask(v: unknown, groupId: ID): Task | null {
     parentId: strOrNull(r.parentId),
     ...(typeof r.kind === 'string' && r.kind !== 'task' && (TASK_KINDS as readonly string[]).includes(r.kind) && { kind: r.kind as TaskKind }),
     ...(celebrantOf(r.celebrant) && { celebrant: celebrantOf(r.celebrant) }),
+    ...(extOf(r.ext) && { ext: extOf(r.ext) }),
     ...(r.only === true && { only: true }),
     ...(r.share !== undefined && r.share !== null && { share: record(r.share, (x) => (typeof x === 'boolean' ? x : null)) }),
     ...(Array.isArray(r.in) && { in: strs(r.in) }),

@@ -157,4 +157,14 @@ assert.deepEqual((await bd2()).celebrant, { name: 'Чужой' }, 'id не из 
 await put(S, { id: 'bd2', groupId: PERSONAL, title: 'ДР', kind: 'important' });
 assert.equal((await bd2()).celebrant, undefined, 'не день рождения — без именинника');
 
-console.log('✓ личный календарь: видимость, режимы, права, перенос, старое приложение, тип дела');
+/* ---------- откуда перенесено (календарь телефона) ---------- */
+const ex1 = async (who: User) => (await sync(who)).tasks.find((t: Task) => t.id === 'ex1');
+const EXT = { cal: '7', id: '1234', h: 'abc' };
+await put(S, { id: 'ex1', groupId: PERSONAL, title: 'Стоматолог', ext: EXT });
+assert.deepEqual((await ex1(S)).ext, EXT);
+await put(S, { id: 'ex1', groupId: PERSONAL, title: 'Стоматолог (старое приложение)' });
+assert.deepEqual((await ex1(S)).ext, EXT, 'без поля «откуда» не стирается');
+await put(S, { id: 'ex1', groupId: PERSONAL, title: 'Стоматолог', ext: null });
+assert.equal((await ex1(S)).ext, undefined, 'null — убрать');
+
+console.log('✓ личный календарь: видимость, режимы, права, перенос, старое приложение, тип дела, откуда перенесено');

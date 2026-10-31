@@ -11,6 +11,7 @@ import { isPlan, parseKey } from '@/adapters/common/tasks';
 import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import type { CalendarChromeProps, CalendarView } from '@/screens/calendar/types';
+import { togglePhoneLayer } from './usePhone';
 import { NO_ME, nav, openTaskEditor, toPlanGrid, useChrome, useInsets, type StoreState } from '../common';
 
 const pickCalendar = (s: StoreState): CalendarSnapshot => ({
@@ -38,9 +39,10 @@ const openList = () => useStore.getState().setTasksView('list');
 const changeView = (view: CalendarView) => useStore.getState().setTasksView(view);
 const addTask = () => router.push(nav.taskEditor({ date: useStore.getState().calendarDate }));
 export const togglePerson = (id: ID) => useStore.getState().toggleCalendarPerson(id);
+const toggleLayer = () => void togglePhoneLayer();
 
 /** Верхняя панель, переключатель вида и нижняя навигация экранов календаря */
-export type CalendarChrome = Required<Pick<CalendarChromeProps, 'groupLabel' | 'me' | 'hasNews' | 'insets'>> &
+export type CalendarChrome = Required<Pick<CalendarChromeProps, 'groupLabel' | 'me' | 'hasNews' | 'insets' | 'phoneOn' | 'onTogglePhone'>> &
   Required<
     Pick<CalendarChromeProps, 'onOpenGroup' | 'onOpenList' | 'onAdd' | 'onOpenFeed' | 'onOpenSettings' | 'onChangeView' | 'onNavigate' | 'onRec'>
   >;
@@ -48,8 +50,11 @@ export type CalendarChrome = Required<Pick<CalendarChromeProps, 'groupLabel' | '
 export function useCalendarChrome(): CalendarChrome {
   const { me, hasNews, groupLabel, onNavigate, onRec, onOpenFeed, onOpenSettings, onOpenGroup } = useChrome('tasks');
   const insets = useInsets();
+  const phoneOn = useStore((s) => s.phoneCal.show);
   return useMemo(
     () => ({
+      phoneOn,
+      onTogglePhone: toggleLayer,
       groupLabel,
       me,
       hasNews,
@@ -63,6 +68,6 @@ export function useCalendarChrome(): CalendarChrome {
       onNavigate,
       onRec,
     }),
-    [groupLabel, me, hasNews, insets, onOpenGroup, onOpenFeed, onOpenSettings, onNavigate, onRec],
+    [phoneOn, groupLabel, me, hasNews, insets, onOpenGroup, onOpenFeed, onOpenSettings, onNavigate, onRec],
   );
 }

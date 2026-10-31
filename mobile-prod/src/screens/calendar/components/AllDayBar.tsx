@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fitTextLines } from '@/lib/calendarLayout';
 import type { TaskKind } from '@/lib/types';
-import { Hatch, LONG_PRESS_MS, Marquee, fonts, useLift, useTheme, type LiftHandler } from '@/ui';
+import { Hatch, Icon, LONG_PRESS_MS, Marquee, fonts, tint, useLift, useTheme, type LiftHandler } from '@/ui';
 import { EventMarks } from './EventMarks';
 import { PeopleFill, PeopleTip } from './PeopleColor';
 
@@ -43,6 +43,8 @@ type Props = {
   done?: boolean;
   plan?: boolean;
   repeat?: boolean;
+  /** Событие календаря телефона: пунктир, без цвета людей, значок телефона */
+  phone?: boolean;
   onPress?: () => void;
   /** Удержание: полоса отдаёт своё место в окне и копию (быстрые действия) */
   onLongPress?: LiftHandler;
@@ -54,6 +56,26 @@ export const AllDayBar = memo(function AllDayBar(props: Props) {
   const { height, fontSize, letterSpacing, paddingLeft } = size;
   const lift = useLift(onLongPress, 'block', () => <AllDayBar {...props} x={0} y={0} onPress={undefined} onLongPress={undefined} />);
   const fits = fitTextLines(height, [{ lineHeight: fontSize * LINE, lines: 1 }]).height > 0;
+  if (props.phone) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Из телефона: ${title}`}
+        onPress={onPress}
+        style={[styles.bar, styles.phone, { left: x, top: y, width, height, paddingLeft: paddingLeft - 2, borderColor: c.muted, backgroundColor: tint(c.panel, 0.75) }]}
+      >
+        {fits ? (
+          <View style={styles.row}>
+            <Icon name="phone" size={Math.round(fontSize + 1)} color={c.muted} />
+            <Marquee style={[styles.title, styles.flex, { fontSize, letterSpacing, lineHeight: height - 2, color: c.muted }]}>
+              {title}
+              {meta ? <Text style={[styles.meta, { color: c.muted }]}>{meta}</Text> : null}
+            </Marquee>
+          </View>
+        ) : null}
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       ref={lift.ref}
@@ -82,6 +104,7 @@ export const AllDayBar = memo(function AllDayBar(props: Props) {
 
 const styles = StyleSheet.create({
   bar: { position: 'absolute', overflow: 'hidden' },
+  phone: { borderWidth: 1, borderStyle: 'dashed' },
   title: { fontFamily: fonts.sans600 },
   row: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3 },
   flex: { flex: 1, minWidth: 0 },

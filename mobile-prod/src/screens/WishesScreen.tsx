@@ -14,7 +14,6 @@ import {
   RowLinkButton,
   ListMotion,
   RowMotion,
-  ScreenTitle,
   SectionBox,
   Tabs,
   TopBar,
@@ -120,7 +119,6 @@ const WishItem = memo(function WishItem({ wish, onToggleGift, onOpenLink, onOpen
 
 export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps) {
   const {
-    caption,
     me,
     people,
     selectedPersonId,
@@ -171,11 +169,10 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
 
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
-      <TopBar lead={{ kind: 'caption', text: caption }} actions={actions} style={[styles.top, { top: insets.top + S.topBarTop }]} />
-      <ScreenTitle title="Хочу" style={[styles.title, { top: insets.top + S.titleTop }]} />
-      <Tabs items={tabs} value={selectedPersonId} onChange={onSelectPerson} style={[styles.tabs, { top: insets.top + S.tabsTop }]} />
+      <TopBar lead={{ kind: 'title', text: 'Хочу' }} actions={actions} style={[styles.top, { top: insets.top + S.topBarTop }]} />
+      <Tabs items={tabs} value={selectedPersonId} onChange={onSelectPerson} style={[styles.tabs, { top: insets.top + S.tabsTopCompact }]} />
 
-      <View style={[styles.content, { top: insets.top + S.contentTop, bottom: insets.bottom + S.contentBottom }]}>
+      <View style={[styles.content, { top: insets.top + S.contentTopCompact, bottom: insets.bottom + S.contentBottom }]}>
         {/* Другой человек — новый список целиком, без анимации строк */}
         <ListMotion key={selectedPersonId}>
         <SectionBox
@@ -223,7 +220,6 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   top: { position: 'absolute', left: space.side, right: space.side },
-  title: { position: 'absolute', left: space.side, right: space.side },
   tabs: { position: 'absolute', left: space.side, right: space.side },
   content: { position: 'absolute', left: space.side, right: space.side },
   /** Не меньше 10px между секциями, когда «Хочу» длинный */

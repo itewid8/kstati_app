@@ -81,6 +81,8 @@ export type Task = {
   kind?: Exclude<TaskKind, 'task'>;
   /** Именинник (только у дня рождения): участник группы (id) или просто имя */
   celebrant?: Celebrant;
+  /** Перенесено из календаря телефона: календарь, событие, отпечаток содержимого (видно только владельцу) */
+  ext?: { cal: string; id: string; h: string };
   parentId?: string | null;
   /** Группа, в которой дело создали; null — в личном календаре */
   home?: string | null;

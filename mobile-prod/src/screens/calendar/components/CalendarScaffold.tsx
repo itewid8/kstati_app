@@ -80,6 +80,8 @@ export const CalendarScaffold = memo(function CalendarScaffold(props: Props) {
     onChangeView,
     onNavigate,
     onRec,
+    phoneOn,
+    onTogglePhone,
   } = props;
   const { c, person, personInk } = useTheme();
   const Wrap = useContext(CalendarContentWrap);
@@ -110,7 +112,13 @@ export const CalendarScaffold = memo(function CalendarScaffold(props: Props) {
       {Wrap ? <Wrap>{children}</Wrap> : children}
       {overlay}
       <TopBar lead={lead} actions={actions} style={[styles.side, { top: insets.top + S.topBarTop }]} />
-      <ViewSwitch value={view} onChange={changeView} style={[styles.side, { top: insets.top + CAL.viewTop }]} />
+      <ViewSwitch
+        value={view}
+        onChange={changeView}
+        phoneOn={phoneOn}
+        onTogglePhone={onTogglePhone}
+        style={[styles.side, { top: insets.top + CAL.viewTop }]}
+      />
       <View style={[styles.side, styles.period, { top: insets.top + CAL.periodTop }]}>{period}</View>
       <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} style={[styles.side, { bottom: insets.bottom + S.navBottom }]} />
     </View>

@@ -3,6 +3,7 @@
  * НОВАЯ ГРУППА. Вступление по коду — в профиле. Отдельное окно (Modal): поверх экранов стека и «назад» Android закрывает его
  */
 import { BugButton } from './BugButton';
+import { ModalShot } from './ModalShot';
 import { router } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
@@ -44,6 +45,7 @@ export function GroupSheet() {
 
   return (
     <Modal transparent visible={s.visible} statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={close}>
+      <ModalShot>
       <View style={styles.fill}>
         <GroupPickerSheet
           visible
@@ -56,6 +58,7 @@ export function GroupSheet() {
         />
       </View>
       <BugButton />
+      </ModalShot>
     </Modal>
   );
 }

@@ -25,6 +25,12 @@ const ICONS = {
   bug: { d: 'M8 9h8v6a4 4 0 0 1-8 0zM9.5 9V7.5a2.5 2.5 0 0 1 5 0V9M3.5 12.5H8M16 12.5h4.5M5 7.5l3 2M19 7.5l-3 2M5 19l3-2.5M19 19l-3-2.5M12 11v8', strokeWidth: 2 },
   mic: { d: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3', strokeWidth: 2 },
   trash: { d: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', strokeWidth: 2 },
+  /** Окно отзыва: отменить и вернуть действие со снимком, снимок на весь экран */
+  undo: { d: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3', strokeWidth: 2 },
+  redo: { d: 'M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3', strokeWidth: 2 },
+  expand: { d: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5', strokeWidth: 2 },
+  /** Календарь телефона: события из него */
+  phone: { d: 'M7 2.5h10v19H7zM10.5 18.5h3', strokeWidth: 2 },
   folder: { d: 'M3 6h7l2 2h9v11H3z', strokeWidth: 2 },
   /** Типы дел (мини-иконки): дело, день рождения, важный день, путешествие */
   kindTask: { d: 'M5 5h14v14H5zM9 12l2 2 4-4', strokeWidth: 2 },

@@ -23,7 +23,9 @@ type Lead =
   /** Выбор группы «МЫ С КАРИНОЙ ⌄» */
   | { kind: 'group'; label: string; onPress?: () => void }
   /** Назад + подпись «ДЕЛО · МЫ С КАРИНОЙ» */
-  | { kind: 'back'; label: string; onBack?: () => void };
+  | { kind: 'back'; label: string; onBack?: () => void }
+  /** Название экрана крупно — вместо отдельной строки заголовка (Заметки, Хочу) */
+  | { kind: 'title'; text: string };
 
 type Props = {
   lead: Lead;
@@ -52,6 +54,10 @@ export const TopBar = memo(function TopBar({ lead, after, actions = [], iconSize
           <Marquee style={[T.group, styles.flex, { color: c.text }]}>{lead.label}</Marquee>
           <Icon name="chevronDown" size={12} color={c.text} strokeWidth={2.5} />
         </Pressable>
+      ) : lead.kind === 'title' ? (
+        <Marquee style={[T.barTitle, styles.flex, styles.titleTail, { color: c.text }]}>
+          {lead.text}
+        </Marquee>
       ) : (
         <Marquee style={[lead.kind === 'back' ? T.backLabel : T.caption, styles.flex, { color: c.muted }]}>
           {lead.kind === 'caption' ? lead.text : lead.label}
@@ -68,6 +74,8 @@ export const TopBar = memo(function TopBar({ lead, after, actions = [], iconSize
 const styles = StyleSheet.create({
   bar: { height: S.topBarHeight, flexDirection: 'row', alignItems: 'center', gap: space.barGap },
   flex: { flex: 1 },
+  /** Хвост последней буквы при отрицательном межбуквенном не срезается */
+  titleTail: { paddingRight: 2 },
   group: {
     flex: 1,
     height: S.topBarHeight,
