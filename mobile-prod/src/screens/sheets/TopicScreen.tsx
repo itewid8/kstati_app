@@ -18,6 +18,7 @@ import {
   LONG_PRESS_MS,
   ListMotion,
   RowMotion,
+  SelectBar,
   fonts,
   TopBar,
   pad2,
@@ -87,6 +88,10 @@ export type TopicScreenProps = {
   onToggleSelect?: (id: ID) => void;
   onCancelSelect?: () => void;
   onDeleteSelected?: () => void;
+  /** «ВЫБРАТЬ» в шапке заметок / «ВЫБРАТЬ ВСЕ»—«СНЯТЬ ВСЕ» в режиме выбора */
+  onStartSelect?: () => void;
+  onSelectAll?: () => void;
+  allSelected?: boolean;
   onOpenIdea?: (id: ID) => void;
   onHoldIdea?: (id: ID, lift: LiftTarget) => void;
   onDeleteIdea?: (id: ID) => void;
@@ -181,10 +186,7 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
   const picked = useMemo(() => new Set(props.selected ?? []), [props.selected]);
   const actions = useMemo<TopBarAction[]>(() => {
     const out: TopBarAction[] = [];
-    if (selecting) {
-      if (picked.size && props.onDeleteSelected) out.push({ key: 'delete', icon: 'trash', accessibilityLabel: 'Удалить выбранные', onPress: props.onDeleteSelected });
-      return out;
-    }
+    if (selecting) return out;
     if (shared !== null && onShare) {
       out.push({
         key: 'share',
@@ -244,7 +246,19 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
           <View style={[styles.box, { borderColor: c.border }]}>
             <View style={[styles.header, { backgroundColor: c.text }]}>
               <Text style={[T.section, { color: c.bg }]}>ЗАМЕТКИ</Text>
-              <Text style={[T.section, { color: c.bg }]}>{pad2(ideas.length)}</Text>
+              <View style={styles.headRight}>
+                {(selecting ? props.onSelectAll : props.onStartSelect) ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    hitSlop={{ top: 10, bottom: 10, left: 8, right: 4 }}
+                    onPress={selecting ? props.onSelectAll : props.onStartSelect}
+                    style={[styles.headAction, { borderColor: c.bg }]}
+                  >
+                    <Text style={[T.section, { color: c.bg }]}>{selecting ? (props.allSelected ? 'СНЯТЬ ВСЕ' : 'ВЫБРАТЬ ВСЕ') : 'ВЫБРАТЬ'}</Text>
+                  </Pressable>
+                ) : null}
+                <Text style={[T.section, { color: c.bg }]}>{pad2(ideas.length)}</Text>
+              </View>
             </View>
             <ListMotion>
               {ideas.map((idea) => (
@@ -270,6 +284,13 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
             <NoteTools current={body.active !== null ? body.blocks[body.active] : undefined} onTool={body.onTool} onDone={props.onDone ?? Keyboard.dismiss} />
           </View>
         </>
+      ) : selecting ? (
+        <SelectBar
+          count={picked.size}
+          onCancel={props.onCancelSelect}
+          actions={[{ label: 'УДАЛИТЬ', danger: true, onPress: props.onDeleteSelected }]}
+          style={[styles.abs, { bottom: insets.bottom + S.navBottom }]}
+        />
       ) : (
         <BottomNav active="ideas" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
       )}
@@ -287,6 +308,8 @@ const styles = StyleSheet.create({
   abs: { position: 'absolute', left: space.side, right: space.side },
   title: { height: S.titleHeight, justifyContent: 'flex-end' },
   box: { borderWidth: S.border },
+  headRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headAction: { paddingHorizontal: 6, height: 16, borderWidth: 1, justifyContent: 'center', marginRight: 2 },
   scroll: { position: 'absolute', left: 0, right: 0 },
   content: { paddingHorizontal: space.side, paddingBottom: 16, flexGrow: 1 },
   bar: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopWidth: S.hairline },

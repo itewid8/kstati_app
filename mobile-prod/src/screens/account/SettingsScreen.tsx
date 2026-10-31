@@ -56,6 +56,9 @@ export type SettingsScreenProps = {
   onToggleBugButton?: (on: boolean) => void;
   /** Календари телефона: слой в календаре и перенос событий */
   onOpenPhoneCalendars?: () => void;
+  /** Недавно удалённые: сколько записей */
+  trashCount?: number;
+  onOpenTrash?: () => void;
   /** Заметки из других приложений (файлы, несколько сразу) */
   onOpenNoteImport?: () => void;
   /** Настройки виджета на рабочем столе; нет — раздела нет (iOS без платного аккаунта) */
@@ -189,6 +192,12 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
               </>
             ) : null}
           </SectionBox>
+
+          {props.onOpenTrash ? (
+            <SectionBox title="КОРЗИНА">
+              <AccountRow label="Недавно удалённые" value={props.trashCount ? String(props.trashCount) : undefined} smallValue onPress={props.onOpenTrash} />
+            </SectionBox>
+          ) : null}
 
           {props.onOpenPhoneCalendars ? (
             <SectionBox title="ПЕРЕНОС">

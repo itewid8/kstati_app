@@ -10,6 +10,7 @@ import {
   BottomNav,
   DoneRow,
   SectionBox,
+  SelectBar,
   Tabs,
   TopBar,
   pad2,
@@ -84,6 +85,13 @@ export type IdeasScreenProps = {
   onToggleSelect?: (id: ID) => void;
   onCancelSelect?: () => void;
   onDeleteSelected?: () => void;
+  /** «ВЫБРАТЬ» в шапке тем — режим выбора без удержания */
+  onStartSelect?: () => void;
+  /** Выбрать все свои темы / снять выбор */
+  onSelectAll?: () => void;
+  /** Все свои темы уже выбраны */
+  allSelected?: boolean;
+  onArchiveSelected?: () => void;
   onToggleSection?: (section: IdeasSection) => void;
   onAddTopic?: () => void;
   onOpenFeed?: () => void;
@@ -165,7 +173,7 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
   const { onDeleteSelected } = props;
 
   const actions = useMemo<TopBarAction[]>(
-    () => selecting ? (picked.size && onDeleteSelected ? [{ key: 'delete', icon: 'trash', accessibilityLabel: 'Удалить выбранные', onPress: onDeleteSelected }] : []) : [
+    () => selecting ? [] : [
       { key: 'add', icon: 'plus', accessibilityLabel: 'Новая тема', onPress: onAddTopic },
       { key: 'feed', icon: 'bell', accessibilityLabel: 'Лента', onPress: onOpenFeed, badge: hasNews },
       {
@@ -196,7 +204,20 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
       <Tabs items={tabs} value={selectedPersonId} onChange={onSelectPerson} style={[styles.abs, { top: insets.top + S.tabsTopCompact }]} />
 
       <View style={[styles.abs, { top: insets.top + S.contentTopCompact, bottom: insets.bottom + S.contentBottom }]}>
-        <SectionBox title="ТЕМЫ" count={pad2(topics.length)} collapsed={!topicsOpen} onToggle={toggleTopics} scrollable>
+        <SectionBox
+          title="ТЕМЫ"
+          count={pad2(topics.length)}
+          collapsed={!topicsOpen && !selecting}
+          onToggle={selecting ? undefined : toggleTopics}
+          action={
+            selecting
+              ? props.onSelectAll && { label: props.allSelected ? 'СНЯТЬ ВСЕ' : 'ВЫБРАТЬ ВСЕ', onPress: props.onSelectAll }
+              : props.onStartSelect && topics.length && topicsOpen
+                ? { label: 'ВЫБРАТЬ', onPress: props.onStartSelect }
+                : undefined
+          }
+          scrollable
+        >
           {topics.map((t) => (
             <TopicRow
               key={t.id}
@@ -231,7 +252,16 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
         </SectionBox>
       </View>
 
-      <BottomNav active="ideas" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+      {selecting ? (
+        <SelectBar
+          count={picked.size}
+          onCancel={props.onCancelSelect}
+          actions={[...(props.onArchiveSelected ? [{ label: 'В АРХИВ', onPress: props.onArchiveSelected }] : []), { label: 'УДАЛИТЬ', danger: true, onPress: onDeleteSelected }]}
+          style={[styles.abs, { bottom: insets.bottom + S.navBottom }]}
+        />
+      ) : (
+        <BottomNav active="ideas" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+      )}
     </View>
   );
 });

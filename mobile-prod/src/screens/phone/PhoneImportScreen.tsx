@@ -7,7 +7,7 @@
 import { memo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { PhoneAccess } from '@/lib/phoneCalendarNative';
-import { Icon, fonts, size as S, space, useTheme } from '@/ui';
+import { Icon, SectionBox, fonts, size as S, space, useTheme } from '@/ui';
 import { AccountHeader } from '../account/components/AccountHeader';
 import { OptionGrid, type Option } from '../account/components/OptionGrid';
 import { Loading, PhoneNotice, Tick, accessNotice } from './PhoneParts';
@@ -156,7 +156,13 @@ export const PhoneImportScreen = memo(function PhoneImportScreen(props: PhoneImp
               ) : !sections.length ? (
                 <PhoneNotice text={props.emptyText} />
               ) : (
-                sections.map((sec) => (
+                <>
+                  <SectionBox
+                    title="СОБЫТИЯ"
+                    count={String(sections.reduce((n, x) => n + x.rows.length, 0))}
+                    action={props.onToggleAll && { label: allChecked ? 'СНЯТЬ ВСЕ' : 'ВЫБРАТЬ ВСЕ', onPress: props.onToggleAll }}
+                  />
+                  {sections.map((sec) => (
                   <View key={sec.key} style={[styles.box, { borderColor: c.border, backgroundColor: c.panel }]}>
                     <Pressable
                       accessibilityRole="button"
@@ -171,7 +177,8 @@ export const PhoneImportScreen = memo(function PhoneImportScreen(props: PhoneImp
                       <Row key={r.key} row={r} onToggle={props.onToggleRow} onUpdate={props.onUpdate} />
                     ))}
                   </View>
-                ))
+                ))}
+                </>
               )}
             </>
           )}
@@ -190,9 +197,6 @@ export const PhoneImportScreen = memo(function PhoneImportScreen(props: PhoneImp
             <Icon name="chevronDown" size={10} color={c.text} />
           </Pressable>
           <View style={styles.buttons}>
-            <Pressable accessibilityRole="button" onPress={props.onToggleAll} style={[styles.button, { borderColor: c.border, backgroundColor: c.panel }]}>
-              <Text style={[styles.buttonText, { color: c.text }]}>{allChecked ? 'СНЯТЬ ВСЕ' : 'ВЫБРАТЬ ВСЕ'}</Text>
-            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ disabled: !selected }}

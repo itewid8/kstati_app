@@ -20,6 +20,7 @@ import * as M from './mock';
 import { NO_PHONE_SETTINGS, type PhoneCal, type PhoneCalSettings, type PhoneDraft, type PhoneEvent, type PhoneExt } from './phoneCalendar';
 import { uid as newUid } from './ids';
 import type { IncomingNote } from './noteImport';
+import { addToTrash, removedEntries, restore as restoreFromTrash, trashKey, type TrashEntry } from './trash';
 import { PERSONAL as PERSONAL_VIEW, newTaskShare as shareFor } from './visibility';
 import { applyChangeList, ownTopic, saveDraftItems, skipOcc, syncParent, toggleOcc, type Lists, type SavedIds } from './edits';
 import { captureList, isEmptyUndo, revertList, type ListUndo } from './undo';
@@ -200,6 +201,8 @@ type State = {
   noteInbox: { notes: IncomingNote[]; from: string | null; skipped: number } | null;
   /** Тема, куда переносили заметку в прошлый раз (null — «Без темы») */
   noteTopicLast: ID | null;
+  /** Недавно удалённые (lib/trash.ts), 30 дней */
+  trash: TrashEntry[];
   menu: Menu | null;
   /** Выбранный день календаря — общий для экрана «Дела» и ответа ассистента */
   calendarDate: string;
@@ -347,6 +350,10 @@ type Actions = {
   importPhone: (items: readonly { draft: PhoneDraft; ext: PhoneExt; dest: string }[]) => ID[];
   /** Убрать дела по id (отмена переноса), с «ВЕРНУТЬ» */
   dropTasks: (ids: readonly ID[], label: string) => void;
+  /** Вернуть из «Недавно удалённых» (с тем, что удалено вместе) */
+  restoreTrash: (keys: readonly string[]) => number;
+  /** Удалить навсегда */
+  purgeTrash: (keys: readonly string[]) => void;
   setNoteInbox: (v: { notes: IncomingNote[]; from: string | null; skipped: number } | null) => void;
   /**
    * Перенести заметки: тема — своя по id, новая/своя по названию или null («Без темы»). Одна «ВЕРНУТЬ» на всё.
@@ -385,6 +392,7 @@ const emptyData = () => ({
   watch: [] as WatchItem[],
   topics: [] as Topic[],
   ideas: [] as Idea[],
+  trash: [] as TrashEntry[],
   ideaRevs: {} as Record<ID, string>,
   overrides: {} as Record<ID, TaskReminderOverride>,
   wishPersonId: null as ID | null,
@@ -453,9 +461,14 @@ export const useStore = create<State & Actions>()(
       if (plan.watch && !isEmptyUndo(plan.watch)) patch.watch = revertList(cur.watch, plan.watch);
       if (plan.topics && !isEmptyUndo(plan.topics)) patch.topics = revertList(cur.topics, plan.topics);
       if (plan.ideas && !isEmptyUndo(plan.ideas)) patch.ideas = revertList(cur.ideas, plan.ideas);
-      set({ ...patch, undo: null });
+      // Вернули — из «Недавно удалённых» тоже
+      const back = new Set(removed.map(trashKey));
+      set({ ...patch, undo: null, ...(back.size && { trash: get().trash.filter((e) => !back.has(trashKey(e))) }) });
     };
-    set({ undo: { label, at: Date.now(), restore } });
+    // Что исчезло из списков — в «Недавно удалённые»
+    const now = new Date().toISOString();
+    const removed = removedEntries(before, after, now, newUid());
+    set({ undo: { label, at: Date.now(), restore }, ...(removed.length && { trash: addToTrash(get().trash, removed) }) });
   };
 
   /** Профиль на экране: и me, и запись в users */
@@ -983,6 +996,16 @@ export const useStore = create<State & Actions>()(
       withUndo(label, before);
     },
     setNoteInbox: (noteInbox) => set({ noteInbox }),
+    restoreTrash: (keys) => {
+      const s = get();
+      const r = restoreFromTrash({ tasks: s.tasks, wishes: s.wishes, watch: s.watch, topics: s.topics, ideas: s.ideas }, s.trash, new Set(keys));
+      set({ ...r.lists, trash: r.trash });
+      return r.count;
+    },
+    purgeTrash: (keys) => {
+      const gone = new Set(keys);
+      set({ trash: get().trash.filter((e) => !gone.has(trashKey(e))) });
+    },
     importNotes: (items) => {
       const me = get().me;
       if (!me || !items.length) return 0;
@@ -1174,6 +1197,7 @@ export const useStore = create<State & Actions>()(
       bugPos: s.bugPos,
       phoneCal: s.phoneCal,
       noteTopicLast: s.noteTopicLast,
+      trash: s.trash,
       activity: s.activity,
       activitySeen: s.activitySeen,
       calendarHidden: s.calendarHidden,

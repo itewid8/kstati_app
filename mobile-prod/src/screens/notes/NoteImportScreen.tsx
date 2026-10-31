@@ -6,7 +6,7 @@
  */
 import { memo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Icon, IconButton, fonts, size as S, space, useTheme } from '@/ui';
+import { Icon, IconButton, SectionBox, fonts, size as S, space, useTheme } from '@/ui';
 import { AccountHeader } from '../account/components/AccountHeader';
 import { Loading, PhoneNotice, Tick } from '../phone/PhoneParts';
 
@@ -39,7 +39,7 @@ export type NoteImportScreenProps = {
 
 const NO_INSETS = { top: 0, bottom: 0 };
 /** Основной способ — коротко; подробнее — по «?» (components/NoteShareHelp) */
-const SHARE_STEPS = ['Откройте заметку в другом приложении', 'Нажмите «Поделиться» (в Keep — ⋮ → «Отправить»)', 'Выберите «Кстати» и нажмите «СОХРАНИТЬ»'];
+const SHARE_STEPS = ['Откройте заметку в другом приложении', 'Нажмите «Поделиться»', 'Выберите «Кстати» и нажмите «СОХРАНИТЬ»'];
 
 const Row = memo(function Row({ row, onToggle }: { row: NoteRow; onToggle?: (k: string) => void }) {
   const { c } = useTheme();
@@ -95,7 +95,7 @@ export const NoteImportScreen = memo(function NoteImportScreen(props: NoteImport
                 ))}
                 {props.onHelp ? (
                   <Pressable accessibilityRole="button" onPress={props.onHelp} style={[styles.more, { borderTopColor: c.hair }]}>
-                    <Text style={[styles.smallText, { color: c.text }]}>НЕСКОЛЬКО СРАЗУ И ДРУГИЕ СОВЕТЫ</Text>
+                    <Text style={[styles.smallText, { color: c.text }]}>НЕСКОЛЬКО ЗАМЕТОК СРАЗУ И ВЕСЬ KEEP</Text>
                     <Icon name="chevronRight" size={10} color={c.text} />
                   </Pressable>
                 ) : null}
@@ -124,7 +124,13 @@ export const NoteImportScreen = memo(function NoteImportScreen(props: NoteImport
                 ) : null}
               </View>
               {groups.length ? (
-                groups.map((g) => (
+                <>
+                  <SectionBox
+                    title="ЗАМЕТКИ"
+                    count={String(groups.reduce((n, x) => n + x.rows.length, 0))}
+                    action={props.onToggleAll && { label: allChecked ? 'СНЯТЬ ВСЕ' : 'ВЫБРАТЬ ВСЕ', onPress: props.onToggleAll }}
+                  />
+                  {groups.map((g) => (
                   <View key={g.key} style={[styles.box, { borderColor: c.border, backgroundColor: c.panel }]}>
                     <Pressable
                       accessibilityRole="button"
@@ -139,7 +145,8 @@ export const NoteImportScreen = memo(function NoteImportScreen(props: NoteImport
                       <Row key={r.key} row={r} onToggle={props.onToggleRow} />
                     ))}
                   </View>
-                ))
+                ))}
+                </>
               ) : (
                 <PhoneNotice text="Заметок в файле не нашлось" />
               )}
@@ -155,9 +162,6 @@ export const NoteImportScreen = memo(function NoteImportScreen(props: NoteImport
             <Icon name="chevronDown" size={10} color={c.text} />
           </Pressable>
           <View style={styles.buttons}>
-            <Pressable accessibilityRole="button" onPress={props.onToggleAll} style={[styles.button, styles.flex, { borderColor: c.border, backgroundColor: c.panel }]}>
-              <Text style={[styles.buttonText, { color: c.text }]}>{allChecked ? 'СНЯТЬ ВСЕ' : 'ВЫБРАТЬ ВСЕ'}</Text>
-            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ disabled: !selected }}
