@@ -17,6 +17,8 @@ type Props = {
   /** Есть onToggle — шапка нажимается и показывает шеврон */
   collapsed?: boolean;
   onToggle?: () => void;
+  /** Текстовая кнопка в шапке справа («ВЫБРАТЬ», «ВЫБРАТЬ ВСЕ») */
+  action?: { label: string; onPress: () => void };
   /** Тело прокручивается внутри рамки, шапка остаётся на месте (секции во flex-колонке) */
   scrollable?: boolean;
   children?: ReactNode;
@@ -30,6 +32,7 @@ export const SectionBox = memo(function SectionBox({
   variant = 'inverted',
   collapsed = false,
   onToggle,
+  action,
   scrollable = false,
   children,
   style,
@@ -41,6 +44,11 @@ export const SectionBox = memo(function SectionBox({
     <>
       <Marquee ellipsis={false} style={[T.section, styles.title, { color: ink }]}>{title}</Marquee>
       <View style={styles.right}>
+        {action ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={action.label} hitSlop={{ top: 10, bottom: 10, left: 8, right: 4 }} onPress={action.onPress} style={[styles.action, { borderColor: ink }]}>
+            <Text style={[T.section, { color: ink }]}>{action.label}</Text>
+          </Pressable>
+        ) : null}
         {count != null ? <Text style={[T.section, { color: ink }]}>{count}</Text> : null}
         {onToggle ? <Icon name={collapsed ? 'chevronDown' : 'chevronUp'} size={10} color={ink} /> : null}
       </View>
@@ -98,5 +106,6 @@ const styles = StyleSheet.create({
   /** Длинное название сжимается до счётчика и едет */
   title: { flexShrink: 1 },
   right: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  action: { paddingHorizontal: 6, height: 16, borderWidth: 1, justifyContent: 'center', marginRight: 2 },
   scroll: { flexGrow: 0, flexShrink: 1 },
 });

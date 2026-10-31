@@ -26,6 +26,7 @@ const editReminders = () => router.push(nav.reminders());
 const openFeedback = () => router.push(accountRoutes.feedback());
 const openPhoneCalendars = () => router.push(phoneRoutes.calendars());
 const openNoteImport = () => router.push(noteImportRoute);
+const openTrash = () => router.push('/settings/trash');
 const toggleBug = (on: boolean) => useStore.getState().setBugButton(on);
 
 /** Выбор на экране, ещё не сохранённый: только то, что меняли */
@@ -50,6 +51,7 @@ export function SettingsContainer() {
   );
   const [draft, setDraft] = useState<Draft>({});
   const bugButton = useStore((s) => s.bugButton);
+  const trashCount = useStore((s) => s.trash.length);
   const saved = useMemo(() => settingsProps({ ...st, vpnOn, version: VERSION }), [st, vpnOn]);
   const data = useMemo(() => ({ ...saved, ...draft }), [saved, draft]);
   const canSave =
@@ -97,6 +99,8 @@ export function SettingsContainer() {
       onOpenWidget={OPEN_WIDGET}
       onOpenPhoneCalendars={openPhoneCalendars}
       onOpenNoteImport={openNoteImport}
+      trashCount={trashCount}
+      onOpenTrash={openTrash}
       onOpenFeedback={openFeedback}
       bugButton={bugButton}
       onToggleBugButton={toggleBug}

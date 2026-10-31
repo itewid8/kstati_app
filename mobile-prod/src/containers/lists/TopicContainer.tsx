@@ -7,8 +7,8 @@
  */
 import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Keyboard, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BackHandler, Keyboard, StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { topicProps, type TopicSnapshot } from '@/adapters/lists/topic';
 import { PullScreen, PullScrollView } from '@/components/PullRefresh';
@@ -125,6 +125,18 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
     setSelected(null);
   }, [selected]);
   const hasIdeas = data.ideas.length > 0;
+  const allIds = useMemo(() => data.ideas.map((x) => x.id), [data.ideas]);
+  const allSelected = !!selected && !!allIds.length && allIds.every((x) => selected.includes(x));
+  const selectAll = useCallback(() => setSelected(allSelected ? [] : allIds), [allSelected, allIds]);
+  // «Назад» Android в режиме выбора — выйти из выбора
+  useEffect(() => {
+    if (!selected) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelected(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [selected]);
   const more = useCallback(() => {
     Keyboard.dismiss();
     if (topic) topicMenu(topic, share, hasIdeas ? startSelect : undefined);
@@ -186,6 +198,9 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
           onToggleSelect={toggleSelect}
           onCancelSelect={cancelSelect}
           onDeleteSelected={deleteSelected}
+          onStartSelect={((own && topic) || inbox) && hasIdeas ? startSelect : undefined}
+          onSelectAll={selectAll}
+          allSelected={allSelected}
           onDone={editable ? done : undefined}
           onCopy={data.bodyText !== null || isNew ? copy : undefined}
           onOpenIdea={open}

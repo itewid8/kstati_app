@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { BackHandler } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { ALL_IDEAS, IDEAS_SECTIONS, ideasProps, type IdeasSnapshot } from '@/adapters/lists/ideas';
 import { openMenu } from '@/components/ActionMenu';
@@ -72,10 +73,31 @@ export const IdeasContainer = signedInOnly(function Ideas() {
     [canPick],
   );
   const cancelSelect = useCallback(() => setSelected(null), []);
+  // «Назад» Android в режиме выбора — выйти из выбора, а не с экрана
+  useEffect(() => {
+    if (!selected) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelected(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [selected]);
   const deleteSelected = useCallback(() => {
     if (selected?.length) deleteTopicsAsk(selected, () => setSelected(null));
   }, [selected]);
   const data = useMemo(() => ideasProps(s, colors, { today }, { personId, collapsed }), [s, colors, today, personId, collapsed]);
+  // Свои видимые темы — их выбирает «ВЫБРАТЬ ВСЕ»
+  const pickable = useMemo(() => data.topics.map((t) => t.id).filter(canPick), [data.topics, canPick]);
+  const allSelected = !!selected && !!pickable.length && pickable.every((id) => selected.includes(id));
+  const startSelect = useCallback(() => setSelected([]), []);
+  const selectAll = useCallback(() => setSelected(allSelected ? [] : pickable), [allSelected, pickable]);
+  const archiveSelected = useCallback(() => {
+    if (!selected?.length) return;
+    const st = useStore.getState();
+    selected.forEach((id) => st.archiveTopic(id, true));
+    st.notice(`В архиве: ${selected.length}`);
+    setSelected(null);
+  }, [selected]);
 
   return (
     <IdeasScreen
@@ -89,6 +111,10 @@ export const IdeasContainer = signedInOnly(function Ideas() {
       onToggleSelect={toggleSelect}
       onCancelSelect={cancelSelect}
       onDeleteSelected={deleteSelected}
+      onStartSelect={startSelect}
+      onSelectAll={selectAll}
+      allSelected={allSelected}
+      onArchiveSelected={archive ? archiveSelected : undefined}
       onToggleSection={toggleSection}
       onAddTopic={addTopic}
       onOpenFeed={onOpenFeed}
