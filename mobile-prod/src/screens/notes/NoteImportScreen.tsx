@@ -6,7 +6,7 @@
  */
 import { memo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Icon, fonts, size as S, space, useTheme } from '@/ui';
+import { Icon, IconButton, fonts, size as S, space, useTheme } from '@/ui';
 import { AccountHeader } from '../account/components/AccountHeader';
 import { Loading, PhoneNotice, Tick } from '../phone/PhoneParts';
 
@@ -27,6 +27,8 @@ export type NoteImportScreenProps = {
   error?: string;
   insets?: { top: number; bottom: number };
   onBack?: () => void;
+  /** «?» в шапке: как перенести через «Поделиться» */
+  onHelp?: () => void;
   onPick?: () => void;
   onToggleRow?: (key: string) => void;
   onToggleGroup?: (key: string) => void;
@@ -36,6 +38,8 @@ export type NoteImportScreenProps = {
 };
 
 const NO_INSETS = { top: 0, bottom: 0 };
+/** Основной способ — коротко; подробнее — по «?» (components/NoteShareHelp) */
+const SHARE_STEPS = ['Откройте заметку в другом приложении', 'Нажмите «Поделиться» (в Keep — ⋮ → «Отправить»)', 'Выберите «Кстати» и нажмите «СОХРАНИТЬ»'];
 
 const Row = memo(function Row({ row, onToggle }: { row: NoteRow; onToggle?: (k: string) => void }) {
   const { c } = useTheme();
@@ -69,16 +73,40 @@ export const NoteImportScreen = memo(function NoteImportScreen(props: NoteImport
         contentContainerStyle={[styles.content, { paddingTop: insets.top + S.topBarTop, paddingBottom: insets.bottom + (ready ? 170 : 24) }]}
         showsVerticalScrollIndicator={false}
       >
-        <AccountHeader caption="ЗАМЕТКИ" title="Перенести заметки" onBack={props.onBack} />
+        <AccountHeader
+          caption="ЗАМЕТКИ"
+          title="Перенести заметки"
+          onBack={props.onBack}
+          right={props.onHelp ? <IconButton icon="help" accessibilityLabel="Как перенести заметки" onPress={props.onHelp} /> : undefined}
+        />
         <View style={styles.body}>
           {props.error ? <PhoneNotice text={props.error} /> : null}
           {phase === 'empty' ? (
-            <View style={[styles.box, styles.pick, { borderColor: c.border, backgroundColor: c.panel }]}>
-              <Text style={[styles.formats, { color: c.muted }]}>ZIP ИЗ GOOGLE TAKEOUT · JSON · TXT · MD</Text>
-              <Pressable accessibilityRole="button" onPress={props.onPick} style={[styles.button, { borderColor: c.text, backgroundColor: c.text }]}>
-                <Text style={[styles.buttonText, { color: c.bg }]}>ВЫБРАТЬ ФАЙЛ</Text>
-              </Pressable>
-            </View>
+            <>
+              <View style={[styles.box, { borderColor: c.border, backgroundColor: c.panel }]}>
+                <View style={[styles.head, { backgroundColor: c.text }]}>
+                  <Text style={[styles.headText, styles.flex, { color: c.bg }]}>ПОДЕЛИТЬСЯ → КСТАТИ</Text>
+                </View>
+                {SHARE_STEPS.map((t, i) => (
+                  <View key={t} style={[styles.step, i > 0 && { borderTopWidth: S.hairline, borderTopColor: c.hair }]}>
+                    <Text style={[styles.num, { color: c.text }]}>{String(i + 1).padStart(2, '0')}</Text>
+                    <Text style={[styles.stepText, { color: c.text }]}>{t}</Text>
+                  </View>
+                ))}
+                {props.onHelp ? (
+                  <Pressable accessibilityRole="button" onPress={props.onHelp} style={[styles.more, { borderTopColor: c.hair }]}>
+                    <Text style={[styles.smallText, { color: c.text }]}>НЕСКОЛЬКО СРАЗУ И ДРУГИЕ СОВЕТЫ</Text>
+                    <Icon name="chevronRight" size={10} color={c.text} />
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={[styles.box, styles.pick, { borderColor: c.border, backgroundColor: c.panel }]}>
+                <Text style={[styles.formats, { color: c.muted }]}>ВСЁ СРАЗУ ИЗ ФАЙЛА · ZIP ИЗ GOOGLE TAKEOUT · JSON · TXT · MD</Text>
+                <Pressable accessibilityRole="button" onPress={props.onPick} style={[styles.button, { borderColor: c.border, backgroundColor: c.panel }]}>
+                  <Text style={[styles.buttonText, { color: c.text }]}>ВЫБРАТЬ ФАЙЛ</Text>
+                </Pressable>
+              </View>
+            </>
           ) : phase === 'loading' ? (
             <Loading />
           ) : (
@@ -160,6 +188,10 @@ const styles = StyleSheet.create({
   meta: { fontFamily: fonts.mono400, fontSize: 9, letterSpacing: 0.4 },
   small: { height: 32, paddingHorizontal: 10, borderWidth: S.border, justifyContent: 'center' },
   smallText: { fontFamily: fonts.mono400, fontSize: 9, letterSpacing: 0.6 },
+  step: { paddingHorizontal: 10, paddingVertical: 10, flexDirection: 'row', gap: 10 },
+  num: { width: 20, fontFamily: fonts.mono600, fontSize: 11, lineHeight: 19 },
+  stepText: { flex: 1, fontFamily: fonts.sans500, fontSize: 14, lineHeight: 19 },
+  more: { height: S.row, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: S.hairline },
   head: { height: S.sectionHeader, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 8 },
   headText: { fontFamily: fonts.mono600, fontSize: 9, letterSpacing: 0.72 },
   row: { minHeight: 56, paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: S.hairline },

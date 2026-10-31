@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { openMenu } from '@/components/ActionMenu';
+import { NoteShareHelp } from '@/components/NoteShareHelp';
 import { useMyTopics } from '@/components/NoteShareSheet';
 import { logError } from '@/lib/diag';
 import { pickNoteFiles, noteFilesAvailable } from '@/lib/noteFilesNative';
@@ -25,12 +26,13 @@ const dateOf = (iso?: string) => {
 export function NoteImportContainer() {
   const insets = useInsets();
   const inbox = useStore((s) => s.noteInbox);
-  const st = useStore(useShallow((s) => ({ ideas: s.ideas, meId: s.me?.id })));
+  const st = useStore(useShallow((s) => ({ ideas: s.ideas, topics: s.topics, meId: s.me?.id })));
   const { mine } = useMyTopics();
   const [source, setSource] = useState<Source | null>(() =>
     inbox && inbox.notes.length > 1 ? { title: `ИЗ ${inbox.from ?? 'ДРУГОГО ПРИЛОЖЕНИЯ'}`, kind: 'share', from: inbox.from, notes: inbox.notes } : null,
   );
   const [loading, setLoading] = useState(false);
+  const [help, setHelp] = useState(false);
   const [error, setError] = useState<string | undefined>(() =>
     noteFilesAvailable() || (inbox && inbox.notes.length > 1) ? undefined : 'Выбор файлов появится в новой сборке приложения',
   );
@@ -39,9 +41,17 @@ export function NoteImportContainer() {
   const dest: NoteDest = destRaw ?? (hasLabels ? 'labels' : 'none');
   const [selected, setSelected] = useState<ReadonlySet<string> | null>(null);
 
-  const existing = useMemo(() => new Set(st.ideas.filter((i) => i.ownerId === st.meId).map((i) => i.text)), [st.ideas, st.meId]);
+  // Уже перенесена: такая заметка есть среди моих (или тема с тем же названием и текстом)
+  const existing = useMemo(
+    () =>
+      new Set([
+        ...st.ideas.filter((i) => i.ownerId === st.meId).map((i) => i.text),
+        ...st.topics.filter((t) => t.ownerId === st.meId && t.body).map((t) => `${t.title}\u0001${t.body}`),
+      ]),
+    [st.ideas, st.topics, st.meId],
+  );
   const notes = source?.notes ?? [];
-  const isDone = useCallback((n: IncomingNote) => existing.has(noteText(n)), [existing]);
+  const isDone = useCallback((n: IncomingNote) => existing.has(noteText(n)) || existing.has(`${displayTitle(n)}\u0001${n.body}`), [existing]);
   const free = useMemo(() => notes.filter((n) => !isDone(n)).map((n) => n.key), [notes, isDone]);
   // По умолчанию отмечено всё, кроме уже перенесённого
   const chosen = selected ?? new Set(free);
@@ -51,6 +61,7 @@ export function NoteImportContainer() {
   const topicTitle = useCallback(
     (label: string | null) => {
       if (dest === 'none') return 'БЕЗ ТЕМЫ';
+      if (dest === 'each') return 'КАЖДАЯ СВОЕЙ ТЕМОЙ';
       if (dest === 'new') return `НОВАЯ «${newTitle.toUpperCase()}»`;
       if (dest === 'labels') return label ? (mine.find((t) => t.title.trim().toLowerCase() === label.toLowerCase())?.title ?? label).toUpperCase() : 'БЕЗ ТЕМЫ';
       return (mine.find((t) => `t:${t.id}` === dest)?.title ?? '').toUpperCase();
@@ -102,12 +113,19 @@ export function NoteImportContainer() {
   };
   const destOptions: { key: NoteDest; label: string }[] = [
     ...(hasLabels ? [{ key: 'labels' as const, label: 'ПО ЯРЛЫКАМ KEEP' }] : []),
+    { key: 'each', label: 'КАЖДАЯ — ОТДЕЛЬНОЙ ТЕМОЙ' },
     { key: 'none', label: 'БЕЗ ТЕМЫ' },
     { key: 'new', label: `НОВАЯ «${newTitle.toUpperCase()}»` },
     ...mine.map((t) => ({ key: `t:${t.id}` as NoteDest, label: t.title.toUpperCase() })),
   ];
   const onTransfer = () => {
-    const list = notes.filter((n) => chosen.has(n.key) && !isDone(n)).map((n) => ({ text: noteText(n), topic: targetOf(n, dest, newTitle) }));
+    const list = notes
+      .filter((n) => chosen.has(n.key) && !isDone(n))
+      .map((n) => ({
+        text: noteText(n),
+        topic: targetOf(n, dest, newTitle),
+        ...(dest === 'each' && { asTopic: { title: displayTitle(n), body: n.body } }),
+      }));
     useStore.getState().importNotes(list);
     setSelected(new Set());
     if (source?.kind === 'share') useStore.getState().setNoteInbox(null);
@@ -115,7 +133,9 @@ export function NoteImportContainer() {
   const doneCount = notes.length - free.length;
 
   return (
+    <>
     <NoteImportScreen
+      onHelp={() => setHelp(true)}
       phase={loading ? 'loading' : source ? 'ready' : 'empty'}
       sourceTitle={source?.title}
       sourceMeta={[
@@ -145,5 +165,7 @@ export function NoteImportContainer() {
       onPickDest={() => openMenu({ title: 'В какие темы', actions: destOptions.map((d) => ({ label: d.label, onPress: () => setDest(d.key) })) })}
       onTransfer={onTransfer}
     />
+    <NoteShareHelp visible={help} onClose={() => setHelp(false)} />
+    </>
   );
 }

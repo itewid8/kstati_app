@@ -352,7 +352,7 @@ type Actions = {
    * Перенести заметки: тема — своя по id, новая/своя по названию или null («Без темы»). Одна «ВЕРНУТЬ» на всё.
    * Возвращает, сколько перенесено
    */
-  importNotes: (items: readonly { text: string; topic: { id: ID } | { title: string } | null }[]) => number;
+  importNotes: (items: readonly { text: string; topic: { id: ID } | { title: string } | null; asTopic?: { title: string; body: string } }[]) => number;
   /** Перенесённое дело — заново из изменённого в телефоне события (видимость и отметки остаются) */
   refreshPhoneTask: (id: ID, draft: PhoneDraft, ext: PhoneExt) => void;
   /** Удалить все перенесённые из телефона дела (с «ВЕРНУТЬ») */
@@ -1000,12 +1000,24 @@ export const useStore = create<State & Actions>()(
         topics = [...topics, created];
         return created.id;
       };
+      // «Каждая — отдельной темой»: тема и есть заметка (название и текст), без записей внутри
+      const own: Topic[] = items
+        .filter((it) => it.asTopic && (it.asTopic.title.trim() || it.asTopic.body.trim()))
+        .map((it) => ({
+          id: newUid(),
+          ownerId: me.id,
+          title: (it.asTopic!.title.trim() || 'Без названия').slice(0, 200),
+          groupIds: [],
+          body: it.asTopic!.body,
+          createdAt: now,
+        }));
       const added: Idea[] = items
-        .filter((it) => it.text.trim())
+        .filter((it) => !it.asTopic && it.text.trim())
         .map((it) => ({ id: newUid(), ownerId: me.id, topicId: topicId(it.topic), text: it.text, createdAt: now, updatedAt: now }));
-      set({ ideas: [...added, ...before.ideas], topics });
-      withUndo(`Перенесено заметок: ${added.length}`, before);
-      return added.length;
+      set({ ideas: [...added, ...before.ideas], topics: [...topics, ...own] });
+      const n = added.length + own.length;
+      withUndo(`Перенесено заметок: ${n}`, before);
+      return n;
     },
     refreshPhoneTask: (id, draft, ext) => {
       const before = { tasks: get().tasks };

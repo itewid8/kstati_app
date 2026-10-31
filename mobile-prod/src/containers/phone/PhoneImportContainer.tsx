@@ -9,8 +9,7 @@ import { toISODate } from '@/lib/dates';
 import { calDest, calOn, eventDays, eventHash, toDraft, type PhoneEvent } from '@/lib/phoneCalendar';
 import { openPhoneSettings, requestPhoneAccess } from '@/lib/phoneCalendarNative';
 import { useStore } from '@/lib/store';
-import { MONTHS_SHORT } from '@/screens/calendar/format';
-import { PhoneImportScreen, type ImportPeriod, type ImportResult, type ImportSummary } from '@/screens/phone/PhoneImportScreen';
+import { PhoneImportScreen, type ImportPeriod } from '@/screens/phone/PhoneImportScreen';
 import { destsOf } from '@/screens/phone/phoneText';
 import { useInsets } from '../common';
 
@@ -31,7 +30,6 @@ export function PhoneImportContainer() {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [dest, setDest] = useState(BY_CAL);
   const [past, setPast] = useState(false);
-  const [result, setResult] = useState<(ImportResult & { ids: string[] }) | null>(null);
   const all = period === 'all';
 
   const today = toISODate(new Date());
@@ -67,59 +65,17 @@ export function PhoneImportContainer() {
   );
   const groupIds = useMemo(() => new Set(st.groups.map((g) => g.id)), [st.groups]);
   const destFor = (calId: string) => {
-    if (dest !== BY_CAL && !all) return dest;
+    if (dest !== BY_CAL) return dest;
     const d = calDest(useStore.getState().phoneCal, calId);
     return d === 'me' || groupIds.has(d) ? d : 'me';
   };
-  // «ВСЁ»: сводка по всем новым событиям включённых календарей
-  const summary = useMemo<ImportSummary | undefined>(() => {
-    if (!all) return undefined;
-    const fresh = items.filter((i) => i.state === 'new');
-    const pastCount = importItems(events.filter((e) => !hidden.has(e.calendarId) && !notPast(e, today)), st.tasks, st.meId).filter((i) => i.state === 'new').length;
-    const byCal = new Map<string, number>();
-    fresh.forEach((i) => byCal.set(i.ev.calendarId, (byCal.get(i.ev.calendarId) ?? 0) + 1));
-    const split = new Map<string, number>();
-    fresh.forEach((i) => {
-      const d = destFor(i.ev.calendarId);
-      const label = d === 'me' ? 'ТОЛЬКО МНЕ' : (st.groups.find((g) => g.id === d)?.name.toUpperCase() ?? 'ТОЛЬКО МНЕ');
-      split.set(label, (split.get(label) ?? 0) + 1);
-    });
-    const end = new Date(`${to}T12:00:00`);
-    return {
-      counting: loading,
-      until: `${MONTHS_SHORT[end.getMonth()]} ${end.getFullYear()}`,
-      total: fresh.length,
-      single: fresh.filter((i) => !i.series && !calMap.get(i.ev.calendarId)?.birthdays).length,
-      series: fresh.filter((i) => i.series && !calMap.get(i.ev.calendarId)?.birthdays).length,
-      birthdays: fresh.filter((i) => calMap.get(i.ev.calendarId)?.birthdays).length,
-      already: items.length - fresh.length,
-      past: { on: past, count: pastCount },
-      cals: onCals.map((c) => ({
-        id: c.id,
-        title: c.title,
-        meta: `${byCal.get(c.id) ?? 0} · ${c.account}`,
-        color: c.color,
-        on: !hidden.has(c.id),
-        dest: dests.find((d) => d.key === destFor(c.id))?.label ?? 'ТОЛЬКО МНЕ',
-      })),
-      split: [...split.entries()].map(([k, n]) => `${k} · ${n}`),
-    };
-    // destFor читает настройки календарей — они в st.settings
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, items, events, hidden, today, to, loading, past, onCals, calMap, dests, st.settings, st.groups, st.tasks, st.meId]);
-
-  const onTransferAll = () => {
-    const fresh = items.filter((i) => i.state === 'new');
-    const list = fresh.map((i) => ({ draft: toDraft(i.ev, calMap.get(i.ev.calendarId)), ext: { cal: i.ev.calendarId, id: i.ev.id, h: eventHash(i.ev) }, dest: destFor(i.ev.calendarId) }));
-    const ids = useStore.getState().importPhone(list);
-    const rows = onCals
-      .map((c) => ({ title: c.title, color: c.color, n: fresh.filter((i) => i.ev.calendarId === c.id).length }))
-      .filter((r) => r.n);
-    setResult({ total: ids.length, rows, ids });
-  };
+  // «ВСЁ»: сколько новых прошедших (за год) — подпись у переключателя
+  const pastCount = useMemo(
+    () => (all ? importItems(events.filter((e) => !hidden.has(e.calendarId) && !notPast(e, today)), st.tasks, st.meId).filter((i) => i.state === 'new').length : 0),
+    [all, events, hidden, today, st.tasks, st.meId],
+  );
 
   const onTransfer = () => {
-    if (all) return onTransferAll();
     const list = items
       .filter((i) => i.state === 'new' && selected.has(i.key))
       .map((i) => ({ draft: toDraft(i.ev, calMap.get(i.ev.calendarId)), ext: { cal: i.ev.calendarId, id: i.ev.id, h: eventHash(i.ev) }, dest: destFor(i.ev.calendarId) }));
@@ -148,25 +104,8 @@ export function PhoneImportContainer() {
       allChecked={!!free.length && chosen.length === free.length}
       emptyText={EMPTY[period]}
       noCalendars={access === 'granted' && !!cals.length && !onCals.length}
-      summary={summary}
-      result={result ?? undefined}
+      past={all ? { on: past, count: pastCount } : undefined}
       onTogglePast={() => setPast((v) => !v)}
-      onPickCalDest={(id) =>
-        openMenu({
-          title: `Куда переносить «${calMap.get(id)?.title ?? ''}»`,
-          actions: destsOf(st.groups).map((d) => ({ label: d.label, onPress: () => useStore.getState().setPhoneCal(id, { dest: d.key }) })),
-        })
-      }
-      onOneByOne={() => setPeriod('quarter')}
-      onUndoResult={() => {
-        if (result) useStore.getState().dropTasks(result.ids, 'Перенос отменён');
-        setResult(null);
-      }}
-      onToCalendar={() => {
-        setResult(null);
-        useStore.getState().setTasksView('week');
-        router.replace('/tasks');
-      }}
       insets={insets}
       onBack={back}
       onAsk={() => void onAsk()}
