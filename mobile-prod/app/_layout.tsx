@@ -8,6 +8,8 @@ import { Appearance, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ActionMenu } from '@/components/ActionMenu';
+import { BugHost } from '@/components/BugHost';
+import { ErrorScreen } from '@/components/ErrorScreen';
 import { CardSheet } from '@/components/CardSheet';
 import { GroupSheet } from '@/components/GroupSheet';
 import { PullIndicator } from '@/components/PullRefresh';
@@ -40,6 +42,11 @@ const HOLD: RecButtonHandlers = { onPressIn: () => void holdStart(), onPressOut:
 
 /** Окна редактирования — экраны корневого стека, выезжают снизу */
 const EDITOR = { animation: 'slide_from_bottom' as const, animationDuration: 250 };
+
+/** Ошибка в интерфейсе — экран «Что-то сломалось» с отчётом вместо белого экрана */
+export function ErrorBoundary(props: { error: Error; retry: () => Promise<void> }) {
+  return <ErrorScreen {...props} />;
+}
 
 export default function RootLayout() {
   const { c } = useTheme();
@@ -121,6 +128,8 @@ export default function RootLayout() {
           <CardSheet />
           <GroupSheet />
           <ActionMenu />
+          {/* Кнопка-жучок и окно отчёта — поверх всего */}
+          <BugHost />
         </RecButtonContext.Provider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

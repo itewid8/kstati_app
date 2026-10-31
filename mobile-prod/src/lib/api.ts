@@ -124,9 +124,15 @@ export async function fetchHealth(): Promise<{ api: number } | null> {
 export type FeedbackKind = 'bug' | 'idea';
 
 /** POST /feedback — ошибка или предложение. Возвращает текст проблемы или null, если отправлено */
-export async function sendFeedback(kind: FeedbackKind, text: string, device: string): Promise<string | null> {
+export async function sendFeedback(
+  kind: FeedbackKind,
+  text: string,
+  device: string,
+  extra: { screenshot?: string | null; context?: Record<string, unknown> } = {},
+): Promise<string | null> {
   try {
-    await request('/feedback', { token: useStore.getState().session?.token, body: { kind, text, device }, timeoutMs: 20_000 });
+    const body = { kind, text, device, ...(extra.screenshot && { screenshot: extra.screenshot }), ...(extra.context && { context: extra.context }) };
+    await request('/feedback', { token: useStore.getState().session?.token, body, timeoutMs: extra.screenshot ? 60_000 : 20_000 });
     return null;
   } catch (e) {
     if (e instanceof ApiError) return e.message;

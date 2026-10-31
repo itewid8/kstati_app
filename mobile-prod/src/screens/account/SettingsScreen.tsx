@@ -51,6 +51,9 @@ export type SettingsScreenProps = {
   onOpenPrivacy?: () => void;
   /** Отзыв: ошибка или предложение */
   onOpenFeedback?: () => void;
+  /** Кнопка-жучок поверх приложения (меняется сразу, без СОХРАНИТЬ) */
+  bugButton?: boolean;
+  onToggleBugButton?: (on: boolean) => void;
   /** Настройки виджета на рабочем столе; нет — раздела нет (iOS без платного аккаунта) */
   onOpenWidget?: () => void;
   onCancel?: () => void;
@@ -203,6 +206,12 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
           <SectionBox title="О ПРИЛОЖЕНИИ">
             <AccountRow label="Версия" value={version} smallValue chevron={false} />
             {onOpenFeedback ? <AccountRow label="Ошибка или предложение" onPress={onOpenFeedback} /> : null}
+            {props.onToggleBugButton ? (
+              <View style={[styles.switchRow, { backgroundColor: c.panel }]}>
+                <Text style={[accountText.rowLabel, { color: c.text }]}>Кнопка отзыва</Text>
+                <Toggle value={!!props.bugButton} onChange={props.onToggleBugButton} accessibilityLabel="Кнопка отзыва" />
+              </View>
+            ) : null}
             {showAboutLinks ? <AccountRow label="Написать в поддержку" onPress={onContactSupport} /> : null}
             {showAboutLinks ? <AccountRow label="Политика конфиденциальности" onPress={onOpenPrivacy} /> : null}
           </SectionBox>

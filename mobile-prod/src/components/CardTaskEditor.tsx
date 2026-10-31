@@ -4,6 +4,7 @@
  * «СОХРАНИТЬ»), «назад» ничего не меняет, «УДАЛИТЬ» убирает дело из ответа.
  * Кладётся внутрь окна записей (вложенный Modal показывается поверх него и на iPhone).
  */
+import { BugButton } from './BugButton';
 import { useCallback, useMemo, useRef, useState, type RefObject } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -40,6 +41,7 @@ export const CardTaskEditor = ({ item, onSave, onRemove, onClose }: Props) => {
     <Modal visible={!!item} animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={onBack}>
       <GestureHandlerRootView style={styles.fill}>
         {item ? <Editor key={item.key} item={item} back={back} onSave={onSave} onRemove={onRemove} onClose={onClose} /> : null}
+        <BugButton />
       </GestureHandlerRootView>
     </Modal>
   );

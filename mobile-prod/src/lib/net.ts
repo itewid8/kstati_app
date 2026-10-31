@@ -4,6 +4,7 @@
  */
 import Constants from 'expo-constants';
 import { API_URL } from './config';
+import { logEvent } from './diag';
 import { ApiError, exchange, NetError } from './http';
 
 /** Уровень API, который понимает приложение: сервер включает для него новые поля и виды ответа */
@@ -43,7 +44,11 @@ export async function request<T = unknown>(
         signal,
       }),
     opts.timeoutMs ?? 20_000,
-  );
+  ).catch((e: unknown) => {
+    // В журнал отчёта — только путь и код ответа
+    logEvent('net', `${path.split('?')[0]} ${e instanceof ApiError ? `${e.status} ${e.code}` : e instanceof NetError ? `нет связи: ${e.message}` : 'ошибка'}`);
+    throw e;
+  });
   return data as T;
 }
 

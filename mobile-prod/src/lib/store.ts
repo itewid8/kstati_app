@@ -185,6 +185,9 @@ type State = {
   collapsedSections: string[];
   /** Планы в списке дел, раскрытые до подзадач (остальные свёрнуты); помнится между запусками */
   expandedPlans: string[];
+  /** Кнопка-жучок поверх приложения и её место (доли ширины и высоты экрана); null — у правого края по центру */
+  bugButton: boolean;
+  bugPos: { x: number; y: number } | null;
   menu: Menu | null;
   /** Выбранный день календаря — общий для экрана «Дела» и ответа ассистента */
   calendarDate: string;
@@ -323,6 +326,8 @@ type Actions = {
   setEditorSeed: (seed: EditorSeed | null) => void;
   toggleSection: (key: string) => void;
   togglePlanOpen: (id: string) => void;
+  setBugButton: (on: boolean) => void;
+  setBugPos: (pos: { x: number; y: number }) => void;
   /** Короткое сообщение внизу экрана без кнопки */
   notice: (label: string) => void;
   clearUndo: () => void;
@@ -380,6 +385,8 @@ const initial: State = {
   calendarView: 'week' as Exclude<TasksView, 'list'>,
   collapsedSections: ['past', 'done'],
   expandedPlans: [],
+  bugButton: true,
+  bugPos: null,
   menu: null,
   calendarDate: toISODate(new Date()),
   voiceTopicId: null,
@@ -903,6 +910,8 @@ export const useStore = create<State & Actions>()(
     setVoiceQuota: (voiceQuota) => set({ voiceQuota, voiceQuotaDay: voiceQuota ? toISODate(new Date()) : '' }),
     setServerApi: (serverApi) => get().serverApi !== serverApi && set({ serverApi }),
     setEditorSeed: (editorSeed) => set({ editorSeed }),
+    setBugButton: (bugButton) => set({ bugButton }),
+    setBugPos: (bugPos) => set({ bugPos }),
     togglePlanOpen: (id) => {
       const cur = get().expandedPlans;
       set({ expandedPlans: cur.includes(id) ? cur.filter((k) => k !== id) : [...cur, id].slice(-100) });
@@ -1034,6 +1043,8 @@ export const useStore = create<State & Actions>()(
       micMode: s.micMode,
       collapsedSections: s.collapsedSections,
       expandedPlans: s.expandedPlans,
+      bugButton: s.bugButton,
+      bugPos: s.bugPos,
       activity: s.activity,
       activitySeen: s.activitySeen,
       calendarHidden: s.calendarHidden,

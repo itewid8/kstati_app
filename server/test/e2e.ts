@@ -396,7 +396,7 @@ async function scenario(name: string, store: Store) {
   assert.deepEqual(await ok('GET', '/voice/quota', undefined, T1), q1, 'запрос счётчика лимит не тратит');
   assert.equal((await call('GET', '/voice/quota')).status, 401);
   // Отзыв: сохраняется на сервере, пустой и без входа — нет
-  assert.deepEqual(await ok('POST', '/feedback', { kind: 'bug', text: 'Зависает при правке заметки', device: 'iOS 18' }, T1), { ok: true });
+  assert.deepEqual(await ok('POST', '/feedback', { kind: 'bug', text: 'Зависает при правке заметки', device: 'iOS 18' }, T1), { ok: true, issue: null }, 'GitHub не настроен — без задачи');
   assert.equal((await call('POST', '/feedback', { kind: 'idea', text: '  ' }, T1)).status, 400);
   assert.equal((await call('POST', '/feedback', { kind: 'idea', text: 'x' })).status, 401);
   const fv = await ok('POST', '/feedback/voice', { audio: Buffer.from('m4a').toString('base64') }, T1);

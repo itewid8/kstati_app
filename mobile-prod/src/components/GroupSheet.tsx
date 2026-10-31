@@ -2,6 +2,7 @@
  * Окно выбора группы (группа в верхней панели списков и календаря, s.groupSheet): мои группы, НАСТРОЙКИ текущей,
  * НОВАЯ ГРУППА. Вступление по коду — в профиле. Отдельное окно (Modal): поверх экранов стека и «назад» Android закрывает его
  */
+import { BugButton } from './BugButton';
 import { router } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
@@ -54,6 +55,7 @@ export function GroupSheet() {
           onCreate={onCreate}
         />
       </View>
+      <BugButton />
     </Modal>
   );
 }
