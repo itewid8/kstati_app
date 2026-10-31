@@ -37,7 +37,7 @@ export type NoteScreenProps = NoteHandlers & {
 
 const NO_INSETS = { top: 0, bottom: 0 };
 /** Текст — под названием */
-const TOP = 122;
+const TOP = 110;
 /** Панель: кнопки 44, сверху и снизу по 16; над клавиатурой — 8 */
 const BAR_PAD = 16;
 const KB_GAP = 8;

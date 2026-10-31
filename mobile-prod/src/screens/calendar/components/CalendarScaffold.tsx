@@ -15,8 +15,8 @@ import { ViewSwitch, type TasksSwitchValue } from './ViewSwitch';
 
 /** Вертикальная сетка экрана календаря (макеты C-Day/Week/Month/Year) */
 export const CAL = {
-  viewTop: 116,
-  periodTop: 68,
+  viewTop: 104,
+  periodTop: 56,
   periodHeight: 40,
   /** Левый край сетки часов (подписи часов слева) и правое поле под вкладки людей */
   gridLeft: GRID.left,

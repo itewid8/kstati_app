@@ -55,8 +55,8 @@ export type DayScreenProps = CalendarChromeProps &
 
 /** Вертикаль дня (px от верха экрана, без safe area) */
 const D = {
-  rule: 152,
-  barsTop: 160,
+  rule: 140,
+  barsTop: 148,
   barPitch: 26,
   hairGap: 6,
   gridGap: 4,

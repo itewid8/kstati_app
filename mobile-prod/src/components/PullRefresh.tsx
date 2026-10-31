@@ -163,7 +163,7 @@ export function PullIndicator() {
   const refreshing = useBusy();
   const shown = useShown(refreshing);
   // Ниже шапки: крутилка не прячется под вырезом камеры и видна там, куда тянет палец
-  const top = insets.top + 84;
+  const top = insets.top + 72;
   const style = useAnimatedStyle(() => {
     const p = Math.max(Math.min(pull.get(), 1), shown.get());
     return {

@@ -278,7 +278,7 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
 });
 
 /** Текст темы — сразу под названием; панель над клавиатурой: отступы 16 и 8 */
-const BODY_TOP = 120;
+const BODY_TOP = 108;
 const BAR_PAD = 16;
 const KB_GAP = 8;
 

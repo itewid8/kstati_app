@@ -153,14 +153,14 @@ export const ShareScreen = memo(function ShareScreen(props: ShareScreenProps) {
   const { variant, caption, title, selectOnly, visible, total, tasks, ask, insets = NO_INSETS } = props;
   const { c } = useTheme();
   const join = variant === 'join';
-  const top = insets.top + (join ? 128 : 72);
+  const top = insets.top + (join ? 116 : 60);
   const barHeight = join ? insets.bottom + BAR + S.hairline : 0;
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
       {join ? (
         <>
           <TopBar lead={{ kind: 'caption', text: caption }} style={[styles.side, { top: insets.top + S.topBarTop }]} />
-          <ScreenTitle title={title} style={[styles.side, { top: insets.top + 74 }]} />
+          <ScreenTitle title={title} style={[styles.side, { top: insets.top + 62 }]} />
         </>
       ) : (
         <AccountHeader caption={caption} title={title} onBack={props.onBack} style={[styles.side, { top: insets.top + S.topBarTop }]} />

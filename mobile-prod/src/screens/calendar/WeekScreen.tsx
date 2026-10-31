@@ -56,10 +56,10 @@ export type WeekScreenProps = CalendarChromeProps &
 
 /** Вертикаль недели (px от верха экрана, без safe area) */
 const W = {
-  headTop: 152,
-  headLabelTop: 156,
-  rule: 202,
-  barsTop: 208,
+  headTop: 140,
+  headLabelTop: 144,
+  rule: 190,
+  barsTop: 196,
   barPitch: 22,
   /** Волосяная линия под полосами и начало сетки */
   barsHair: 4,

@@ -45,7 +45,7 @@ const MAX_TRANSPARENCY = 1 - WIDGET_OPACITY_MIN;
 const STAGE = 260;
 const STAGE_PAD = 14;
 const REAL: Record<WidgetSize, readonly [number, number]> = { '1x1': [82, 82], '2x1': [174, 82], '2x2': [174, 182], '4x2': [358, 210], '4x4': [358, 374] };
-const TOP = 72 + STAGE + 8 + 34 + 10;
+const TOP = 60 + STAGE + 8 + 34 + 10;
 const SAVE_BAR = 76;
 
 export const WidgetSettingsScreen = memo(function WidgetSettingsScreen(props: WidgetSettingsScreenProps) {
@@ -145,7 +145,7 @@ export const WidgetSettingsScreen = memo(function WidgetSettingsScreen(props: Wi
       </ScrollView>
 
       <View style={[styles.top, { height: insets.top + TOP + 1, backgroundColor: c.bg, borderBottomColor: c.border }]}>
-        <View style={[styles.head, { top: insets.top + 20 }]}>
+        <View style={[styles.head, { top: insets.top + 8 }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Назад"
@@ -156,12 +156,12 @@ export const WidgetSettingsScreen = memo(function WidgetSettingsScreen(props: Wi
           </Pressable>
           <Text style={[styles.title, { color: c.text }]}>Виджет</Text>
         </View>
-        <View style={[styles.stage, { top: insets.top + 72, borderColor: c.border }]}>
+        <View style={[styles.stage, { top: insets.top + 60, borderColor: c.border }]}>
           <Wallpaper dark={preview.dark} />
           <View style={StyleSheet.absoluteFill} onLayout={onStage} pointerEvents="none" />
           {stage ? <Preview size={size} prefs={prefs} data={preview} box={stage} /> : null}
         </View>
-        <View style={[styles.sizes, { top: insets.top + 72 + STAGE + 8 }]}>
+        <View style={[styles.sizes, { top: insets.top + 60 + STAGE + 8 }]}>
           <Segments
             height={34}
             options={WIDGET_SIZES.map((key) => ({ key, label: key.replace('x', '×') }))}
