@@ -12,7 +12,7 @@ import { AccountHeader } from '../account/components/AccountHeader';
 import { OptionGrid, type Option } from '../account/components/OptionGrid';
 import { Loading, PhoneNotice, Tick, accessNotice } from './PhoneParts';
 
-export type ImportPeriod = 'week' | 'month' | 'quarter';
+export type ImportPeriod = 'week' | 'month' | 'quarter' | 'all';
 export type ImportRow = {
   key: string;
   time: string;
@@ -26,6 +26,24 @@ export type ImportRow = {
 };
 export type ImportSection = { key: string; title: string; rows: readonly ImportRow[] };
 export type ImportChip = { id: string; label: string; on: boolean };
+
+/** «ВСЁ»: сводка вместо списка */
+export type ImportSummary = {
+  counting: boolean;
+  /** «ОКТ 2028» */
+  until: string;
+  total: number;
+  single: number;
+  series: number;
+  birthdays: number;
+  already: number;
+  past: { on: boolean; count: number };
+  cals: readonly { id: string; title: string; meta: string; color: string; on: boolean; dest: string }[];
+  /** «ТОЛЬКО МНЕ · 173», «МЫ С КАРИНОЙ · 41» */
+  split: readonly string[];
+};
+/** Итог переноса всего календаря */
+export type ImportResult = { total: number; rows: readonly { title: string; color: string; n: number }[] };
 
 export type PhoneImportScreenProps = {
   access: PhoneAccess | null;
@@ -42,6 +60,13 @@ export type PhoneImportScreenProps = {
   emptyText: string;
   /** Включённых календарей нет */
   noCalendars?: boolean;
+  summary?: ImportSummary;
+  result?: ImportResult;
+  onTogglePast?: () => void;
+  onPickCalDest?: (id: string) => void;
+  onOneByOne?: () => void;
+  onUndoResult?: () => void;
+  onToCalendar?: () => void;
   insets?: { top: number; bottom: number };
   onBack?: () => void;
   onAsk?: () => void;
@@ -60,7 +85,8 @@ export type PhoneImportScreenProps = {
 const PERIODS: Option<ImportPeriod>[] = [
   { key: 'week', label: 'НЕДЕЛЯ' },
   { key: 'month', label: '30 ДНЕЙ' },
-  { key: 'quarter', label: '3 МЕСЯЦА' },
+  { key: 'quarter', label: '3 МЕС.' },
+  { key: 'all', label: 'ВСЁ' },
 ];
 const NO_INSETS = { top: 0, bottom: 0 };
 const noop = () => {};
@@ -100,6 +126,8 @@ export const PhoneImportScreen = memo(function PhoneImportScreen(props: PhoneImp
   const { c } = useTheme();
   const notice = accessNotice(access, props.onAsk ?? noop, props.onOpenSettings ?? noop);
   const ready = !notice;
+  if (props.result) return <ResultView result={props.result} insets={insets} onUndo={props.onUndoResult} onDone={props.onToCalendar} />;
+  const summary = period === 'all' ? props.summary : undefined;
   return (
     <View style={[styles.screen, { backgroundColor: c.bg }]}>
       <ScrollView
@@ -114,7 +142,7 @@ export const PhoneImportScreen = memo(function PhoneImportScreen(props: PhoneImp
               <View style={[styles.box, { borderColor: c.border }]}>
                 <OptionGrid options={PERIODS} value={period} onChange={props.onPeriod} />
               </View>
-              {chips.length > 1 ? (
+              {summary ? null : chips.length > 1 ? (
                 <View style={styles.chips}>
                   {chips.map((ch) => (
                     <Pressable
@@ -132,6 +160,8 @@ export const PhoneImportScreen = memo(function PhoneImportScreen(props: PhoneImp
               ) : null}
               {props.noCalendars ? (
                 <PhoneNotice text="Календари не выбраны" action="КАЛЕНДАРИ" onAction={props.onOpenCalendars} />
+              ) : summary ? (
+                <SummaryView s={summary} onTogglePast={props.onTogglePast} onToggleCal={props.onToggleChip} onPickDest={props.onPickCalDest} />
               ) : loading && !sections.length ? (
                 <Loading />
               ) : !sections.length ? (
@@ -158,7 +188,31 @@ export const PhoneImportScreen = memo(function PhoneImportScreen(props: PhoneImp
           )}
         </View>
       </ScrollView>
-      {ready ? (
+      {ready && summary ? (
+        <View style={[styles.bottom, { paddingBottom: insets.bottom + 16, borderTopColor: c.hair, backgroundColor: c.bg }]}>
+          {summary.split.length ? (
+            <View style={styles.split}>
+              {summary.split.map((t) => (
+                <Text key={t} style={[styles.splitText, { color: c.muted }]}>{t}</Text>
+              ))}
+            </View>
+          ) : null}
+          <View style={styles.buttons}>
+            <Pressable accessibilityRole="button" onPress={props.onOneByOne} style={[styles.button, { borderColor: c.border, backgroundColor: c.panel }]}>
+              <Text style={[styles.buttonText, { color: c.text }]}>ПО ОДНОМУ</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !summary.total || summary.counting }}
+              disabled={!summary.total || summary.counting}
+              onPress={props.onTransfer}
+              style={[styles.button, styles.main, { borderColor: c.text, backgroundColor: c.text }, (!summary.total || summary.counting) && styles.faded]}
+            >
+              <Text style={[styles.buttonText, { color: c.bg }]}>{summary.total ? `ПЕРЕНЕСТИ ${summary.total}` : 'ПЕРЕНЕСТИ'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : ready ? (
         <View style={[styles.bottom, { paddingBottom: insets.bottom + 16, borderTopColor: c.hair, backgroundColor: c.bg }]}>
           <Pressable
             accessibilityRole="button"
@@ -190,7 +244,142 @@ export const PhoneImportScreen = memo(function PhoneImportScreen(props: PhoneImp
   );
 });
 
+const Stat = ({ n, label, muted, first }: { n: number; label: string; muted?: boolean; first?: boolean }) => {
+  const { c } = useTheme();
+  return (
+    <View style={[styles.stat, !first && { borderLeftWidth: S.hairline, borderLeftColor: c.hair }]}>
+      <Text style={[styles.statN, { color: muted ? c.muted : c.text }]}>{n}</Text>
+      <Text numberOfLines={1} style={[styles.statLabel, { color: c.muted }]}>{label}</Text>
+    </View>
+  );
+};
+
+const SummaryView = memo(function SummaryView({
+  s,
+  onTogglePast,
+  onToggleCal,
+  onPickDest,
+}: {
+  s: ImportSummary;
+  onTogglePast?: () => void;
+  onToggleCal?: (id: string) => void;
+  onPickDest?: (id: string) => void;
+}) {
+  const { c } = useTheme();
+  return (
+    <>
+      <View style={[styles.box, { borderColor: c.border, backgroundColor: c.panel }]}>
+        <View style={[styles.head, { backgroundColor: c.text }]}>
+          <Text style={[styles.headText, { color: c.bg }]}>{`ВЕСЬ КАЛЕНДАРЬ · ДО ${s.until}`}</Text>
+          <Text style={[styles.headText, { color: c.bg }]}>{s.counting ? 'СЧИТАЕМ…' : `${s.total} НОВЫХ`}</Text>
+        </View>
+        <Pressable accessibilityRole="switch" accessibilityState={{ checked: s.past.on }} onPress={onTogglePast} style={styles.pastRow}>
+          <View style={styles.titleWrap}>
+            <View>
+              <Text style={[styles.title, { color: c.text }]}>Прошедшие события</Text>
+              <Text style={[styles.cal, { color: c.muted }]}>{`ЗА ГОД НАЗАД · ${s.past.count}`}</Text>
+            </View>
+          </View>
+          <Tick on={s.past.on} />
+        </Pressable>
+        <View style={[styles.stats, { borderTopColor: c.hair }]}>
+          <Stat n={s.single} label="РАЗОВЫХ" first />
+          <Stat n={s.series} label="СЕРИЙ" />
+        </View>
+        <View style={[styles.stats, { borderTopColor: c.hair }]}>
+          <Stat n={s.birthdays} label="ДР" first />
+          <Stat n={s.already} label="УЖЕ ЕСТЬ" muted />
+        </View>
+      </View>
+      <View style={[styles.box, { borderColor: c.border, backgroundColor: c.panel }]}>
+        <View style={[styles.head, { backgroundColor: c.text }]}>
+          <Text style={[styles.headText, { color: c.bg }]}>КАЛЕНДАРИ</Text>
+          <Text style={[styles.headText, { color: c.bg }]}>{`${s.cals.filter((x) => x.on).length} ИЗ ${s.cals.length}`}</Text>
+        </View>
+        {s.cals.map((cal) => (
+          <View key={cal.id} style={[styles.calRow, { borderTopColor: c.hair }, !cal.on && styles.faded]}>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: cal.on }}
+              accessibilityLabel={cal.title}
+              onPress={onToggleCal ? () => onToggleCal(cal.id) : undefined}
+              style={styles.calMain}
+            >
+              <Tick on={cal.on} />
+              <View style={[styles.swatch, { backgroundColor: cal.color }]} />
+              <View style={styles.titleWrap}>
+                <View style={styles.calText}>
+                  <Text numberOfLines={1} style={[styles.title, { color: c.text }]}>{cal.title}</Text>
+                  <Text numberOfLines={1} style={[styles.cal, { color: c.muted }]}>{cal.meta}</Text>
+                </View>
+              </View>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Куда: ${cal.dest}`} onPress={onPickDest ? () => onPickDest(cal.id) : undefined} style={[styles.update, styles.destChip, { borderColor: c.border }]}>
+              <Text numberOfLines={1} style={[styles.chipText, { color: c.text }]}>{cal.dest}</Text>
+              <Icon name="chevronDown" size={8} color={c.text} />
+            </Pressable>
+          </View>
+        ))}
+      </View>
+    </>
+  );
+});
+
+const ResultView = memo(function ResultView({
+  result,
+  insets,
+  onUndo,
+  onDone,
+}: {
+  result: ImportResult;
+  insets: { top: number; bottom: number };
+  onUndo?: () => void;
+  onDone?: () => void;
+}) {
+  const { c } = useTheme();
+  return (
+    <View style={[styles.screen, styles.content, { backgroundColor: c.bg, paddingTop: insets.top + S.topBarTop }]}>
+      <AccountHeader caption="КАЛЕНДАРИ ТЕЛЕФОНА" title={`Перенесено ${result.total}`} back={false} />
+      <View style={[styles.box, styles.body, { borderColor: c.border, backgroundColor: c.panel }]}>
+        <View style={[styles.head, { backgroundColor: c.text }]}>
+          <Text style={[styles.headText, { color: c.bg }]}>ПО КАЛЕНДАРЯМ</Text>
+        </View>
+        {result.rows.map((r) => (
+          <View key={r.title} style={[styles.resultRow, { borderTopColor: c.hair }]}>
+            <View style={[styles.swatch, { backgroundColor: r.color }]} />
+            <Text style={[styles.title, styles.titleWrap, { color: c.text }]}>{r.title}</Text>
+            <Text style={[styles.time, { color: c.text }]}>{r.n}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={[styles.bottom, { paddingBottom: insets.bottom + 16, borderTopColor: c.hair, backgroundColor: c.bg }]}>
+        <View style={styles.buttons}>
+          <Pressable accessibilityRole="button" onPress={onUndo} style={[styles.button, { borderColor: c.border, backgroundColor: c.panel }]}>
+            <Text style={[styles.buttonText, { color: c.text }]}>ОТМЕНИТЬ ПЕРЕНОС</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={onDone} style={[styles.button, { borderColor: c.text, backgroundColor: c.text }]}>
+            <Text style={[styles.buttonText, { color: c.bg }]}>К КАЛЕНДАРЮ</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+});
+
 const styles = StyleSheet.create({
+  pastRow: { minHeight: 52, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stats: { flexDirection: 'row', borderTopWidth: S.hairline },
+  stat: { flex: 1, paddingHorizontal: 10, paddingVertical: 8, gap: 2 },
+  statN: { fontFamily: fonts.mono600, fontSize: 16 },
+  statLabel: { fontFamily: fonts.mono400, fontSize: 8.5, letterSpacing: 0.5 },
+  calRow: { minHeight: 52, paddingRight: 8, flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: S.hairline },
+  calMain: { flex: 1, minHeight: 52, paddingLeft: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  calText: { flex: 1, minWidth: 0, gap: 2 },
+  swatch: { width: 10, height: 10 },
+  destChip: { maxWidth: 130, flexDirection: 'row', alignItems: 'center', gap: 4, height: 32 },
+  resultRow: { height: 40, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: S.hairline },
+  split: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  splitText: { fontFamily: fonts.mono400, fontSize: 9, letterSpacing: 0.5 },
   screen: { flex: 1 },
   content: { paddingHorizontal: space.side },
   body: { marginTop: 12, gap: 8 },

@@ -1,8 +1,9 @@
 /**
- * Календарь телефона через expo-calendar (только чтение). Модуль подключается через require: нет модуля в сборке
+ * Календарь телефона через expo-calendar/legacy (только чтение; в SDK 57 эти функции из «expo-calendar» бросают ошибку). Модуль подключается через require: нет модуля в сборке
  * (старая сборка без expo-calendar) — available() false, а приложение работает как раньше.
  */
-import { Linking, Platform } from 'react-native';
+import { Linking, PermissionsAndroid, Platform } from 'react-native';
+import { logError } from './diag';
 import { isBirthdayCalendar, isHolidayCalendar, type PhoneCal, type PhoneEvent, type PhoneRule } from './phoneCalendar';
 
 type Perm = { status: 'granted' | 'denied' | 'undetermined'; canAskAgain: boolean };
@@ -39,7 +40,7 @@ function cal(): ExpoCalendar | null {
   if (mod !== undefined) return mod;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    mod = require('expo-calendar') as ExpoCalendar;
+    mod = require('expo-calendar/legacy') as ExpoCalendar;
   } catch {
     mod = null;
   }
@@ -52,13 +53,36 @@ export const phoneCalendarAvailable = () => !!cal();
 /** Доступ: есть, можно спросить, отказано насовсем (только через настройки телефона) */
 export type PhoneAccess = 'granted' | 'ask' | 'blocked' | 'unavailable';
 
+/*
+ * Доступ на Android — напрямую у системы (PermissionsAndroid), не через expo-calendar: его ответ после выдачи доступа
+ * мог остаться «нет доступа» до перезапуска приложения. Библиотеке для чтения нужны оба разрешения — чтение и запись
+ * (записи в календарь в приложении нет). На iOS — через expo-calendar.
+ */
+const READ = 'android.permission.READ_CALENDAR' as const;
+const WRITE = 'android.permission.WRITE_CALENDAR' as const;
+/** Отказано с «больше не спрашивать» — дальше только настройки телефона (до перезапуска; потом проверим заново) */
+let neverAsk = false;
+
+async function androidGranted(): Promise<boolean> {
+  const [r, w] = await Promise.all([PermissionsAndroid.check(READ), PermissionsAndroid.check(WRITE)]);
+  return r && w;
+}
+
 export async function phoneAccess(): Promise<PhoneAccess> {
   const m = cal();
   if (!m) return 'unavailable';
   try {
+    if (Platform.OS === 'android') {
+      if (await androidGranted()) {
+        neverAsk = false;
+        return 'granted';
+      }
+      return neverAsk ? 'blocked' : 'ask';
+    }
     const p = await m.getCalendarPermissionsAsync();
     return p.status === 'granted' ? 'granted' : p.canAskAgain ? 'ask' : 'blocked';
-  } catch {
+  } catch (e) {
+    logError(e);
     return 'unavailable';
   }
 }
@@ -67,9 +91,23 @@ export async function requestPhoneAccess(): Promise<PhoneAccess> {
   const m = cal();
   if (!m) return 'unavailable';
   try {
+    if (Platform.OS === 'android') {
+      const res = await PermissionsAndroid.requestMultiple([READ, WRITE]);
+      // Система могла ещё не применить выдачу к моменту ответа — перепроверяем несколько раз
+      for (let i = 0; i < 4; i++) {
+        if (await androidGranted()) {
+          neverAsk = false;
+          return 'granted';
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      neverAsk = Object.values(res).some((v) => v === 'never_ask_again');
+      return neverAsk ? 'blocked' : 'ask';
+    }
     const p = await m.requestCalendarPermissionsAsync();
     return p.status === 'granted' ? 'granted' : p.canAskAgain ? 'ask' : 'blocked';
-  } catch {
+  } catch (e) {
+    logError(e);
     return 'unavailable';
   }
 }

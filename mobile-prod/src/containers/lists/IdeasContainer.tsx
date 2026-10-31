@@ -2,6 +2,8 @@ import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { ALL_IDEAS, IDEAS_SECTIONS, ideasProps, type IdeasSnapshot } from '@/adapters/lists/ideas';
+import { openMenu } from '@/components/ActionMenu';
+import { noteImportRoute } from '@/components/ShareHost';
 import { deleteTopicsAsk } from '@/lib/ideas';
 import { DEMO, useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
@@ -20,7 +22,16 @@ function toggleArchive(id: ID, archived: boolean) {
 
 const openTopic = (id: ID) => router.push(nav.topic(id));
 /** Новая тема — сразу экран темы: пишется название и текст, тема появляется с первым словом */
-const addTopic = () => router.push(nav.topic(NEW_NOTE));
+const newTopic = () => router.push(nav.topic(NEW_NOTE));
+/** «+»: новая тема или перенос заметок из других приложений */
+const addTopic = () =>
+  openMenu({
+    title: 'Заметки',
+    actions: [
+      { label: 'Новая тема', onPress: newTopic },
+      { label: 'Перенести из других приложений', onPress: () => router.push(noteImportRoute) },
+    ],
+  });
 const toggleSection = (section: IdeasSection) => useStore.getState().toggleSection(IDEAS_SECTIONS[section]);
 
 /** Только то, что нужно блокноту (и цветам людей): дела, хотелки и «Смотреть» экран не перерисовывают */

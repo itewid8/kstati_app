@@ -13,6 +13,7 @@ import { nav, useInsets } from '../common';
 import { backToProfile } from './back';
 import { accountRoutes } from './routes';
 import { phoneRoutes } from '../calendar/usePhone';
+import { noteImportRoute } from '@/components/ShareHost';
 
 /** «0.1.0 (1)»: версия и номер сборки из app.json */
 const VERSION = (() => {
@@ -24,6 +25,7 @@ const VERSION = (() => {
 const editReminders = () => router.push(nav.reminders());
 const openFeedback = () => router.push(accountRoutes.feedback());
 const openPhoneCalendars = () => router.push(phoneRoutes.calendars());
+const openNoteImport = () => router.push(noteImportRoute);
 const toggleBug = (on: boolean) => useStore.getState().setBugButton(on);
 
 /** Выбор на экране, ещё не сохранённый: только то, что меняли */
@@ -94,6 +96,7 @@ export function SettingsContainer() {
       onEditAllDayReminders={editReminders}
       onOpenWidget={OPEN_WIDGET}
       onOpenPhoneCalendars={openPhoneCalendars}
+      onOpenNoteImport={openNoteImport}
       onOpenFeedback={openFeedback}
       bugButton={bugButton}
       onToggleBugButton={toggleBug}

@@ -3,7 +3,7 @@
  * снова на экране и когда меняют настройки календарей). Последние загруженные события запоминаются по ключу —
  * по нажатию на событие шторка берёт его отсюда.
  */
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { notImported, phoneKey } from '@/adapters/calendar/phone';
@@ -64,6 +64,8 @@ export function usePhoneCalendars(): { access: PhoneAccess | null; cals: PhoneCa
   const [cals, setCals] = useState<PhoneCal[]>([]);
   const [n, setN] = useState(0);
   const fg = useForeground();
+  // Экран снова показан (вернулись из настроек телефона, закрыли системное окно) — проверить доступ заново
+  useFocusEffect(useCallback(() => setN((x) => x + 1), []));
   useEffect(() => {
     let alive = true;
     void (async () => {

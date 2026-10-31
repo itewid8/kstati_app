@@ -56,6 +56,8 @@ export type SettingsScreenProps = {
   onToggleBugButton?: (on: boolean) => void;
   /** Календари телефона: слой в календаре и перенос событий */
   onOpenPhoneCalendars?: () => void;
+  /** Заметки из других приложений (файлы, несколько сразу) */
+  onOpenNoteImport?: () => void;
   /** Настройки виджета на рабочем столе; нет — раздела нет (iOS без платного аккаунта) */
   onOpenWidget?: () => void;
   onCancel?: () => void;
@@ -189,8 +191,9 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
           </SectionBox>
 
           {props.onOpenPhoneCalendars ? (
-            <SectionBox title="КАЛЕНДАРЬ ТЕЛЕФОНА">
+            <SectionBox title="ПЕРЕНОС">
               <AccountRow label="Календари телефона" onPress={props.onOpenPhoneCalendars} />
+              {props.onOpenNoteImport ? <AccountRow label="Заметки из других приложений" onPress={props.onOpenNoteImport} /> : null}
             </SectionBox>
           ) : null}
 

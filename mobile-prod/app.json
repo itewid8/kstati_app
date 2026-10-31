@@ -12,16 +12,14 @@
       "allowBackup": false,
       "permissions": [
         "RECORD_AUDIO",
-        "READ_CALENDAR"
+        "READ_CALENDAR",
+        "WRITE_CALENDAR"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "monochromeImage": "./assets/monochrome-icon.png",
         "backgroundColor": "#1E1E1E"
-      },
-      "blockedPermissions": [
-        "android.permission.WRITE_CALENDAR"
-      ]
+      }
     },
     "ios": {
       "bundleIdentifier": "ru.kstati.app",
@@ -79,7 +77,8 @@
       "expo-web-browser",
       "./plugins/withoutPushEntitlement",
       "./plugins/withWorkManagerFix",
-      "expo-background-task"
+      "expo-background-task",
+      "./plugins/withShareIntent"
     ],
     "icon": "./assets/icon.png"
   }
