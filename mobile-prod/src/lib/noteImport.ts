@@ -144,12 +144,12 @@ export function displayTitle(n: Pick<IncomingNote, 'title' | 'body'>): string {
 }
 
 /** Куда переносить: по ярлыкам, без темы, в новую тему, в свою тему (t:<id>) */
-export type NoteDest = 'labels' | 'none' | 'new' | `t:${string}`;
+export type NoteDest = 'labels' | 'none' | 'new' | 'each' | `t:${string}`;
 export type NoteTarget = { id: string } | { title: string } | null;
 
 /** Тема для заметки при выбранном «куда» */
 export function targetOf(n: Pick<IncomingNote, 'labels'>, dest: NoteDest, newTitle: string): NoteTarget {
-  if (dest === 'none') return null;
+  if (dest === 'none' || dest === 'each') return null;
   if (dest === 'new') return { title: newTitle };
   if (dest === 'labels') return n.labels[0] ? { title: n.labels[0] } : null;
   return { id: dest.slice(2) };

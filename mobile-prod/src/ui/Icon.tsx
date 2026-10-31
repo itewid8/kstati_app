@@ -29,6 +29,8 @@ const ICONS = {
   undo: { d: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3', strokeWidth: 2 },
   redo: { d: 'M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3', strokeWidth: 2 },
   expand: { d: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5', strokeWidth: 2 },
+  /** Подсказка: «?» в круге */
+  help: { d: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.5M12 16.8v.1', strokeWidth: 2 },
   /** Календарь телефона: события из него */
   phone: { d: 'M7 2.5h10v19H7zM10.5 18.5h3', strokeWidth: 2 },
   folder: { d: 'M3 6h7l2 2h9v11H3z', strokeWidth: 2 },
