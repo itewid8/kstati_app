@@ -2,7 +2,7 @@
  * Заметки из файлов: выбор (expo-document-picker) и чтение — архив Google Takeout (.zip, распаковка fflate),
  * отдельные заметки Keep (.json), .txt и .md. Модули подключаются через require: нет в сборке — available() false.
  */
-import { File } from 'expo-file-system';
+import { readBytes, readText } from './fileBytes';
 import { logError } from './diag';
 import { fromKeepJson, fromTextFile, type IncomingNote } from './noteImport';
 
@@ -41,9 +41,8 @@ export async function pickNoteFiles(): Promise<NoteFiles | null> {
     const name = a.name ?? `файл ${i + 1}`;
     const lower = name.toLowerCase();
     try {
-      const file = new File(a.uri);
       if (lower.endsWith('.zip')) {
-        const bytes = new Uint8Array(await file.arrayBuffer());
+        const bytes = new Uint8Array(await readBytes(a.uri));
         const entries = zip.unzipSync(bytes, {
           filter: (f) => f.originalSize < MAX_ENTRY && /\.(json|txt|md)$/i.test(f.name) && !/\/(Labels|labels)\.txt$/.test(f.name),
         });
@@ -66,13 +65,13 @@ export async function pickNoteFiles(): Promise<NoteFiles | null> {
           }
         }
       } else if (lower.endsWith('.json')) {
-        const n = fromKeepJson(JSON.parse(file.textSync()), `${i}`);
+        const n = fromKeepJson(JSON.parse(await readText(a.uri)), `${i}`);
         if (n) {
           notes.push(n);
           keep = true;
         }
       } else {
-        const n = fromTextFile(name, file.textSync(), `${i}`);
+        const n = fromTextFile(name, await readText(a.uri), `${i}`);
         if (n) notes.push(n);
       }
     } catch (e) {

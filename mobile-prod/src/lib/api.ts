@@ -1,4 +1,4 @@
-import { File } from 'expo-file-system';
+import { readBytes, removeFile } from './fileBytes';
 import { toHHMM, toISODate } from './dates';
 import type { ParseResult } from './mockParser';
 import { ApiError, NetError, request } from './net';
@@ -56,20 +56,12 @@ function toBase64(buf: ArrayBuffer): string {
   return out;
 }
 
-const fileUriOf = (uri: string) => (/^(file|content):\/\//.test(uri) ? uri : `file://${uri}`);
-
 /**
  * Удалить файл записи: после отправки, отмены или слишком короткой записи он не нужен.
  * expo-audio на каждую запись создаёт новый файл в кэше и сам их не удаляет — голос копился бы на телефоне
  */
 export function deleteRecording(uri: string | null | undefined) {
-  if (!uri) return;
-  try {
-    const f = new File(fileUriOf(uri));
-    if (f.exists) f.delete();
-  } catch {
-    /* файла уже нет */
-  }
+  if (uri) removeFile(uri);
 }
 
 /**
@@ -79,7 +71,7 @@ export function deleteRecording(uri: string | null | undefined) {
 export async function uploadVoice(uri: string): Promise<{ ok: true; transcript: string; result: ParseResult; left?: number; spend?: VoiceSpend } | VoiceFail> {
   let audio: string;
   try {
-    audio = toBase64(await new File(fileUriOf(uri)).arrayBuffer());
+    audio = toBase64(await readBytes(uri));
   } catch (e) {
     return { ok: false, problem: 'server', detail: `чтение записи: ${(e as Error).message ?? e}` };
   }
@@ -153,7 +145,7 @@ export async function sendFeedback(
 export async function transcribeFeedback(uri: string): Promise<{ text: string } | { problem: string }> {
   let audio: string;
   try {
-    audio = toBase64(await new File(fileUriOf(uri)).arrayBuffer());
+    audio = toBase64(await readBytes(uri));
   } catch (e) {
     return { problem: `Не прочиталась запись: ${(e as Error).message ?? e}` };
   } finally {

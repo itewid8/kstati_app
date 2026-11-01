@@ -97,7 +97,7 @@ export function SettingsContainer() {
       onEditTimedReminders={editReminders}
       onEditAllDayReminders={editReminders}
       onOpenWidget={OPEN_WIDGET}
-      onOpenPhoneCalendars={openPhoneCalendars}
+      onOpenPhoneCalendars={Platform.OS === 'web' ? undefined : openPhoneCalendars}
       onOpenNoteImport={openNoteImport}
       trashCount={trashCount}
       onOpenTrash={openTrash}

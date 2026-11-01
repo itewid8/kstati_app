@@ -1,0 +1,75 @@
+# Выкладка веб-версии «Кстати» (kstati-app.ru) в Yandex Object Storage.
+# При push в main, если менялось приложение (mobile-prod/src, app, assets, app.json, package*.json), GitHub сам:
+#   1) собирает веб-версию: npx expo export -p web (адрес сервера — переменная PUBLIC_URL),
+#   2) кладёт рядом страницу удаления аккаунта (kstati-app.ru/delete-account — копия страницы сервера),
+#   3) загружает всё в бакет WEB_BUCKET (файлы с хешем в имени кэшируются надолго, index.html — нет).
+# Можно запустить вручную: GitHub → Actions → «Выкладка веб-версии» → Run workflow.
+#
+# Настройки (GitHub → Settings → Secrets and variables → Actions):
+#   Secrets:   WEB_S3_KEY_ID, WEB_S3_SECRET — статический ключ доступа сервисного аккаунта с ролью storage.editor
+#   Variables: PUBLIC_URL (уже есть), WEB_BUCKET — имя бакета (kstati-app.ru)
+name: Выкладка веб-версии
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile-prod/src/**'
+      - 'mobile-prod/app/**'
+      - 'mobile-prod/assets/**'
+      - 'mobile-prod/modules/*/index.ts'
+      - 'mobile-prod/app.json'
+      - 'mobile-prod/package.json'
+      - 'mobile-prod/package-lock.json'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: mobile-prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile-prod/package-lock.json
+
+      - name: Зависимости
+        run: npm ci
+
+      - name: Сборка веб-версии
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.PUBLIC_URL }}
+        run: npx expo export -p web --output-dir dist-web --clear
+
+      - name: Страница удаления аккаунта
+        run: |
+          # Сервер может выкатываться тем же push — ждём, пока страница появится (до 5 минут)
+          for i in $(seq 1 30); do curl -fsS -o /dev/null "${{ vars.PUBLIC_URL }}/delete-account" && break; sleep 10; done
+          curl -fsS "${{ vars.PUBLIC_URL }}/delete-account" | sed "s#var API = '';#var API = '${{ vars.PUBLIC_URL }}';#" > delete-account.html
+          grep -q "var API = 'http" delete-account.html
+
+      - name: Загрузка в Object Storage
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.WEB_S3_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.WEB_S3_SECRET }}
+          AWS_DEFAULT_REGION: ru-central1
+        run: |
+          S3="aws --endpoint-url=https://storage.yandexcloud.net s3"
+          # Файлы с хешем в имени не меняются — кэш на год; index.html и прочее — всегда свежие
+          $S3 sync dist-web "s3://${{ vars.WEB_BUCKET }}" --delete --exclude "*" --include "_expo/*" --include "assets/*" --cache-control "public,max-age=31536000,immutable"
+          $S3 sync dist-web "s3://${{ vars.WEB_BUCKET }}" --delete --exclude "_expo/*" --exclude "assets/*" --cache-control "no-cache"
+          # Без расширения: адрес kstati-app.ru/delete-account открывает страницу, а не приложение
+          $S3 cp delete-account.html "s3://${{ vars.WEB_BUCKET }}/delete-account" --content-type "text/html; charset=utf-8" --cache-control "no-cache"
+          echo "✓ Веб-версия выложена"

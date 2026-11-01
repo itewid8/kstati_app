@@ -59,6 +59,8 @@ export const config = {
   /** Простые команды разбирать правилами, без YandexGPT (QUICK_RULES=0 — всё через модель) */
   /** Цена распознавания SpeechKit за отрезок 15 с, ₽ с НДС — для расхода команды в ответе */
   sttPrice15s: Number(env('STT_PRICE_15S', '0.1626')),
+  /** Сайты, которым можно обращаться к API из браузера (веб-версия). Не в продакшене — ещё любой localhost */
+  webOrigins: env('WEB_ORIGINS', 'https://app.kstati-app.ru,https://kstati-app.ru').split(',').map((s) => s.trim()).filter(Boolean),
   quickRules: env('QUICK_RULES', '1') !== '0',
   /** Промпт модели: compact — только нужные фразе правила (полный — если не понял), full — всегда полный */
   promptMode: env('PROMPT_MODE', 'compact') === 'full' ? ('full' as const) : ('compact' as const),

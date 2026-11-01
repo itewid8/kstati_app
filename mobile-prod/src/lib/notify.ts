@@ -75,6 +75,8 @@ let again = false;
 /** Пересчитать и поставить все напоминания заново */
 /** ask = false — в фоне: разрешение не спрашиваем (некому ответить), только ставим, если уже есть */
 export async function syncReminders(ask = true): Promise<void> {
+  // В браузере напоминаний нет: они ставятся на телефоне, где открыто приложение
+  if (Platform.OS === 'web') return;
   if (running) {
     again = true;
     return running;

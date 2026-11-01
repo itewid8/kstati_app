@@ -29,12 +29,15 @@ import type { ThemePref } from '@/lib/types';
 import { holdEnd, holdStart } from '@/lib/voice';
 import { RecButtonContext, useTheme, type RecButtonHandlers } from '@/ui';
 import { uiFonts } from '@/ui/fonts';
+import { setForcedScheme } from '@/ui/forcedScheme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 initAnalytics();
 
-const applyTheme = (t: ThemePref) => Appearance.setColorScheme(t === 'system' ? 'unspecified' : t);
+// В браузере Appearance.setColorScheme нет — тему из настроек ставим поверх системной сами
+const applyTheme = (t: ThemePref) =>
+  typeof Appearance.setColorScheme === 'function' ? Appearance.setColorScheme(t === 'system' ? 'unspecified' : t) : setForcedScheme(t === 'system' ? null : t);
 // Данные с телефона читаются сразу при запуске — тему ставим до первого кадра, без мигания
 applyTheme(useStore.getState().theme);
 
