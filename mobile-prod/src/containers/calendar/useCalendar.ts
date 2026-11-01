@@ -3,6 +3,7 @@
  * верхняя панель с переключателем вида и переходы по нажатию на дело. Колбэки — на уровне модуля:
  * читают хранилище в момент нажатия, поэтому ссылки стабильны и memo-экраны не перерисовываются зря.
  */
+import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -42,7 +43,8 @@ export const togglePerson = (id: ID) => useStore.getState().toggleCalendarPerson
 const toggleLayer = () => void togglePhoneLayer();
 
 /** Верхняя панель, переключатель вида и нижняя навигация экранов календаря */
-export type CalendarChrome = Required<Pick<CalendarChromeProps, 'groupLabel' | 'me' | 'hasNews' | 'insets' | 'phoneOn' | 'onTogglePhone'>> &
+export type CalendarChrome = Required<Pick<CalendarChromeProps, 'groupLabel' | 'me' | 'hasNews' | 'insets' | 'phoneOn'>> &
+  Pick<CalendarChromeProps, 'onTogglePhone'> &
   Required<
     Pick<CalendarChromeProps, 'onOpenGroup' | 'onOpenList' | 'onAdd' | 'onOpenFeed' | 'onOpenSettings' | 'onChangeView' | 'onNavigate' | 'onRec'>
   >;
@@ -54,7 +56,8 @@ export function useCalendarChrome(): CalendarChrome {
   return useMemo(
     () => ({
       phoneOn,
-      onTogglePhone: toggleLayer,
+      // В браузере календаря телефона нет — ячейки «ТЕЛ» тоже
+      onTogglePhone: Platform.OS === 'web' ? undefined : toggleLayer,
       groupLabel,
       me,
       hasNews,

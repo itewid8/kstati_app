@@ -28,7 +28,11 @@ export function logError(e: unknown, fatal = false) {
 
 /* ---------- падение прошлого запуска ---------- */
 
-const crashFile = () => new File(Paths.document, 'last-crash.json');
+// В браузере файлов нет — снимок падения не сохраняем (crashFile бросит, вызовы ниже в try)
+const crashFile = () => {
+  if (Platform.OS === 'web') throw new Error('web');
+  return new File(Paths.document, 'last-crash.json');
+};
 
 export type CrashInfo = { at: string; message: string; stack?: string; events: DiagEvent[] };
 

@@ -1,3 +1,4 @@
+import { useForcedScheme } from './forcedScheme';
 import { useColorScheme } from 'react-native';
 import type { PersonColor } from '@/lib/types';
 import { palettes, personColor, personInk, type Palette, type Scheme } from './tokens';
@@ -31,5 +32,7 @@ const themes: Record<Scheme, Theme> = {
 
 /** Тема по системе (или выбранная в настройках через Appearance). Объект стабилен для каждой темы */
 export function useTheme(): Theme {
-  return themes[useColorScheme() === 'dark' ? 'dark' : 'light'];
+  const system = useColorScheme();
+  const forced = useForcedScheme();
+  return themes[(forced ?? system) === 'dark' ? 'dark' : 'light'];
 }

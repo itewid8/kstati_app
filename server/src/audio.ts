@@ -3,8 +3,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-/** Запись длиннее этого обрезаем: приложение останавливает запись на 10 с, секунда — запас */
-const MAX_SEC = 11;
+/** Запись длиннее этого обрезаем: 30 с — предел синхронного распознавания SpeechKit (приложение останавливает запись там же) */
+const MAX_SEC = 30;
 
 /**
  * Любой звук (m4a/aac/wav…) → OggOpus моно 48 кГц для SpeechKit и длительность исходной записи в секундах.

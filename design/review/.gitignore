@@ -1,2 +1,5 @@
 bundle.js
 out/
+out-web.tgz
+webbuild.sh
+server-js.tgz

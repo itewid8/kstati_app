@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Data, registerData } from './api.js';
 import { toOggOpus } from './audio.js';
 import { HttpError, registerAuth, requireUser } from './auth.js';
+import { registerPages } from './pages.js';
 import { API_LEVEL, apiLevel, appVersion } from './client.js';
 import { config } from './config.js';
 import { sendMail } from './mail.js';
@@ -61,6 +62,20 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
 
   const app = Fastify({ logger: { level: config.isProd ? 'info' : 'warn' }, bodyLimit: 2 * 1024 * 1024, trustProxy: true });
 
+  /* ---------- веб-версия: запросы из браузера с разрешённых сайтов (CORS) ---------- */
+  const allowedOrigin = (o: string | undefined) =>
+    !!o && (config.webOrigins.includes(o) || (!config.isProd && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o)));
+  app.addHook('onRequest', async (req, reply) => {
+    const origin = req.headers.origin;
+    if (!allowedOrigin(origin)) return;
+    reply.header('access-control-allow-origin', origin);
+    reply.header('vary', 'Origin');
+    reply.header('access-control-allow-headers', 'content-type, x-kstati-token, x-kstati-api, x-kstati-app');
+    reply.header('access-control-allow-methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    reply.header('access-control-max-age', '86400');
+    if (req.method === 'OPTIONS') return reply.code(204).send();
+  });
+
   /* ---------- защита от перебора: 120 запросов в минуту с адреса ---------- */
   const hits = new Map<string, number[]>();
   app.addHook('onRequest', async (req, reply) => {
@@ -96,6 +111,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   }));
 
   registerAuth(app, store);
+  registerPages(app);
   registerData(app, store, data);
 
   /** Контекст для ИИ собирает сервер из базы: люди моих групп, дела текущей группы, мои хотелки */

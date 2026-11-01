@@ -21,6 +21,16 @@
         "backgroundColor": "#1E1E1E"
       }
     },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Кстати",
+      "shortName": "Кстати",
+      "lang": "ru",
+      "favicon": "./assets/icon.png",
+      "themeColor": "#1E1E1E",
+      "backgroundColor": "#E7E6E1"
+    },
     "ios": {
       "bundleIdentifier": "ru.kstati.app",
       "buildNumber": "1",

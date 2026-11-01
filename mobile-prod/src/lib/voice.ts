@@ -8,6 +8,7 @@
  */
 import { scopeFilter } from '@/lib/visibility';
 import * as Haptics from 'expo-haptics';
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { QUOTA_DETAIL, quotaText } from '@/adapters/voice/problem';
 import { MIN_HOLD_MS, recStep, type RecEvent, type RecMode, type RecState } from '@/adapters/voice/recording';
@@ -24,8 +25,8 @@ import { answerPlans } from './plans';
 import { groupmates, useStore, type VoiceQuota } from './store';
 import type { ItemType } from './types';
 
-/** Голосовая команда — не длиннее 10 секунд: короткие фразы дешевле и точнее разбираются */
-export const MAX_MS = 10_000;
+/** Голосовая команда — не длиннее 30 секунд (предел распознавания SpeechKit). Пока идут тесты — без ограничений тарифа */
+export const MAX_MS = 30_000;
 /** Короче — не команда (случайное касание): разбор не запускаем */
 const MIN_MS = MIN_HOLD_MS;
 const FAKE_PROCESSING_MS = 800;
@@ -100,7 +101,7 @@ function speechNoticeDue(): boolean {
   const s = useStore.getState();
   if (!API_URL || s.speechNotice || deviceSpeechAvailable()) return false;
   s.setSpeechNotice(true);
-  s.setCard({ source: 'voice', transcript: '', problem: 'info', query: 'На этом телефоне нет встроенного распознавания речи'});
+  s.setCard({ source: 'voice', transcript: '', problem: 'info', query: Platform.OS === 'web' ? 'В этом браузере нет распознавания речи' : 'На этом телефоне нет встроенного распознавания речи' });
   return true;
 }
 
