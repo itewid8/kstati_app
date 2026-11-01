@@ -1,5 +1,7 @@
 import { bodyHint } from './lists.js';
 import { repeatShort } from './recur.js';
+import { changesRepeat } from './repeat.js';
+import { hasChangeVerb, isUnmark } from './spoken.js';
 import type { Context } from './types.js';
 import type { Msg } from './yandex.js';
 
@@ -176,5 +178,144 @@ ${rows.length ? rows.join('\n') : '— нет —'}
   return [
     { role: 'system', text: SYSTEM },
     { role: 'user', text: user },
+  ];
+}
+
+/* ---------- Компактный промпт: только нужные фразе части правил и данных ---------- */
+
+/**
+ * Полный промпт — около 2 800 токенов, из них ~2 500 — правила на все случаи. Для «добавь Дюну» модели не нужны
+ * правила заметок, вопросов о планах и правок, а для «перенеси ужин» — правила «Смотреть». Части берём из того же
+ * SYSTEM по началу строки (пункт с продолжением — строки с отступом), порядок — как в полном промпте.
+ * Сомневаемся — включаем. Если модель всё равно ответила «непонятно», parseText повторяет с полным промптом.
+ */
+const LINES = SYSTEM.split('\n');
+
+/** Номера строк пункта, начинающегося с prefix, вместе с его продолжением (строки с отступом) */
+function chunk(prefix: string): number[] {
+  const i = LINES.findIndex((l) => l.startsWith(prefix));
+  if (i < 0) throw new Error(`prompt: нет строки «${prefix}»`);
+  const out = [i];
+  for (let j = i + 1; j < LINES.length && /^\s+\S/.test(LINES[j]); j++) out.push(j);
+  return out;
+}
+const at = (prefix: string) => LINES.findIndex((l) => l.startsWith(prefix));
+
+export type Block = 'task' | 'parent' | 'wish' | 'watch' | 'change' | 'qwatch' | 'qwish' | 'plans' | 'ideas';
+
+const PARTS: Record<Block, string[]> = {
+  task: ['1)', '- Время:', '- Название дела', '- Повтор', '- Длительность дела', '- people', '- Тип дела', '«В субботу в семь', '«Баня каждую', '«Футбол в среду', '«Мы с Кариной едем'],
+  parent: ['- parent', '«В поездку в Питер'],
+  wish: ['2)', '- Хотелка:', '- «Хочу …»', '«Добавь в мой вишлист'],
+  watch: ['3)', 'Значения:', 'kind:', 'genres/genre:', 'origin:', 'fresh:', '- Смотреть:', '- «Хочу …»', '- Страну и год', '«Добавь Дюну'],
+  change: ['4)', '5)', '6)', '7)', '- «Баню теперь', '- «Продли футбол', '- update / mark', '- Фраза с глаголом', '- Изменения (update', '«Удали йогу', '«Перенеси стоматолога', '«Мы посмотрели'],
+  qwatch: ['8)', 'Значения:', 'kind:', 'genres/genre:', 'origin:', 'fresh:', '- В query_watch', '- Вопросы не добавляют', '- Страну и год', '«Что-нибудь смешное'],
+  qwish: ['9)', '- Вопросы не добавляют'],
+  plans: ['10)', '- Вопрос о планах', '«Какие у нас с Кариной', '«Что у наших друзей', '«Когда у нас дача', '«Что я делаю', '«Что у нас на этой'],
+  ideas: ['11)', '12)', '13)', '14)', '- Заметка (type idea)', '- Правка списка', '- «Идея подарка', '- «Создай тему', '- «Покажи идеи', '«Запиши идею', '«Добавь в поздравления', '«Создай тему', '«Покажи идеи', '«Запиши в заметки', '«Добавь в список продуктов'],
+};
+// Шапка, разделы, «непонятно» и пустые строки между разделами — всегда
+const ALWAYS = [0, 1, 2, 3, 4, 5, 6, at('Виды действий:'), ...chunk('15)'), at('Правила:'), ...chunk('- Если фраза не похожа'), at('Примеры (')].concat(
+  LINES.map((l, i) => (l === '' ? i : -1)).filter((i) => i >= 0),
+);
+const DATES = chunk('- Даты бери');
+const IDEA_MOVE = chunk('- Перенос идеи');
+const PART_LINES = Object.fromEntries(Object.entries(PARTS).map(([k, v]) => [k, v.flatMap(chunk)])) as Record<Block, number[]>;
+
+const nrm = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
+const stems = (s: string) => nrm(s).split(/[^а-яa-z0-9]+/).filter((w) => w.length >= 4).map((w) => w.slice(0, 4));
+
+/** Какие части промпта нужны фразе */
+export function pickBlocks(text: string, ctx: Context): { blocks: Set<Block>; calendar: boolean; rows: boolean } {
+  const t = nrm(text);
+  const b = new Set<Block>();
+  const change =
+    hasChangeVerb(t) || changesRepeat(t) || isUnmark(t) || /(^|\s)(добавь|убери|исключи)\s+\S+\s+(в|из)\s/.test(t) || /(купил|купила|сделали|готово)/.test(t);
+  const question = /\?/.test(t) || /^(что|чего|какие|какой|какая|какую|каких|когда|где|сколько|кто|кому|покажи|открой|найди)(\s|$)/.test(t) || /(что-нибудь|что-то|какой-нибудь|какую-нибудь|какое-нибудь|чем заняться)/.test(t);
+  const watchish = /(посмотр|смотреть|фильм|сериал|мульт|кино|шоу|стендап|комеди|драм|ужас|боевик|триллер|фантаст|детектив|мелодрам|документал|смешн|страшн|интересн)/.test(t);
+  const plansish = /(план|когда|что у|делаю|делаем|делает|заняты?|свобод|запланир|выходн|недел)/.test(t);
+  const topicHit = (ctx.topics ?? []).some((tp) => stems(tp.title).some((s) => t.includes(s)) || (tp.body ? stems(tp.body).some((s) => new RegExp(`(^|\\s)${s}`).test(t)) : false));
+  const ideaish = /(иде[яиюейя]|заметк|мысл|(^|\s)тем[аеуы]?(\s|$)|списк|список|блокнот|пункт|запиши в|набросок|поздравлен)/.test(t) || !!ctx.currentTopicId || topicHit;
+
+  if (question) {
+    if (watchish || /(посмотрим|глянуть)/.test(t)) b.add('qwatch');
+    if (/(подар|хоч|хотел)/.test(t)) b.add('qwish');
+    if (plansish || /(сегодня|завтра|суббот|воскресен|понедельник|вторник|сред|четверг|пятниц)/.test(t)) b.add('plans');
+    if (ideaish) b.add('ideas');
+    if (!b.size) ['qwatch', 'qwish', 'plans'].forEach((x) => b.add(x as Block));
+  } else {
+    // Добавления — самые частые: дело, хотелка, «Смотреть» (в «добавь Дюну» нет слова «фильм»)
+    ['task', 'wish', 'watch'].forEach((x) => b.add(x as Block));
+    if (ideaish) b.add('ideas');
+    if (plansish && /(^|\s)(что|когда|какие)(\s|$)/.test(t)) b.add('plans');
+  }
+  if (change) {
+    b.add('change');
+    // Правка: добавлений обычно нет — правила хотелок и «Смотреть» только если о них речь
+    if (!question && !watchish) b.delete('watch');
+    if (!question && !/(хоч|вишлист|подар)/.test(t)) b.delete('wish');
+  }
+  const parent = !!ctx.currentParentId || /(в поездк|в план|для поездк|разбей|подзадач|в командировк|в отпуск)/.test(t);
+  if (parent) b.add('parent');
+  const calendar =
+    b.has('plans') || b.has('change') || parent || /(сегодня|завтра|послезавтра|через|недел|выходн|понедельник|вторник|сред[аеуы]|четверг|пятниц|суббот|воскресен|январ|феврал|март|апрел|ма[яй]|июн|июл|август|сентябр|октябр|ноябр|декабр|числ|\d)/.test(t);
+  return { blocks: b, calendar, rows: change || parent };
+}
+
+/** Компактные сообщения для модели: части правил по pickBlocks, данные — только нужные */
+export function buildCompactMessages(text: string, ctx: Context): Msg[] {
+  const { blocks, calendar: withCal, rows: withRows } = pickBlocks(text, ctx);
+  const idx = new Set<number>(ALWAYS);
+  for (const k of blocks) PART_LINES[k].forEach((i) => idx.add(i));
+  if (withCal) DATES.forEach((i) => idx.add(i));
+  if (blocks.has('ideas') && blocks.has('change')) IDEA_MOVE.forEach((i) => idx.add(i));
+  const system = [...idx]
+    .sort((a, b) => a - b)
+    .map((i) => LINES[i])
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n');
+
+  const d = new Date(`${ctx.today}T00:00:00Z`);
+  const people = [`${ctx.me.name} (это говорящий, «я»)`, ...ctx.people.map((p) => p.name)].join(', ');
+  const ex = ctx.existing;
+  const topics = ctx.topics ?? [];
+  const topicTitle = (id: string | null) => topics.find((t) => t.id === id)?.title ?? 'без темы';
+  const current = ctx.currentTopicId ? topics.find((t) => t.id === ctx.currentTopicId) : null;
+  const plan = ctx.currentParentId ? ex.tasks.find((t) => t.id === ctx.currentParentId) : null;
+
+  let rows: string[] = [];
+  if (withRows) {
+    const all = [
+      ...ex.tasks.map((t) => {
+        const end = t.endDate || t.endTime ? ` – ${[t.endDate, t.endTime].filter(Boolean).join(' ')}` : '';
+        const who = t.people?.length ? ` | кто: ${t.people.join(', ')}` : '';
+        const inPlan = t.parentId ? ` | в плане task:${t.parentId}` : '';
+        const rep = t.repeat ? ` | повтор: ${repeatShort(t.repeat)}` : '';
+        return { title: t.title, row: `task:${t.id} | ${t.title} | ${[t.date, t.time].filter(Boolean).join(' ') || 'без даты'}${end}${rep}${who}${inPlan}${t.done ? ' | выполнено' : ''}`, keep: t.id === plan?.id };
+      }),
+      ...ex.watch.map((w) => ({ title: w.title, row: `watch:${w.id} | ${w.title}${w.done ? ' | посмотрели' : ''}`, keep: false })),
+      ...ex.wishes.map((w) => ({ title: w.title, row: `wish:${w.id} | ${w.title}${w.done ? ' | подарили' : ''}`, keep: false })),
+      ...(ex.ideas ?? []).map((i) => ({ title: i.text, row: `idea:${i.id} | ${i.text} | тема: ${topicTitle(i.topicId)}`, keep: false })),
+    ];
+    // Только записи, похожие на сказанное (по началу слов); ничего не похоже — все
+    const said = new Set(stems(text));
+    const hit = all.filter((r) => r.keep || stems(r.title).some((s) => said.has(s)));
+    rows = (hit.length ? hit : all).slice(0, 80).map((r) => r.row);
+  }
+
+  const parts = [`Сегодня: ${WD[d.getUTCDay()]} ${ctx.today}, сейчас ${ctx.now}.`];
+  if (withCal) parts.push(`Календарь:\n${calendar(ctx.today)}`);
+  parts.push(`Люди в группах: ${people}`);
+  if (blocks.has('plans')) parts.push(`Мои группы: ${(ctx.groups ?? []).map((g) => `${g.name} (${g.category})`).join(', ') || '—'}`);
+  if (blocks.has('ideas'))
+    parts.push(
+      `Мои темы: ${topics.map((t) => `«${t.title}»${t.body?.trim() ? ` (${bodyHint(t.body)})` : ''}`).join(', ') || '—'}${current ? `\nОткрыта тема «${current.title}» — идея без названной темы идёт в неё.` : ''}`,
+    );
+  if (plan) parts.push(`Открыт план task:${plan.id} «${plan.title}» (${[plan.date, plan.endDate].filter(Boolean).join(' – ')}) — новые дела становятся его подзадачами.`);
+  if (withRows) parts.push(`Существующие записи (тип:id | название | детали):\n${rows.length ? rows.join('\n') : '— нет —'}`);
+  parts.push(`Фраза: «${text}»`);
+  return [
+    { role: 'system', text: system },
+    { role: 'user', text: parts.join('\n\n') },
   ];
 }

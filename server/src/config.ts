@@ -58,6 +58,8 @@ export const config = {
   voiceDailyLimit: Number(env('VOICE_DAILY_LIMIT', '30')),
   /** Простые команды разбирать правилами, без YandexGPT (QUICK_RULES=0 — всё через модель) */
   quickRules: env('QUICK_RULES', '1') !== '0',
+  /** Промпт модели: compact — только нужные фразе правила (полный — если не понял), full — всегда полный */
+  promptMode: env('PROMPT_MODE', 'compact') === 'full' ? ('full' as const) : ('compact' as const),
 };
 
 /**

@@ -98,8 +98,19 @@ export async function startDeviceSpeech(lang: string, on: { level?: (v: number) 
     interim = '';
     failure = null;
     running = true;
+    // «АВТО»: у служб телефона нет такого языка — без подсказки они слушают по-английски. Основной — русский;
+    // Android 14+ сам переключится на английский, если услышит его. На iPhone и старом Android — русский
+    const auto = lang === 'auto';
     native.start({
-      lang,
+      lang: auto ? 'ru-RU' : lang,
+      ...(auto &&
+        Platform.OS === 'android' && {
+          androidIntentOptions: {
+            EXTRA_ENABLE_LANGUAGE_SWITCH: 'balanced',
+            EXTRA_LANGUAGE_SWITCH_ALLOWED_LANGUAGES: ['ru-RU', 'en-US'],
+            EXTRA_LANGUAGE_DETECTION_ALLOWED_LANGUAGES: ['ru-RU', 'en-US'],
+          },
+        }),
       interimResults: true,
       continuous: false,
       addsPunctuation: false,
