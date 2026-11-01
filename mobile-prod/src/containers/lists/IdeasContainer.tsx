@@ -6,6 +6,8 @@ import { ALL_IDEAS, IDEAS_SECTIONS, ideasProps, type IdeasSnapshot } from '@/ada
 import { openMenu } from '@/components/ActionMenu';
 import { noteImportRoute } from '@/components/ShareHost';
 import { deleteTopicsAsk } from '@/lib/ideas';
+import type { SelectAction } from '@/ui';
+import { archiveTopicsMany } from './bulk';
 import { DEMO, useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { IdeasScreen, type IdeasSection } from '@/screens/lists/IdeasScreen';
@@ -87,17 +89,24 @@ export const IdeasContainer = signedInOnly(function Ideas() {
   }, [selected]);
   const data = useMemo(() => ideasProps(s, colors, { today }, { personId, collapsed }), [s, colors, today, personId, collapsed]);
   // Свои видимые темы — их выбирает «ВЫБРАТЬ ВСЕ»
-  const pickable = useMemo(() => data.topics.map((t) => t.id).filter(canPick), [data.topics, canPick]);
+  const pickable = useMemo(() => [...data.topics.map((t) => t.id), ...data.archive.map((a) => a.id)].filter(canPick), [data.topics, data.archive, canPick]);
   const allSelected = !!selected && !!pickable.length && pickable.every((id) => selected.includes(id));
   const startSelect = useCallback(() => setSelected([]), []);
   const selectAll = useCallback(() => setSelected(allSelected ? [] : pickable), [allSelected, pickable]);
-  const archiveSelected = useCallback(() => {
-    if (!selected?.length) return;
-    const st = useStore.getState();
-    selected.forEach((id) => st.archiveTopic(id, true));
-    st.notice(`В архиве: ${selected.length}`);
-    setSelected(null);
-  }, [selected]);
+  // Действия выбранного: в архив (или из архива, если выбраны только архивные), удалить
+  const archivedIds = useMemo(() => new Set(data.archive.map((a) => a.id)), [data.archive]);
+  const active = (selected ?? []).filter((id) => !archivedIds.has(id));
+  const archived = (selected ?? []).filter((id) => archivedIds.has(id));
+  const selectActions: SelectAction[] = [
+    ...(archive
+      ? [
+          active.length || !archived.length
+            ? { label: 'В АРХИВ', n: active.length, onPress: () => (archiveTopicsMany(active, true), setSelected(null)) }
+            : { label: 'ИЗ АРХИВА', n: archived.length, onPress: () => (archiveTopicsMany(archived, false), setSelected(null)) },
+        ]
+      : []),
+    { label: 'УДАЛИТЬ', n: selected?.length ?? 0, danger: true, onPress: deleteSelected },
+  ];
 
   return (
     <IdeasScreen
@@ -114,7 +123,7 @@ export const IdeasContainer = signedInOnly(function Ideas() {
       onStartSelect={startSelect}
       onSelectAll={selectAll}
       allSelected={allSelected}
-      onArchiveSelected={archive ? archiveSelected : undefined}
+      selectActions={selectActions}
       onToggleSection={toggleSection}
       onAddTopic={addTopic}
       onOpenFeed={onOpenFeed}

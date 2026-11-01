@@ -11,6 +11,7 @@ import {
   ListMotion,
   RowMotion,
   SectionBox,
+  SelectBar,
   TopBar,
   size as S,
   space,
@@ -21,6 +22,7 @@ import {
   type Scheme,
   type TopBarAction,
 } from '@/ui';
+import { selectAction, type SelectionProps } from './selection';
 import { CAL } from '@/screens/calendar/components/CalendarScaffold';
 import { PeriodNote, PeriodTitle, PeriodWeekday } from '@/screens/calendar/components/PeriodBar';
 import { ViewSwitch, type TasksSwitchValue } from '@/screens/calendar/components/ViewSwitch';
@@ -85,7 +87,7 @@ export type TaskSection = {
 /** Куда переключились из списка: вид календаря */
 export type TasksView = TasksSwitchValue;
 
-export type TasksListScreenProps = {
+export type TasksListScreenProps = SelectionProps & {
   groupLabel: string;
   /** Сегодня (YYYY-MM-DD) — строка даты на месте строки периода календаря */
   today?: string;
@@ -122,11 +124,33 @@ const PLAN_ALPHA: Record<Scheme, number> = { light: 0.14, dark: 0.16 };
 /** Строка даты и переключатель — там же, где в календаре (CAL), секции — под переключателем */
 const SECTIONS_TOP = CAL.viewTop + S.viewSwitch + 12;
 
-type RowCallbacks = Pick<TasksListScreenProps, 'onToggleTask' | 'onOpenTask' | 'onOpenPlan' | 'onLongPressTask'>;
+type RowCallbacks = Pick<TasksListScreenProps, 'onToggleTask' | 'onOpenTask' | 'onOpenPlan' | 'onLongPressTask'> & {
+  /** Режим выбора: выбранные ключи и отметка строки */
+  picked?: ReadonlySet<ID> | null;
+  onToggleSelect?: (id: ID) => void;
+};
 
-const TaskEntry = memo(function TaskEntry({ task, onToggleTask, onOpenTask, onLongPressTask }: { task: TaskItem } & RowCallbacks) {
+const TaskEntry = memo(function TaskEntry({ task, onToggleTask, onOpenTask, onLongPressTask, picked, onToggleSelect }: { task: TaskItem } & RowCallbacks) {
   const { person } = useTheme();
   const [a, b] = task.owners;
+  if (picked) {
+    const toggle = onToggleSelect ? () => onToggleSelect(task.id) : undefined;
+    return (
+      <TaskRow
+        kind="task"
+        title={task.title}
+        time={task.time}
+        strip={b ? [person(a), person(b)] : person(a)}
+        done={task.done}
+        hidden={task.hidden}
+        taskType={task.taskType}
+        repeat={task.repeat}
+        selected={picked.has(task.id)}
+        onToggle={toggle}
+        onPress={toggle}
+      />
+    );
+  }
   return (
     <TaskRow
       kind="task"
@@ -147,11 +171,12 @@ const TaskEntry = memo(function TaskEntry({ task, onToggleTask, onOpenTask, onLo
 type PlanProps = { plan: PlanItem; expanded: boolean; onExpand?: (id: ID) => void } & RowCallbacks;
 
 /** План и его подзадачи: подзадачи видны, только когда план раскрыт (по умолчанию свёрнут) */
-const PlanEntry = memo(function PlanEntry({ plan, expanded, onExpand, onToggleTask, onOpenTask, onOpenPlan, onLongPressTask }: PlanProps) {
+const PlanEntry = memo(function PlanEntry({ plan, expanded, onExpand, onToggleTask, onOpenTask, onOpenPlan, onLongPressTask, picked, onToggleSelect }: PlanProps) {
   const { scheme, person } = useTheme();
   const color = person(plan.color);
   const fill = tint(color, PLAN_ALPHA[scheme]);
   const done = !!plan.done;
+  const sel = (id: ID) => (onToggleSelect ? () => onToggleSelect(id) : undefined);
   return (
     <>
       <TaskRow
@@ -161,11 +186,12 @@ const PlanEntry = memo(function PlanEntry({ plan, expanded, onExpand, onToggleTa
         strip={color}
         fill={fill}
         done={done}
-        onToggle={onToggleTask ? () => onToggleTask(plan.id, !done) : undefined}
+        selected={picked ? picked.has(plan.id) : undefined}
+        onToggle={picked ? sel(plan.id) : onToggleTask ? () => onToggleTask(plan.id, !done) : undefined}
         expanded={plan.steps.length ? expanded : undefined}
         onExpand={onExpand ? () => onExpand(plan.id) : undefined}
-        onPress={onOpenPlan ? () => onOpenPlan(plan.id) : undefined}
-        onLongPress={onLongPressTask ? (lift) => onLongPressTask(plan.id, lift) : undefined}
+        onPress={picked ? sel(plan.id) : onOpenPlan ? () => onOpenPlan(plan.id) : undefined}
+        onLongPress={!picked && onLongPressTask ? (lift) => onLongPressTask(plan.id, lift) : undefined}
       />
       {(expanded ? plan.steps : []).map((s) => (
         <TaskRow
@@ -176,14 +202,19 @@ const PlanEntry = memo(function PlanEntry({ plan, expanded, onExpand, onToggleTa
           strip={color}
           fill={fill}
           done={s.done}
-          onToggle={onToggleTask ? () => onToggleTask(s.id, !s.done) : undefined}
-          onPress={onOpenTask ? () => onOpenTask(s.id) : undefined}
-          onLongPress={onLongPressTask ? (lift) => onLongPressTask(s.id, lift) : undefined}
+          selected={picked ? picked.has(s.id) : undefined}
+          onToggle={picked ? sel(s.id) : onToggleTask ? () => onToggleTask(s.id, !s.done) : undefined}
+          onPress={picked ? sel(s.id) : onOpenTask ? () => onOpenTask(s.id) : undefined}
+          onLongPress={!picked && onLongPressTask ? (lift) => onLongPressTask(s.id, lift) : undefined}
         />
       ))}
     </>
   );
 });
+
+/** Ключи всех строк раздела (планы — вместе с подзадачами) */
+const sectionIds = (sec: { items: readonly TaskListEntry[] }): ID[] =>
+  sec.items.flatMap((e) => (e.kind === 'plan' ? [e.id, ...e.steps.map((st) => st.id)] : [e.id]));
 
 export const TasksListScreen = memo(function TasksListScreen(props: TasksListScreenProps) {
   const {
@@ -217,6 +248,9 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
     [onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
   );
   const expandedSet = useMemo(() => new Set(props.expandedPlans ?? []), [props.expandedPlans]);
+  const selecting = !!props.selected;
+  const picked = useMemo(() => (props.selected ? new Set(props.selected) : null), [props.selected]);
+  const onToggleSelect = props.onToggleSelect;
   const renderEntry = useCallback(
     (e: TaskListEntry) =>
       e.kind === 'plan' ? (
@@ -229,14 +263,16 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
             onOpenTask={onOpenTask}
             onOpenPlan={onOpenPlan}
             onLongPressTask={onLongPressTask}
+            picked={picked}
+            onToggleSelect={onToggleSelect}
           />
         </RowMotion>
       ) : (
         <RowMotion key={e.id}>
-          <TaskEntry task={e} onToggleTask={onToggleTask} onOpenTask={onOpenTask} onLongPressTask={onLongPressTask} />
+          <TaskEntry task={e} onToggleTask={onToggleTask} onOpenTask={onOpenTask} onLongPressTask={onLongPressTask} picked={picked} onToggleSelect={onToggleSelect} />
         </RowMotion>
       ),
-    [onToggleTask, onOpenTask, onOpenPlan, onLongPressTask, expandedSet, props.onTogglePlan],
+    [onToggleTask, onOpenTask, onOpenPlan, onLongPressTask, expandedSet, props.onTogglePlan, picked, onToggleSelect],
   );
 
   return (
@@ -259,13 +295,17 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
       >
         {/* Смена группы — новый список целиком, без анимации строк */}
         <ListMotion key={groupLabel}>
-          {sections.map((sec) => (
+          {selecting ? (
+            <SectionBox title="ВСЕ ДЕЛА" count={String(sections.reduce((n, x) => n + sectionIds(x).length, 0))} action={selectAction(props, true)} style={styles.section} />
+          ) : null}
+          {sections.map((sec, i) => (
             <SectionBox
               key={sec.id}
               title={sec.label}
               count={sec.date}
-              collapsed={!!sec.collapsed}
-              onToggle={onToggleSection ? () => onToggleSection(sec.id) : undefined}
+              collapsed={!!sec.collapsed && !selecting}
+              onToggle={selecting ? (props.onSelectMany ? () => props.onSelectMany!(sectionIds(sec)) : undefined) : onToggleSection ? () => onToggleSection(sec.id) : undefined}
+              action={!selecting && i === 0 ? selectAction(props, true) : undefined}
               style={styles.section}
             >
               {sec.items.map(renderEntry)}
@@ -274,7 +314,15 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
         </ListMotion>
       </ScrollView>
 
-      <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+      {selecting && picked ? (
+        <SelectBar
+          onCancel={props.onCancelSelect}
+          actions={props.selectActions ?? []}
+          style={[styles.abs, { bottom: insets.bottom + S.navBottom }]}
+        />
+      ) : (
+        <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+      )}
     </View>
   );
 });

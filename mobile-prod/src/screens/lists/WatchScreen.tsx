@@ -14,6 +14,7 @@ import {
   RowMotion,
   ScreenTitle,
   SectionBox,
+  SelectBar,
   TopBar,
   pad2,
   size as S,
@@ -24,6 +25,7 @@ import {
   type NavTab,
   type TopBarAction,
 } from '@/ui';
+import { selectAction, type SelectionProps } from './selection';
 import { FilterTabs, type FilterTab } from './components/FilterTabs';
 
 export type WatchFilter = 'all' | 'movies' | 'series';
@@ -48,7 +50,7 @@ export type WatchedItem = {
 
 export type WatchSection = 'queue' | 'watched';
 
-export type WatchScreenProps = {
+export type WatchScreenProps = SelectionProps & {
   groupLabel: string;
   me: { letter: string; color: PersonColor };
   filter: WatchFilter;
@@ -91,8 +93,26 @@ type QueueRowProps = {
   onLongPressItem?: (id: ID, lift: LiftTarget) => void;
 };
 
-const QueueRow = memo(function QueueRow({ item, onToggleWatched, onOpenItem, onLongPressItem }: QueueRowProps) {
+const QueueRow = memo(function QueueRow({ item, onToggleWatched, onOpenItem, onLongPressItem, selected, onToggleSelect }: QueueRowProps & {
+  selected?: boolean;
+  onToggleSelect?: (id: ID) => void;
+}) {
   const { c, person } = useTheme();
+  if (selected !== undefined) {
+    const toggle = onToggleSelect ? () => onToggleSelect(item.id) : undefined;
+    return (
+      <ListRow
+        title={item.title}
+        meta={item.meta}
+        strip={person(item.addedByColor)}
+        checked={selected}
+        checkLabel="Выбрать"
+        onToggle={toggle}
+        onPress={toggle}
+        right={<Text style={[T.rowValue, { color: c.text }]}>{item.year}</Text>}
+      />
+    );
+  }
   return (
     <ListRow
       title={item.title}
@@ -150,6 +170,8 @@ export const WatchScreen = memo(function WatchScreen(props: WatchScreenProps) {
     [onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
   );
 
+  const selecting = !!props.selected;
+  const picked = useMemo(() => new Set(props.selected ?? []), [props.selected]);
   const toggleQueue = useCallback(() => onToggleSection?.('queue'), [onToggleSection]);
   const toggleWatched = useCallback(() => onToggleSection?.('watched'), [onToggleSection]);
 
@@ -171,10 +193,24 @@ export const WatchScreen = memo(function WatchScreen(props: WatchScreenProps) {
 
       <View style={[styles.abs, { top: insets.top + S.contentTop, bottom: insets.bottom + S.contentBottom }]}>
         <ListMotion key={filter}>
-        <SectionBox title="В ОЧЕРЕДИ" count={pad2(queue.length)} collapsed={!queueOpen} onToggle={toggleQueue} scrollable>
+        <SectionBox
+          title="В ОЧЕРЕДИ"
+          count={pad2(queue.length)}
+          collapsed={!queueOpen && !selecting}
+          onToggle={selecting ? undefined : toggleQueue}
+          action={selectAction(props, queue.length > 0)}
+          scrollable
+        >
           {queue.map((item) => (
             <RowMotion key={item.id}>
-              <QueueRow item={item} onToggleWatched={onToggleWatched} onOpenItem={onOpenItem} onLongPressItem={onLongPressItem} />
+              <QueueRow
+                item={item}
+                onToggleWatched={onToggleWatched}
+                onOpenItem={onOpenItem}
+                onLongPressItem={onLongPressItem}
+                selected={selecting ? picked.has(item.id) : undefined}
+                onToggleSelect={props.onToggleSelect}
+              />
             </RowMotion>
           ))}
         </SectionBox>
@@ -190,19 +226,38 @@ export const WatchScreen = memo(function WatchScreen(props: WatchScreenProps) {
         >
           {watched.map((w) => (
             <RowMotion key={w.id}>
+              {selecting ? (
+                <ListRow
+                  title={w.title}
+                  meta={w.date}
+                  checked={picked.has(w.id)}
+                  checkLabel="Выбрать"
+                  onToggle={props.onToggleSelect ? () => props.onToggleSelect!(w.id) : undefined}
+                  onPress={props.onToggleSelect ? () => props.onToggleSelect!(w.id) : undefined}
+                />
+              ) : (
               <DoneRow
                 title={w.title}
                 meta={w.date}
                 checkLabel="Вернуть в очередь"
                 onToggle={onToggleWatched ? () => onToggleWatched(w.id, false) : undefined}
               />
+              )}
             </RowMotion>
           ))}
         </SectionBox>
         </ListMotion>
       </View>
 
-      <BottomNav active="watch" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+      {selecting ? (
+        <SelectBar
+          onCancel={props.onCancelSelect}
+          actions={props.selectActions ?? []}
+          style={[styles.abs, { bottom: insets.bottom + S.navBottom }]}
+        />
+      ) : (
+        <BottomNav active="watch" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+      )}
     </View>
   );
 });

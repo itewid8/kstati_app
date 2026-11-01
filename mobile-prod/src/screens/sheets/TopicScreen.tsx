@@ -19,6 +19,7 @@ import {
   ListMotion,
   RowMotion,
   SelectBar,
+  type SelectAction,
   fonts,
   TopBar,
   pad2,
@@ -88,6 +89,8 @@ export type TopicScreenProps = {
   onToggleSelect?: (id: ID) => void;
   onCancelSelect?: () => void;
   onDeleteSelected?: () => void;
+  /** Действия панели выбора (свои у типа) */
+  selectActions?: readonly SelectAction[];
   /** «ВЫБРАТЬ» в шапке заметок / «ВЫБРАТЬ ВСЕ»—«СНЯТЬ ВСЕ» в режиме выбора */
   onStartSelect?: () => void;
   onSelectAll?: () => void;
@@ -286,9 +289,8 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
         </>
       ) : selecting ? (
         <SelectBar
-          count={picked.size}
           onCancel={props.onCancelSelect}
-          actions={[{ label: 'УДАЛИТЬ', danger: true, onPress: props.onDeleteSelected }]}
+          actions={props.selectActions ?? []}
           style={[styles.abs, { bottom: insets.bottom + S.navBottom }]}
         />
       ) : (

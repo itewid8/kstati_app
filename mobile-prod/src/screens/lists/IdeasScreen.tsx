@@ -11,6 +11,7 @@ import {
   DoneRow,
   SectionBox,
   SelectBar,
+  type SelectAction,
   Tabs,
   TopBar,
   pad2,
@@ -85,6 +86,8 @@ export type IdeasScreenProps = {
   onToggleSelect?: (id: ID) => void;
   onCancelSelect?: () => void;
   onDeleteSelected?: () => void;
+  /** Действия панели выбора (свои у типа) */
+  selectActions?: readonly SelectAction[];
   /** «ВЫБРАТЬ» в шапке тем — режим выбора без удержания */
   onStartSelect?: () => void;
   /** Выбрать все свои темы / снять выбор */
@@ -240,7 +243,18 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
           scrollable
           style={styles.archive}
         >
-          {archive.map((a) => (
+          {archive.map((a) =>
+            selecting ? (
+              <AccessoryListRow
+                key={a.id}
+                title={a.title}
+                meta={a.month}
+                checked={picked.has(a.id)}
+                checkLabel="Выбрать"
+                onToggle={props.onToggleSelect ? () => props.onToggleSelect!(a.id) : undefined}
+                onPress={props.onToggleSelect ? () => props.onToggleSelect!(a.id) : undefined}
+              />
+            ) : (
             <DoneRow
               key={a.id}
               title={a.title}
@@ -248,15 +262,15 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
               checkLabel="Вернуть из архива"
               onToggle={onToggleArchive ? () => onToggleArchive(a.id, false) : undefined}
             />
-          ))}
+            ),
+          )}
         </SectionBox>
       </View>
 
       {selecting ? (
         <SelectBar
-          count={picked.size}
           onCancel={props.onCancelSelect}
-          actions={[...(props.onArchiveSelected ? [{ label: 'В АРХИВ', onPress: props.onArchiveSelected }] : []), { label: 'УДАЛИТЬ', danger: true, onPress: onDeleteSelected }]}
+          actions={props.selectActions ?? []}
           style={[styles.abs, { bottom: insets.bottom + S.navBottom }]}
         />
       ) : (

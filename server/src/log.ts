@@ -11,7 +11,7 @@ import type { Usage } from './yandex.js';
 
 export type LogEntry = {
   ts: string;
-  source: 'voice' | 'text' | 'eval';
+  source: 'voice' | 'text' | 'device' | 'eval';
   model: string;
   /** Кто говорил (id аккаунта) */
   userId?: string;

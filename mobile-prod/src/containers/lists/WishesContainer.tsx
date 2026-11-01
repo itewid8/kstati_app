@@ -1,6 +1,9 @@
 import { useCallback, useMemo } from 'react';
 import { Linking } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
+import { useSelection } from '../common/useSelection';
+import type { SelectAction } from '@/ui';
+import { giftMany, setReceivedMany, wishStates } from './bulk';
 import { emptyDraft } from '@/components/CardSheet';
 import { ALL_PEOPLE, WISH_SECTIONS, parseWishKey, safeLink, wishesProps, type WishesSnapshot } from '@/adapters/lists/wishes';
 import { DEMO, useStore } from '@/lib/store';
@@ -77,6 +80,45 @@ export const WishesContainer = signedInOnly(function Wishes() {
   // Вкладка другого человека: без API 2 отмечать нечего, открывать его хотелки нельзя
   const other = selected !== meId && selected !== ALL_PEOPLE;
 
+  // Выбор: свои — получено / удалить; чужие — подарю (если сервер умеет); из «Подарено» — вернуть
+  const pickable = useMemo(
+    () => [...data.wishes.map((w) => w.id).filter((k) => parseWishKey(k)?.ownerId === meId || gifts), ...data.gifted.map((g) => g.id)],
+    [data.wishes, data.gifted, meId, gifts],
+  );
+  const sel = useSelection(pickable);
+  const deleteSelected = useCallback(() => {
+    const ids = (sel.selected ?? [])
+      .map((k) => parseWishKey(k))
+      .filter((r) => r?.ownerId === meId)
+      .map((r) => r!.id);
+    if (ids.length) useStore.getState().deleteWishesMany(ids);
+    sel.cancel();
+  }, [sel, meId]);
+  const picked = sel.selected ?? [];
+  const wst = wishStates(picked);
+  const own = picked.filter((k) => parseWishKey(k)?.ownerId === meId);
+  const ownClosed = wst.closed.filter((k) => parseWishKey(k)?.ownerId === meId);
+  const otherClosed = wst.closed.filter((k) => parseWishKey(k)?.ownerId !== meId);
+  const selectActions: SelectAction[] = [
+    ...(wst.mineOpen.length || (!wst.othersOpen.length && !wst.closed.length)
+      ? [{ label: 'ПОЛУЧЕНО', n: wst.mineOpen.length, onPress: () => (setReceivedMany(wst.mineOpen, true), sel.cancel()) }]
+      : []),
+    ...(wst.othersOpen.length ? [{ label: 'ПОДАРЮ', n: wst.othersOpen.length, onPress: () => (void giftMany(wst.othersOpen, true), sel.cancel()) }] : []),
+    ...(wst.closed.length
+      ? [
+          {
+            label: 'ВЕРНУТЬ',
+            n: wst.closed.length,
+            onPress: () => {
+              if (ownClosed.length) setReceivedMany(ownClosed, false);
+              if (otherClosed.length) void giftMany(otherClosed, false);
+              sel.cancel();
+            },
+          },
+        ]
+      : []),
+    { label: 'УДАЛИТЬ', n: own.length, danger: true, onPress: deleteSelected },
+  ];
   const onSelectPerson = useCallback((id: ID) => useStore.getState().setWishPerson(id === meId ? null : id), [meId]);
   const onAdd = useCallback(() => {
     const st = useStore.getState();
@@ -99,6 +141,15 @@ export const WishesContainer = signedInOnly(function Wishes() {
       onOpenSettings={onOpenSettings}
       onNavigate={onNavigate}
       onRec={onRec}
+      selected={sel.selected}
+      pickable={pickable}
+      allSelected={sel.allSelected}
+      onStartSelect={sel.start}
+      onToggleSelect={sel.toggle}
+      onSelectAll={sel.selectAll}
+      onCancelSelect={sel.cancel}
+      onDeleteSelected={deleteSelected}
+      selectActions={selectActions}
     />
   );
 });

@@ -216,6 +216,8 @@ type State = {
   lastMe: User | null;
   /** Язык распознавания голоса */
   voiceLang: VoiceLang;
+  /** Уже сказали, что на телефоне нет встроенного распознавания речи */
+  speechNotice: boolean;
   /** Голосовые команды за сегодня; null — ещё не знаем */
   voiceQuota: VoiceQuota | null;
   /** День (YYYY-MM-DD), за который известен voiceQuota: лимит действует только в этот день */
@@ -301,6 +303,10 @@ type Actions = {
   giftWish: (ownerId: ID, id: ID, gifted: boolean) => Promise<string | null>;
   toggleWatched: (id: ID) => void;
   deleteWatch: (id: ID) => void;
+  /** Несколько разом — одна «ВЕРНУТЬ» на всё. Дела — по ключам «id@раз»: у серии удаляется только этот раз */
+  deleteTasksMany: (keys: readonly string[]) => void;
+  deleteWishesMany: (ids: readonly ID[]) => void;
+  deleteWatchMany: (ids: readonly ID[]) => void;
   /** Идеи: удалить идею, тему (вместе с её идеями), переименовать / открыть группам */
   deleteIdea: (id: ID) => void;
   /** Несколько заметок разом — одна отмена на всё */
@@ -335,6 +341,7 @@ type Actions = {
   /** Вкладка человека в календаре: скрыть / показать его дела */
   toggleCalendarPerson: (id: ID) => void;
   setVoiceLang: (lang: VoiceLang) => void;
+  setSpeechNotice: (v: boolean) => void;
   /** Счётчик команд за сегодня; день запоминается сам (voiceQuotaDay) */
   setVoiceQuota: (q: VoiceQuota | null) => void;
   setServerApi: (api: number | null) => void;
@@ -435,6 +442,7 @@ const initial: State = {
   theme: 'system',
   micMode: 'tap',
   voiceLang: 'ru-RU',
+  speechNotice: false,
   serverApi: null,
 };
 
@@ -810,6 +818,36 @@ export const useStore = create<State & Actions>()(
       });
       withUndo('Повторы завершены', before);
     },
+    deleteTasksMany: (keys) => {
+      const before = { tasks: get().tasks };
+      let tasks = before.tasks;
+      const gone = new Set<ID>();
+      for (const key of keys) {
+        const at = key.lastIndexOf('@');
+        const occ = at > 0 && /^\d{4}-\d{2}-\d{2}$/.test(key.slice(at + 1)) ? key.slice(at + 1) : '';
+        const id = occ ? key.slice(0, at) : key;
+        const t = tasks.find((x) => x.id === id);
+        if (!t) continue;
+        if (t.repeat && occ) tasks = tasks.map((x) => (x.id === id ? skipOcc(x, occ) : x));
+        else gone.add(id);
+      }
+      // План — вместе с подзадачами
+      tasks = tasks.filter((t) => !gone.has(t.id) && !(t.parentId && gone.has(t.parentId)));
+      set({ tasks });
+      withUndo(`Удалено: ${keys.length}`, before);
+    },
+    deleteWishesMany: (ids) => {
+      const gone = new Set(ids);
+      const before = { wishes: get().wishes };
+      set({ wishes: before.wishes.filter((w) => !gone.has(w.id)) });
+      withUndo(`Удалено: ${ids.length}`, before);
+    },
+    deleteWatchMany: (ids) => {
+      const gone = new Set(ids);
+      const before = { watch: get().watch };
+      set({ watch: before.watch.filter((w) => !gone.has(w.id)) });
+      withUndo(`Удалено: ${ids.length}`, before);
+    },
     deleteWish: (id) => {
       const before = { wishes: get().wishes };
       set({ wishes: before.wishes.filter((w) => w.id !== id) });
@@ -953,6 +991,7 @@ export const useStore = create<State & Actions>()(
       set({ calendarHidden: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
     },
     setVoiceLang: (voiceLang) => set({ voiceLang }),
+    setSpeechNotice: (speechNotice) => set({ speechNotice }),
     setVoiceQuota: (voiceQuota) => set({ voiceQuota, voiceQuotaDay: voiceQuota ? toISODate(new Date()) : '' }),
     setServerApi: (serverApi) => get().serverApi !== serverApi && set({ serverApi }),
     setEditorSeed: (editorSeed) => set({ editorSeed }),
@@ -1202,6 +1241,7 @@ export const useStore = create<State & Actions>()(
       activitySeen: s.activitySeen,
       calendarHidden: s.calendarHidden,
       voiceLang: s.voiceLang,
+      speechNotice: s.speechNotice,
       quarantine: s.quarantine,
       parked: s.parked,
     }),

@@ -2,6 +2,9 @@ import { Redirect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
+import { useSelection } from '../common/useSelection';
+import type { SelectAction } from '@/ui';
+import { setWatched, watchStates } from './bulk';
 import { openMenu } from '@/components/ActionMenu';
 import { emptyDraft } from '@/components/CardSheet';
 import { FILTER_META, FilterSheet, type FilterKey } from '@/components/FilterSheet';
@@ -99,6 +102,20 @@ export const WatchContainer = signedInOnly(function Watch() {
     });
   }, []);
   const onCloseFilter = useCallback(() => setField(null), []);
+  const pickable = useMemo(() => [...data.queue.map((q) => q.id), ...data.watched.map((w) => w.id)], [data.queue, data.watched]);
+  const sel = useSelection(pickable);
+  const deleteSelected = useCallback(() => {
+    if (sel.selected?.length) useStore.getState().deleteWatchMany(sel.selected);
+    sel.cancel();
+  }, [sel]);
+  const picked = sel.selected ?? [];
+  const ws = watchStates(picked);
+  const selectActions: SelectAction[] = [
+    ws.queue.length || !ws.watched.length
+      ? { label: 'ПОСМОТРЕЛИ', n: ws.queue.length, onPress: () => (setWatched(ws.queue, true), sel.cancel()) }
+      : { label: 'В ОЧЕРЕДЬ', n: ws.watched.length, onPress: () => (setWatched(ws.watched, false), sel.cancel()) },
+    { label: 'УДАЛИТЬ', n: picked.length, danger: true, onPress: deleteSelected },
+  ];
   const setFilters = useStore((st) => st.setWatchFilters);
 
   if (!s.groups.length) return <Redirect href="/onboarding" />;
@@ -120,6 +137,14 @@ export const WatchContainer = signedInOnly(function Watch() {
         onOpenSettings={onOpenSettings}
         onNavigate={onNavigate}
         onRec={onRec}
+        selected={sel.selected}
+        allSelected={sel.allSelected}
+        onStartSelect={sel.start}
+        onToggleSelect={sel.toggle}
+        onSelectAll={sel.selectAll}
+        onCancelSelect={sel.cancel}
+        onDeleteSelected={deleteSelected}
+        selectActions={selectActions}
       />
       <FilterSheet field={field} filters={filters} onChange={setFilters} onClose={onCloseFilter} />
     </View>

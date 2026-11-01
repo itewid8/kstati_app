@@ -30,6 +30,8 @@ type Props = {
   taskType?: TaskKind;
   repeat?: boolean;
   onToggle?: () => void;
+  /** Режим выбора: отмечена ли строка (квадрат — выбор, а не «готово»); undefined — выбора нет */
+  selected?: boolean;
   /** План: раскрыт ли (подзадачи под ним) — справа стрелка; undefined — стрелки нет */
   expanded?: boolean;
   onExpand?: () => void;
@@ -93,7 +95,13 @@ export const TaskRow = memo(function TaskRow(props: Props) {
           <View style={[styles.half, { backgroundColor: strip[1] }]} />
         </View>
       )}
-      <Checkbox checked={done} onPress={onToggle} accessibilityLabel="Готово" emptyFill="none" checkedFill={person('green')} />
+      <Checkbox
+        checked={props.selected ?? done}
+        onPress={onToggle}
+        accessibilityLabel={props.selected !== undefined ? 'Выбрать' : 'Готово'}
+        emptyFill="none"
+        checkedFill={props.selected !== undefined ? undefined : person('green')}
+      />
       <View style={styles.titleBox}>
         <Marquee
           style={[

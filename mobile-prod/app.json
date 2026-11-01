@@ -35,6 +35,13 @@
         }
       ],
       [
+        "expo-speech-recognition",
+        {
+          "speechRecognitionPermission": "Распознавание речи нужно, чтобы понимать голосовые команды",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox", "com.google.android.as", "com.samsung.android.bixby.agent"]
+        }
+      ],
+      [
         "expo-calendar",
         {
           "calendarPermission": "Календарь нужен, чтобы показать ваши события рядом с делами и перенести их в «Кстати»"
@@ -66,6 +73,7 @@
           "backgroundColor": "#1E1E1E"
         }
       ],
+      "./plugins/withoutPushEntitlement",
       [
         "expo-notifications",
         {
@@ -75,7 +83,6 @@
       ],
       "./plugins/withIpv4First",
       "expo-web-browser",
-      "./plugins/withoutPushEntitlement",
       "./plugins/withWorkManagerFix",
       "expo-background-task",
       "./plugins/withShareIntent"

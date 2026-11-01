@@ -6,6 +6,8 @@
  * Пока экран открыт, голосовая заметка без названной темы ложится сюда. Потянуть вниз — обновить.
  */
 import * as Clipboard from 'expo-clipboard';
+import type { SelectAction } from '@/ui';
+import { copyIdeasMany, moveIdeasMany } from './bulk';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Keyboard, StyleSheet, View } from 'react-native';
@@ -128,6 +130,25 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
   const allIds = useMemo(() => data.ideas.map((x) => x.id), [data.ideas]);
   const allSelected = !!selected && !!allIds.length && allIds.every((x) => selected.includes(x));
   const selectAll = useCallback(() => setSelected(allSelected ? [] : allIds), [allSelected, allIds]);
+  // Действия выбранного: в другую тему, скопировать текст, удалить
+  const chosen = selected ?? [];
+  const selectActions: SelectAction[] = [
+    {
+      label: 'В ТЕМУ',
+      n: chosen.length,
+      onPress: () => {
+        const st = useStore.getState();
+        const here = topic?.id ?? null;
+        const targets = [
+          ...(here ? [{ id: null as string | null, title: 'Без темы' }] : []),
+          ...st.topics.filter((t) => t.ownerId === st.me?.id && !t.archivedAt && t.id !== here).map((t) => ({ id: t.id as string | null, title: t.title })),
+        ];
+        openMenu({ title: `В тему: ${chosen.length}`, actions: targets.map((t) => ({ label: t.title, onPress: () => (moveIdeasMany(chosen, t.id), setSelected(null)) })) });
+      },
+    },
+    { label: 'КОПИРОВАТЬ', n: chosen.length, onPress: () => (copyIdeasMany(chosen), setSelected(null)) },
+    { label: 'УДАЛИТЬ', n: chosen.length, danger: true, onPress: deleteSelected },
+  ];
   // «Назад» Android в режиме выбора — выйти из выбора
   useEffect(() => {
     if (!selected) return;
@@ -198,6 +219,7 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
           onToggleSelect={toggleSelect}
           onCancelSelect={cancelSelect}
           onDeleteSelected={deleteSelected}
+          selectActions={selectActions}
           onStartSelect={((own && topic) || inbox) && hasIdeas ? startSelect : undefined}
           onSelectAll={selectAll}
           allSelected={allSelected}
