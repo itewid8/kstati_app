@@ -22,3 +22,4 @@ export { useInputColors } from './inputColors';
 export { LONG_PRESS_MS, useLift, type LiftHandler, type LiftRect, type LiftShape, type LiftTarget } from './lift';
 export { BLOCK_SCALE, LIFT_BORDER, LIFT_GAP, liftFrame, liftShift } from './liftMath';
 export { SelectBar, type SelectAction } from './SelectBar';
+export { CONTENT_MAX, DESKTOP_MIN, DIALOG_WIDTH, SIDEBAR_WIDTH, hovered, useDesktop } from './desktop';

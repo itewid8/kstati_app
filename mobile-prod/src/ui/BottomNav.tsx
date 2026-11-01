@@ -6,6 +6,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { cancelDrag } from '@/adapters/voice/recording';
 import { size as S, space, type as T } from './tokens';
 import { useTheme } from './useTheme';
+import { useDesktop } from './desktop';
 
 export type NavTab = 'tasks' | 'wishes' | 'watch' | 'ideas';
 
@@ -123,7 +124,12 @@ const RecHold = memo(function RecHold({ hold }: { hold: RecButtonHandlers }) {
 });
 
 /** Нижняя навигация: сетка 2×2 разделов и кнопка записи 104px */
-export const BottomNav = memo(function BottomNav({ active, onSelect, onRec, recHeld, style }: Props) {
+export const BottomNav = memo(function BottomNav(props: Props) {
+  // На компьютере разделы и запись — в боковой панели (components/DesktopShell)
+  return useDesktop() ? null : <BottomNavView {...props} />;
+});
+
+const BottomNavView = memo(function BottomNavView({ active, onSelect, onRec, recHeld, style }: Props) {
   const { c } = useTheme();
   const hold = useContext(RecButtonContext);
   return (

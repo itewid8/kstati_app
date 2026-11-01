@@ -15,7 +15,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { size as S, space, useTheme } from '@/ui';
+import { DIALOG_WIDTH, size as S, space, useDesktop, useTheme } from '@/ui';
 
 const OPEN_MS = 220;
 const CLOSE_MS = 150;
@@ -46,6 +46,7 @@ export function Sheet({ visible, onClose, children, footer, inset = false, locke
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const desktop = useDesktop();
   const [mounted, setMounted] = useState(visible);
   const y = useRef(new Animated.Value(1)).current;
   // Смахивание вниз: окно едет за пальцем, дальше 100 px или быстро — закрывается
@@ -86,6 +87,33 @@ export function Sheet({ visible, onClose, children, footer, inset = false, locke
   }, [visible]);
 
   if (!mounted) return null;
+
+  // Компьютер: окно по центру вместо нижней шторки — без ручки и смахивания, Esc закрывает (onRequestClose)
+  if (desktop) {
+    const fade = y.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+    const lift = y.interpolate({ inputRange: [0, 1], outputRange: [0, 16] });
+    return (
+      <Modal transparent visible animationType="none" onRequestClose={onClose}>
+        <ModalShot>
+          <View style={[styles.fill, styles.center]}>
+            <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim, opacity: fade }]}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Закрыть" style={styles.fill} onPress={onClose} />
+            </Animated.View>
+            <Animated.View
+              accessibilityViewIsModal
+              style={[styles.dialog, { borderColor: c.border, backgroundColor: c.bg, maxHeight: height * 0.85, opacity: fade, transform: [{ translateY: lift }] }]}
+            >
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[inset && styles.inset, styles.dialogBody]}>
+                {children}
+              </ScrollView>
+              {footer ? <View style={[inset ? styles.footerInset : undefined, styles.dialogFooter]}>{footer}</View> : null}
+            </Animated.View>
+          </View>
+          <BugButton />
+        </ModalShot>
+      </Modal>
+    );
+  }
 
   const translateY = Animated.add(y.interpolate({ inputRange: [0, 1], outputRange: [0, height * 0.6] }), drag);
   const opacity = y.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
@@ -139,4 +167,8 @@ const styles = StyleSheet.create({
   grabber: { alignSelf: 'center', width: S.grabberWidth, height: S.grabberHeight, marginBottom: 10 },
   inset: { paddingHorizontal: space.side, gap: 10 },
   footerInset: { paddingHorizontal: space.side },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  dialog: { width: DIALOG_WIDTH, maxWidth: '92%', borderWidth: S.border },
+  dialogBody: { paddingTop: 16, paddingBottom: 12 },
+  dialogFooter: { paddingBottom: 16 },
 });
