@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { DraftItem } from '@/lib/types';
 import { CLOCK, snapshot } from '../common/fixture';
-import { mmss, sheetHeader } from './header';
+import { mmss, sheetHeader, spendNote } from './header';
 import { QUOTA_DETAIL, problemSheet, quotaText } from './problem';
 import { voiceView, type VoiceCard } from './view';
 
@@ -69,5 +69,7 @@ describe('шапка', () => {
     assert.equal(mmss(75_000), '01:15');
     assert.deepEqual(sheetHeader([1, 2], 3000, 'УДАЛИТЬ'), { duration: '00:03', levels: [1, 2], badge: 'УДАЛИТЬ' });
     assert.deepEqual(sheetHeader([], 0, undefined, true), { duration: '00:00', levels: [], live: true });
+    assert.equal(spendNote({ tokens: 1840, rub: 0.372 }), '1 840 ТОК · 0,37 ₽');
+    assert.equal(spendNote({ tokens: 0, rub: 0 }), '0 ТОК · 0 ₽');
   });
 });

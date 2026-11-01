@@ -28,7 +28,11 @@ export const VoiceHeader = memo(function VoiceHeader({ header }: { header: Voice
         </Text>
       </View>
       <Waveform levels={header.levels} live={live} bars={BARS} />
-      {header.badge ? (
+      {header.note ? (
+        <Text style={[styles.note, { color: c.muted }]} numberOfLines={1}>
+          {header.note}
+        </Text>
+      ) : header.badge ? (
         <View style={[styles.badge, { backgroundColor: c.text }]}>
           <Text style={[T.section, { color: c.bg }]}>{header.badge}</Text>
         </View>
@@ -43,4 +47,5 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   time: { fontFamily: fonts.mono600, fontSize: 10, letterSpacing: 1 },
   badge: { height: 22, paddingHorizontal: 7, justifyContent: 'center' },
+  note: { fontFamily: fonts.mono600, fontSize: 9.5, letterSpacing: 0.6 },
 });

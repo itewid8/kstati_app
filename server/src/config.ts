@@ -57,6 +57,8 @@ export const config = {
   /** Сколько голосовых команд в сутки на человека */
   voiceDailyLimit: Number(env('VOICE_DAILY_LIMIT', '30')),
   /** Простые команды разбирать правилами, без YandexGPT (QUICK_RULES=0 — всё через модель) */
+  /** Цена распознавания SpeechKit за отрезок 15 с, ₽ с НДС — для расхода команды в ответе */
+  sttPrice15s: Number(env('STT_PRICE_15S', '0.1626')),
   quickRules: env('QUICK_RULES', '1') !== '0',
   /** Промпт модели: compact — только нужные фразе правила (полный — если не понял), full — всегда полный */
   promptMode: env('PROMPT_MODE', 'compact') === 'full' ? ('full' as const) : ('compact' as const),
