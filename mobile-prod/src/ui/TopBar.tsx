@@ -5,6 +5,7 @@ import { IconButton } from './IconButton';
 import { Marquee } from './Marquee';
 import { size as S, space, type as T } from './tokens';
 import { useTheme } from './useTheme';
+import { useDesktop } from './desktop';
 
 export type TopBarAction = {
   key: string;
@@ -37,14 +38,19 @@ type Props = {
 };
 
 /** Верхняя панель: 40px, кнопки 40×40 через 8px */
-export const TopBar = memo(function TopBar({ lead, after, actions = [], iconSize = S.icon, style }: Props) {
+export const TopBar = memo(function TopBar({ lead, after, actions: all = [], iconSize = S.icon, style }: Props) {
   const { c } = useTheme();
+  // На компьютере группа, лента и профиль — в боковой панели: здесь остаются кнопки самого экрана
+  const desktop = useDesktop();
+  const actions = desktop ? all.filter((a) => a.key !== 'feed' && a.key !== 'me') : all;
   return (
     <View style={[styles.bar, style]}>
       {lead.kind === 'back' ? (
         <IconButton icon="back" accessibilityLabel="Назад" onPress={lead.onBack} iconSize={S.iconSmall} />
       ) : null}
-      {lead.kind === 'group' ? (
+      {lead.kind === 'group' && desktop ? (
+        <View style={styles.flex} />
+      ) : lead.kind === 'group' ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={lead.label}

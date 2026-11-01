@@ -29,6 +29,7 @@ import type { ThemePref } from '@/lib/types';
 import { holdEnd, holdStart } from '@/lib/voice';
 import { RecButtonContext, useTheme, type RecButtonHandlers } from '@/ui';
 import { uiFonts } from '@/ui/fonts';
+import { DesktopShell } from '@/components/DesktopShell';
 import { setForcedScheme } from '@/ui/forcedScheme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -85,6 +86,7 @@ export default function RootLayout() {
         <StatusBar style="auto" />
         <RecButtonContext.Provider value={hold ? HOLD : null}>
           <View style={{ flex: 1 }}>
+            <DesktopShell>
             <Stack
               screenOptions={{
                 headerShown: false,
@@ -122,6 +124,7 @@ export default function RootLayout() {
                 <Stack.Screen name="note/[id]" />
               </Stack.Protected>
             </Stack>
+            </DesktopShell>
             <UndoToast />
             <PullIndicator />
           </View>

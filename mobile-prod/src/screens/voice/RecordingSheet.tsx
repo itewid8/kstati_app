@@ -10,7 +10,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { dragProgress } from '@/adapters/voice/recording';
-import { fonts, size as S, space, type as T, useTheme } from '@/ui';
+import { DIALOG_WIDTH, fonts, size as S, space, type as T, useDesktop, useTheme } from '@/ui';
 import type { RecDrag } from '@/ui/BottomNav';
 import { SheetActions } from './components/SheetActions';
 import { VoiceHeader } from './components/VoiceHeader';
@@ -64,10 +64,23 @@ export const RecordingSheet = memo(function RecordingSheet({
 }: RecordingSheetProps) {
   const { c } = useTheme();
   const live = header.live === true;
+  const desktop = useDesktop();
   /** Низ навигации и её верх (над ним — окно) */
   const navBottom = bottomInset + S.navBottom;
   const navTop = navBottom + S.navHeight;
   const scrim = { backgroundColor: c.scrim };
+  // Компьютер: нижней навигации нет — окно записи по центру, затемнение целиком
+  if (desktop)
+    return (
+      <View style={[StyleSheet.absoluteFill, styles.center]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Отмена" onPress={onClose} style={[StyleSheet.absoluteFill, scrim]} />
+        <View style={[styles.dialog, { borderColor: c.border, backgroundColor: c.bg }]}>
+          <VoiceHeader header={header} />
+          {live ? null : <Text style={[styles.wait, { color: c.text }]}>…</Text>}
+          {actions.length ? <SheetActions actions={actions} /> : null}
+        </View>
+      </View>
+    );
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {live ? (
@@ -120,4 +133,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   wait: { fontFamily: fonts.sans600, fontSize: 18, lineHeight: 22, letterSpacing: -0.36 },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  dialog: { width: DIALOG_WIDTH, maxWidth: '92%', borderWidth: S.border, padding: 16, gap: 12 },
 });
