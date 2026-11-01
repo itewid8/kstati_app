@@ -7,4 +7,4 @@ rm -rf $OUT && mkdir -p $OUT
 npx tsc -p tsconfig.json --outDir $OUT --noEmit false --declaration false --sourceMap false --rootDir . >/dev/null || { echo "tsc failed"; npx tsc -p tsconfig.json --noEmit; exit 1; }
 ln -sfn "$PWD/node_modules" $OUT/node_modules
 echo '{"type":"module"}' > $OUT/package.json
-for t in quick repeat ideas lists films feedback duration v2 personal e2e compat-v1; do echo "== $t"; node $OUT/test/$t.js; done
+for t in quick prompt repeat ideas lists films feedback duration v2 personal e2e compat-v1; do echo "== $t"; node $OUT/test/$t.js; done

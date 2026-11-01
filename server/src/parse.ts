@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { applyListEdit, listBody, spokenList } from './lists.js';
-import { buildMessages } from './prompt.js';
+import { buildCompactMessages, buildMessages } from './prompt.js';
 import { occurrences } from './recur.js';
 import { changesRepeat, firstDate, spokenRepeat, stopsRepeat, stripRepeat } from './repeat.js';
 import {
@@ -23,7 +23,7 @@ import {
   spokenTime,
   spokenUntil,
 } from './spoken.js';
-import { addUsage, complete, NO_USAGE, type Usage } from './yandex.js';
+import { addUsage, complete, NO_USAGE, type Msg, type Usage } from './yandex.js';
 import { quickParse } from './quick.js';
 import { config } from './config.js';
 import {
@@ -558,8 +558,10 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
         // Время, названное во фразе, надёжнее ответа модели («перенеси ужин на восемь» → 20:00)
         const said = spokenTime(transcript);
         if (said) patch.time = said;
-        // Новая дата — то, что сказано после последнего «на / к»: «с пятницы на субботу» → суббота
-        const tail = transcript.split(/\s(?:на|к)\s/i).slice(1).at(-1) ?? transcript;
+        // Новая дата — то, что сказано после последнего «на / к» с днём или датой: «с пятницы на субботу» → суббота;
+        // «на пятницу на два» — день из «на пятницу», а не из «на два»
+        const segs = transcript.split(/\s(?:на|к)\s/i).slice(1);
+        const tail = [...segs].reverse().find((s) => plainWeekday(s) !== null || spokenPeriod(s, ctx.today) !== null) ?? segs.at(-1) ?? transcript;
         const dow = plainWeekday(tail);
         const saidDate = spokenPeriod(tail, ctx.today);
         // День недели при переносе — ближайший к старой дате записи.
@@ -646,7 +648,18 @@ export async function parseText(input: string, ctx: Context, model?: string): Pr
       if (result.type === 'items') return { result, raw: 'rules', usage: NO_USAGE, attempts: 0 };
     }
   }
-  const messages = buildMessages(text, ctx);
+  // Сначала короткий промпт (только нужные фразе правила); «непонятно» — повтор с полным
+  if (config.promptMode === 'compact') {
+    const first = await ask(buildCompactMessages(text, ctx), text, ctx, model);
+    if (first.result.type !== 'unknown') return first;
+    const full = await ask(buildMessages(text, ctx), text, ctx, model);
+    return { ...full, usage: addUsage(first.usage, full.usage), attempts: first.attempts + full.attempts };
+  }
+  return ask(buildMessages(text, ctx), text, ctx, model);
+}
+
+/** Один разбор моделью: не JSON — один повтор */
+async function ask(messages: Msg[], text: string, ctx: Context, model?: string): Promise<ParseOutput> {
   let raw = '';
   let usage = NO_USAGE;
   let attempts = 0;
