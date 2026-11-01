@@ -151,7 +151,8 @@ const styles = StyleSheet.create({
   stepTitle: { flex: 1, minWidth: 0, fontFamily: fonts.sans500, fontSize: 12, lineHeight: 16 },
   done: { textDecorationLine: 'line-through' },
   titleBox: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  titleShrink: { flex: 0, flexShrink: 1 },
+  // Не flex: 0 — в браузере это flex-basis 0%, и название сжимается до нулевой ширины
+  titleShrink: { flexGrow: 0, flexShrink: 1, flexBasis: 'auto' },
   expand: { width: 22, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: -6 },
   time: { fontFamily: fonts.mono600, fontSize: 12, letterSpacing: -0.24 },
   stepTime: { fontSize: 11, letterSpacing: -0.22 },
