@@ -26,11 +26,11 @@ function fail(e: unknown): VoiceFail {
 }
 
 /** POST /voice/text → ParseResult («Разобрать заново», текст без микрофона). left — сколько команд осталось на сегодня */
-export async function parseOnServer(text: string): Promise<{ ok: true; result: ParseResult; left?: number } | VoiceFail> {
+export async function parseOnServer(text: string, src?: 'device'): Promise<{ ok: true; result: ParseResult; left?: number } | VoiceFail> {
   try {
     const json = await request<{ result: ParseResult; left?: number }>('/voice/text', {
       token: useStore.getState().session?.token,
-      body: { ...meta(), text },
+      body: { ...meta(), text, ...(src && { src, lang: useStore.getState().voiceLang }) },
       timeoutMs: 60_000,
     });
     return { ok: true, result: json.result, ...(typeof json.left === 'number' && { left: json.left }) };

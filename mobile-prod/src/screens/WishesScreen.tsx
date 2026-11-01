@@ -15,6 +15,7 @@ import {
   ListMotion,
   RowMotion,
   SectionBox,
+  SelectBar,
   Tabs,
   TopBar,
   pad2,
@@ -26,6 +27,7 @@ import {
   type TabItem,
   type TopBarAction,
 } from '@/ui';
+import { selectAction, type SelectionProps } from './lists/selection';
 
 export type WishPerson = {
   id: ID;
@@ -56,7 +58,8 @@ export type WishSection = 'wishes' | 'gifted';
 /** Вкладка «ВСЕ» */
 export const ALL_PEOPLE = 'all';
 
-export type WishesScreenProps = {
+
+export type WishesScreenProps = SelectionProps & {
   /** «ВИШЛИСТЫ · 4 ЧЕЛОВЕКА» */
   caption: string;
   /** Кнопка профиля: буква и свой цвет */
@@ -100,8 +103,27 @@ type WishItemProps = {
   onLongPressWish?: (id: ID, lift: LiftTarget) => void;
 };
 
-const WishItem = memo(function WishItem({ wish, onToggleGift, onOpenLink, onOpenWish, onLongPressWish }: WishItemProps) {
+const WishItem = memo(function WishItem({ wish, onToggleGift, onOpenLink, onOpenWish, onLongPressWish, selected, canSelect, onToggleSelect }: WishItemProps & {
+  selected?: boolean;
+  canSelect?: boolean;
+  onToggleSelect?: (id: ID) => void;
+}) {
   const { person } = useTheme();
+  if (selected !== undefined) {
+    const toggle = canSelect && onToggleSelect ? () => onToggleSelect(wish.id) : undefined;
+    return (
+      <ListRow
+        title={wish.title}
+        meta={wish.note}
+        strip={person(wish.ownerColor)}
+        checked={selected}
+        checkLabel="Выбрать"
+        onToggle={toggle}
+        onPress={toggle}
+        style={!canSelect && styles.off}
+      />
+    );
+  }
   return (
     <ListRow
       title={wish.title}
@@ -164,6 +186,10 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
     [people, person],
   );
 
+  const selecting = !!props.selected;
+  const picked = useMemo(() => new Set(props.selected ?? []), [props.selected]);
+  const pickSet = useMemo(() => (props.pickable ? new Set(props.pickable) : null), [props.pickable]);
+  const canPick = useCallback((id: ID) => !pickSet || pickSet.has(id), [pickSet]);
   const toggleWishes = useCallback(() => onToggleSection?.('wishes'), [onToggleSection]);
   const toggleGifted = useCallback(() => onToggleSection?.('gifted'), [onToggleSection]);
 
@@ -178,13 +204,23 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
         <SectionBox
           title="ХОЧУ"
           count={pad2(wishes.length)}
-          collapsed={!wishesOpen}
-          onToggle={toggleWishes}
+          collapsed={!wishesOpen && !selecting}
+          onToggle={selecting ? undefined : toggleWishes}
+          action={selectAction(props, wishes.some((w) => canPick(w.id)))}
           scrollable
         >
           {wishes.map((w) => (
             <RowMotion key={w.id}>
-              <WishItem wish={w} onToggleGift={onToggleGift} onOpenLink={onOpenLink} onOpenWish={onOpenWish} onLongPressWish={onLongPressWish} />
+              <WishItem
+                wish={w}
+                onToggleGift={onToggleGift}
+                onOpenLink={onOpenLink}
+                onOpenWish={onOpenWish}
+                onLongPressWish={onLongPressWish}
+                selected={selecting ? picked.has(w.id) : undefined}
+                canSelect={canPick(w.id)}
+                onToggleSelect={props.onToggleSelect}
+              />
             </RowMotion>
           ))}
         </SectionBox>
@@ -200,19 +236,38 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
         >
           {gifted.map((g) => (
             <RowMotion key={g.id}>
+              {selecting ? (
+                <ListRow
+                  title={g.title}
+                  meta={g.from}
+                  checked={picked.has(g.id)}
+                  checkLabel="Выбрать"
+                  onToggle={props.onToggleSelect ? () => props.onToggleSelect!(g.id) : undefined}
+                  onPress={props.onToggleSelect ? () => props.onToggleSelect!(g.id) : undefined}
+                />
+              ) : (
               <DoneRow
                 title={g.title}
                 meta={g.from}
                 checkLabel="Вернуть в список"
                 onToggle={onToggleGift ? () => onToggleGift(g.id, false) : undefined}
               />
+              )}
             </RowMotion>
           ))}
         </SectionBox>
         </ListMotion>
       </View>
 
-      <BottomNav active="wishes" onSelect={onNavigate} onRec={onRec} style={[styles.nav, { bottom: insets.bottom + S.navBottom }]} />
+      {selecting ? (
+        <SelectBar
+          onCancel={props.onCancelSelect}
+          actions={props.selectActions ?? []}
+          style={[styles.nav, { bottom: insets.bottom + S.navBottom }]}
+        />
+      ) : (
+        <BottomNav active="wishes" onSelect={onNavigate} onRec={onRec} style={[styles.nav, { bottom: insets.bottom + S.navBottom }]} />
+      )}
     </View>
   );
 });
@@ -227,4 +282,5 @@ const styles = StyleSheet.create({
   /** «Подарено» не выше ~5 строк, дальше прокрутка */
   gifted: { flexShrink: 0, maxHeight: S.border * 2 + S.sectionHeader + S.doneRow * 5 },
   nav: { position: 'absolute', left: space.side, right: space.side },
+  off: { opacity: 0.4 },
 });

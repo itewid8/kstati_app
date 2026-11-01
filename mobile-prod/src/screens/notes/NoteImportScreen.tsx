@@ -5,7 +5,7 @@
  * Презентационный экран: данные — пропсами, действия — колбэками.
  */
 import { memo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Icon, IconButton, SectionBox, fonts, size as S, space, useTheme } from '@/ui';
 import { AccountHeader } from '../account/components/AccountHeader';
 import { Loading, PhoneNotice, Tick } from '../phone/PhoneParts';
@@ -39,6 +39,8 @@ export type NoteImportScreenProps = {
 
 const NO_INSETS = { top: 0, bottom: 0 };
 /** Основной способ — коротко; подробнее — по «?» (components/NoteShareHelp) */
+/** «Поделиться → Кстати» пока только на Android: на iPhone для этого нужно расширение общего доступа */
+const SHARE = Platform.OS === 'android';
 const SHARE_STEPS = ['Откройте заметку в другом приложении', 'Нажмите «Поделиться»', 'Выберите «Кстати» и нажмите «СОХРАНИТЬ»'];
 
 const Row = memo(function Row({ row, onToggle }: { row: NoteRow; onToggle?: (k: string) => void }) {
@@ -77,12 +79,13 @@ export const NoteImportScreen = memo(function NoteImportScreen(props: NoteImport
           caption="ЗАМЕТКИ"
           title="Перенести заметки"
           onBack={props.onBack}
-          right={props.onHelp ? <IconButton icon="help" accessibilityLabel="Как перенести заметки" onPress={props.onHelp} /> : undefined}
+          right={SHARE && props.onHelp ? <IconButton icon="help" accessibilityLabel="Как перенести заметки" onPress={props.onHelp} /> : undefined}
         />
         <View style={styles.body}>
           {props.error ? <PhoneNotice text={props.error} /> : null}
           {phase === 'empty' ? (
             <>
+              {SHARE ? (
               <View style={[styles.box, { borderColor: c.border, backgroundColor: c.panel }]}>
                 <View style={[styles.head, { backgroundColor: c.text }]}>
                   <Text style={[styles.headText, styles.flex, { color: c.bg }]}>ПОДЕЛИТЬСЯ → КСТАТИ</Text>
@@ -100,6 +103,7 @@ export const NoteImportScreen = memo(function NoteImportScreen(props: NoteImport
                   </Pressable>
                 ) : null}
               </View>
+              ) : null}
               <View style={[styles.box, styles.pick, { borderColor: c.border, backgroundColor: c.panel }]}>
                 <Text style={[styles.formats, { color: c.muted }]}>ВСЁ СРАЗУ ИЗ ФАЙЛА · ZIP ИЗ GOOGLE TAKEOUT · JSON · TXT · MD</Text>
                 <Pressable accessibilityRole="button" onPress={props.onPick} style={[styles.button, { borderColor: c.border, backgroundColor: c.panel }]}>

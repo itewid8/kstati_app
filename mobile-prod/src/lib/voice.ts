@@ -14,6 +14,7 @@ import { MIN_HOLD_MS, recStep, type RecEvent, type RecMode, type RecState } from
 import { nav } from '@/containers/common/nav';
 import { toTab, toTopic } from '@/containers/common/go';
 import { deleteRecording, fetchVoiceQuota, parseOnServer, uploadVoice, type VoiceProblem } from './api';
+import { abortDeviceSpeech, deviceSpeechAvailable, startDeviceSpeech, stopDeviceSpeech } from './deviceSpeech';
 import { track } from './analytics';
 import { API_URL } from './config';
 import { toISODate } from './dates';
@@ -69,6 +70,34 @@ export const registerRecorder = (r: RecorderImpl | null) => {
   recorder = r;
 };
 const useRealMic = () => !!API_URL && !!recorder;
+
+/**
+ * Чем записываем текущую команду: speech — распознаёт сам телефон (бесплатно, на сервер уходит текст),
+ * mic — запись звука, распознаёт сервер (SpeechKit), fake — заглушка без сервера
+ */
+let engine: 'speech' | 'mic' | 'fake' = 'fake';
+
+/** Громкость от распознавания телефона: волна и автостоп после 2 с тишины (как у записи звука) */
+let spoke = false;
+let lastLoud = 0;
+function speechLevel(v: number) {
+  if (useStore.getState().voice !== 'recording') return;
+  useVoiceLevel.setState({ level: v });
+  const now = Date.now();
+  if (v > 0.3) {
+    spoke = true;
+    lastLoud = now;
+  } else if (spoke && now - lastLoud > 2000) stopRecording();
+}
+
+/** Распознавания на телефоне нет: один раз говорим, что голос пойдёт через сервер */
+function speechNoticeDue(): boolean {
+  const s = useStore.getState();
+  if (!API_URL || s.speechNotice || deviceSpeechAvailable()) return false;
+  s.setSpeechNotice(true);
+  s.setCard({ source: 'voice', transcript: '', problem: 'info', query: 'На этом телефоне нет встроенного распознавания речи'});
+  return true;
+}
 
 const buzz = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
@@ -175,9 +204,25 @@ async function begin(mode: RecMode) {
   s.setCard(null);
   const spent = quotaSpent();
   if (spent) return showLimit('', spent);
+  if (speechNoticeDue()) return;
   useVoiceUi.setState({ held: mode === 'hold' });
-  const mic = useRealMic() ? recorder : null;
-  if (mic) {
+  if (API_URL && deviceSpeechAvailable()) {
+    const id = run;
+    starting = true;
+    spoke = false;
+    lastLoud = Date.now();
+    const res = await startDeviceSpeech(s.voiceLang, { level: speechLevel, ended: stopRecording });
+    starting = false;
+    if (id !== run) {
+      abortDeviceSpeech();
+      if (res === 'denied') s.setCard({ source: 'voice', transcript: '', problem: 'micDenied' });
+      return;
+    }
+    if (res === 'denied') return s.setCard({ source: 'voice', transcript: '', problem: 'micDenied' });
+    if (res === 'error') return s.setCard({ source: 'voice', transcript: '', problem: 'server', detail: 'распознавание телефона не запустилось' });
+    engine = 'speech';
+  } else if (useRealMic() && recorder) {
+    const mic = recorder;
     const id = run;
     starting = true;
     let res: 'ok' | 'denied' | 'error';
@@ -197,7 +242,11 @@ async function begin(mode: RecMode) {
     }
     if (res === 'denied') return s.setCard({ source: 'voice', transcript: '', problem: 'micDenied' });
     if (res === 'error') return s.setCard({ source: 'voice', transcript: '', problem: 'server' });
-  } else startFakeLevels();
+    engine = 'mic';
+  } else {
+    engine = 'fake';
+    startFakeLevels();
+  }
   buzz();
   startedAt = Date.now();
   lastMs = 0;
@@ -252,7 +301,8 @@ export async function cancelRecording() {
   lastMs = 0;
   useVoiceUi.setState({ cancelling: true });
   useStore.getState().setVoice('processing');
-  if (useRealMic() && recorder) deleteRecording(await recorder.stop().catch(() => null));
+  if (engine === 'speech') abortDeviceSpeech();
+  else if (engine === 'mic' && recorder) deleteRecording(await recorder.stop().catch(() => null));
   useStore.getState().setVoice('idle');
   useVoiceUi.setState({ cancelling: false });
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -289,7 +339,24 @@ async function finish() {
   const id = ++run;
   s.setVoice('processing');
 
-  if (useRealMic() && recorder) {
+  if (engine === 'speech') {
+    const out = await stopDeviceSpeech();
+    if (id !== run) return;
+    if ('error' in out) {
+      useStore.getState().setVoice('idle');
+      if (out.error === 'denied') return useStore.getState().setCard({ source: 'voice', transcript: '', problem: 'micDenied' });
+      return useStore.getState().setCard({ source: 'voice', transcript: '', problem: out.error === 'network' ? 'offline' : 'server', detail: `распознавание телефона: ${out.detail}` });
+    }
+    if (duration < MIN_MS || !out.text) return silence();
+    const res = await parseOnServer(out.text, 'device');
+    if (id !== run) return;
+    useStore.getState().setVoice('idle');
+    if (!res.ok) return showFail(out.text, res);
+    noteLeft(res.left);
+    return applyResult(out.text, res.result);
+  }
+
+  if (engine === 'mic' && recorder) {
     let uri: string | null;
     try {
       uri = await recorder.stop();

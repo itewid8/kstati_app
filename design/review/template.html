@@ -1,0 +1,331 @@
+<title>Карта «Кстати»</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+/* Раскладка: шапка со счётчиками → сводка проверок → карта переходов (колонки по разделам) → экраны (каркасы из геометрии) с панелью деталей */
+:root {
+  --bg: #E7E6E1; --panel: #F4F3EF; --ink: #111111; --line: #161616; --hair: #CFCEC8; --muted: #5E5E58;
+  --red: #C8231A; --amber: #A86A00; --ok: #1F7A45; --sel: #111111; --selInk: #E7E6E1;
+  --e-push: #111111; --e-sheet: #2F6BDB; --e-view: #8C8C86; --e-replace: #A86A00; --e-tab: #B9B8B2;
+  --sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; --mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151515; --panel: #1E1E1E; --ink: #F2F2F0; --line: #E8E8E4; --hair: #333331; --muted: #9A9A95;
+  --red: #FF6B61; --amber: #E0A84A; --ok: #4CC685; --sel: #F2F2F0; --selInk: #151515;
+  --e-push: #F2F2F0; --e-sheet: #6E9BFF; --e-view: #77777A; --e-replace: #E0A84A; --e-tab: #4A4A47; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151515; --panel: #1E1E1E; --ink: #F2F2F0; --line: #E8E8E4; --hair: #333331; --muted: #9A9A95;
+  --red: #FF6B61; --amber: #E0A84A; --ok: #4CC685; --sel: #F2F2F0; --selInk: #151515;
+  --e-push: #F2F2F0; --e-sheet: #6E9BFF; --e-view: #77777A; --e-replace: #E0A84A; --e-tab: #4A4A47; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 64px; display: flex; flex-direction: column; gap: 40px; }
+.eyebrow, .mono { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: 34px; line-height: 1.1; letter-spacing: -0.04em; margin: 4px 0 0; text-wrap: balance; }
+h2 { font-size: 22px; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h3 { font-size: 15px; margin: 0; }
+p { margin: 0; max-width: 68ch; }
+.head { display: flex; flex-direction: column; gap: 14px; }
+.counts { display: flex; flex-wrap: wrap; gap: 8px; }
+.count { border: 1.5px solid var(--line); background: var(--panel); padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 110px; }
+.count b { font-family: var(--mono); font-size: 22px; font-variant-numeric: tabular-nums; font-weight: 600; }
+section { display: flex; flex-direction: column; gap: 14px; }
+.box { border: 1.5px solid var(--line); background: var(--panel); min-width: 0; }
+.bar { background: var(--ink); color: var(--bg); font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .08em; padding: 5px 10px; display: flex; justify-content: space-between; gap: 8px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px; border-top: 1px solid var(--hair); vertical-align: top; }
+th { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; color: var(--muted); font-weight: 500; text-transform: uppercase; border-top: 0; }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.sw { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--hair); vertical-align: -2px; margin-right: 4px; }
+.sev2 { color: var(--red); } .sev1 { color: var(--amber); }
+.note { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.note li { margin: 0 0 4px; }
+.note ul { margin: 0; padding-left: 18px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--mono); font-size: 10px; color: var(--muted); align-items: center; }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
+.legend i.dash { border-top-style: dashed; }
+.controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+button.chip { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; padding: 0 10px; height: 30px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+button.chip[aria-pressed="true"] { background: var(--sel); color: var(--selInk); font-weight: 600; }
+button:focus-visible, .node:focus-visible, .shot:focus-visible { outline: 2px solid var(--e-sheet); outline-offset: 2px; }
+#graph { display: block; }
+#graph .node rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+#graph .node text { fill: var(--ink); font-family: var(--sans); font-size: 12px; font-weight: 500; }
+#graph .node text.r { fill: var(--muted); font-family: var(--mono); font-size: 8.5px; font-weight: 400; }
+#graph .node .badge { font-family: var(--mono); font-size: 9px; font-weight: 600; }
+#graph .node { cursor: pointer; }
+#graph .col text { fill: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; }
+#graph path.e { fill: none; stroke-width: 1.3; opacity: .55; }
+#graph.focus path.e { opacity: .06; }
+#graph.focus path.e.on { opacity: 1; stroke-width: 2; }
+#graph.focus .node { opacity: .3; }
+#graph.focus .node.on { opacity: 1; }
+#graph .node.sel rect { stroke-width: 3; }
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
+.shot { display: flex; flex-direction: column; gap: 6px; cursor: pointer; background: none; border: 0; padding: 0; text-align: left; color: var(--ink); font: inherit; }
+.shot svg { width: 100%; height: auto; border: 1.5px solid var(--line); display: block; }
+.shot .cap { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
+.shot .cap span:first-child { font-size: 12.5px; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.badges { display: flex; gap: 6px; font-family: var(--mono); font-size: 9.5px; white-space: nowrap; }
+.groupTitle { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; color: var(--muted); grid-column: 1 / -1; border-top: 1px solid var(--hair); padding-top: 10px; margin-top: 4px; }
+#detail { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--bg); border-left: 1.5px solid var(--line); overflow-y: auto; z-index: 20;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) 16px; display: flex; flex-direction: column; gap: 14px; }
+#detail .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+#detail .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#detail .pair svg { width: 100%; height: auto; border: 1.5px solid var(--line); }
+#detail ul { margin: 0; padding-left: 18px; font-size: 13px; }
+#detail li { margin-bottom: 3px; }
+.links { display: flex; flex-wrap: wrap; gap: 6px; }
+.links button { font-family: var(--sans); font-size: 12px; height: auto; padding: 4px 8px; text-align: left; }
+@media (prefers-reduced-motion: no-preference) { #graph path.e, #graph .node { transition: opacity .15s; } }
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <div class="eyebrow">Структурная карта приложения · собрана из кода и рендера react-native-web</div>
+      <h1>Карта «Кстати»</h1>
+    </div>
+    <p>Каждый экран нарисован по реальной геометрии и цветам из рендера, а не по картинке. Переходы взяты из вызовов навигации в <span class="mono" style="text-transform:none">src/</span>. Нажмите на экран или узел карты, чтобы увидеть его проблемы и связи.</p>
+    <div class="counts" id="counts"></div>
+  </header>
+
+  <section>
+    <h2>Что нашли автопроверки</h2>
+    <div class="grid2">
+      <div class="box">
+        <div class="bar"><span>КОНТРАСТ ТЕКСТА · ПО ПАРАМ ЦВЕТОВ</span><span>WCAG AA</span></div>
+        <div class="scroll"><table id="tContrast"><thead><tr><th>Тема</th><th>Цвета</th><th>Токен</th><th>Контраст</th><th>Текстов</th><th>Экранов</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="box">
+        <div class="bar"><span>ЗОНЫ НАЖАТИЯ МЕНЬШЕ 44 PX</span><span>СВЕТЛАЯ ТЕМА</span></div>
+        <div class="scroll"><table id="tTap"><thead><tr><th>Размер</th><th>Сколько</th><th>Экранов</th><th>Например</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="box">
+        <div class="bar"><span>РАЗМЕРЫ ШРИФТА</span><span id="famCount"></span></div>
+        <div style="padding:10px"><svg id="sizes" width="100%" height="150" role="img" aria-label="Сколько текстов каждого размера"></svg></div>
+      </div>
+      <div class="box">
+        <div class="bar"><span>ПЕРЕХОДЫ</span><span>ГРАФ</span></div>
+        <div class="note" id="flowNote"></div>
+      </div>
+    </div>
+    <div class="box"><div class="bar"><span>ЧЕГО ПРОВЕРКИ НЕ ВИДЯТ</span></div>
+      <div class="note"><ul>
+        <li>Рендер сделан в браузере (react-native-web), а не на телефоне: метрики шрифтов, тени и толщина линий на устройстве немного другие.</li>
+        <li><b>hitSlop</b> (расширение зоны нажатия без изменения размера) в геометрии не виден. Он есть у 17 элементов, например у чекбоксов и кнопки в шапке раздела, поэтому часть мелких зон на самом деле больше.</li>
+        <li>Наложения текста в шторках и под нижними кнопками — это обычно прокрутка под панелью, а не ошибка. В отчёте оставлены только те, что стоит проверить глазами.</li>
+        <li>Шторка «Как перенести» на стенде не рисуется (модальное окно-заглушка), её каркаса нет.</li>
+        <li>Данные на экранах — тестовые, из фикстур стенда.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Карта переходов</h2>
+    <div class="controls">
+      <button class="chip" id="tChrome" aria-pressed="false">ПОКАЗАТЬ ПЕРЕХОДЫ С КАЖДОЙ ВКЛАДКИ</button>
+      <div class="legend">
+        <span><i style="border-color:var(--e-push)"></i>экран</span>
+        <span><i class="dash" style="border-color:var(--e-sheet)"></i>шторка / меню</span>
+        <span><i style="border-color:var(--e-replace)"></i>замена экрана</span>
+        <span><i class="dash" style="border-color:var(--e-view)"></i>вид внутри экрана</span>
+        <span><i style="border-color:var(--e-tab)"></i>вкладки и шапка</span>
+      </div>
+    </div>
+    <div class="box scroll"><svg id="graph" role="img" aria-label="Граф экранов и переходов"></svg></div>
+  </section>
+
+  <section>
+    <div class="controls" style="justify-content:space-between">
+      <h2>Экраны</h2>
+      <div class="controls">
+        <button class="chip" data-theme-pick="light" aria-pressed="true">СВЕТЛАЯ</button>
+        <button class="chip" data-theme-pick="dark" aria-pressed="false">ТЁМНАЯ</button>
+      </div>
+    </div>
+    <div class="shots" id="shots"></div>
+  </section>
+</div>
+
+<aside id="detail" hidden aria-label="Экран"></aside>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const NS = 'http://www.w3.org/2000/svg';
+  const KIND = { tap: 'Зона нажатия', contrast: 'Контраст', overlap: 'Наложение текста', label: 'Без подписи', overflow: 'За краем' };
+  const byId = Object.fromEntries(D.nodes.map(n => [n.id, n]));
+  const screenNode = {}; D.nodes.forEach(n => n.screens.forEach(s => (screenNode[s] = n.id)));
+  let theme = 'light';
+  const el = (tag, attrs = {}, kids = []) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) if (k === 'text') e.textContent = v; else e.setAttribute(k, v); kids.forEach(k => e.append(k)); return e; };
+  const sv = (tag, attrs = {}) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
+  const finds = (s, t) => D.res[s + '|' + t] || [];
+  const cnt = (s, t) => { const c = {}; finds(s, t).forEach(x => (c[x.k] = (c[x.k] || 0) + 1)); return c; };
+
+  // Счётчики
+  const allScreens = D.nodes.flatMap(n => n.screens);
+  let total = { contrast: 0, tap: 0 }; allScreens.forEach(s => { const c = cnt(s, 'light'), d = cnt(s, 'dark'); total.contrast += (c.contrast || 0) + (d.contrast || 0); total.tap += c.tap || 0; });
+  [['Узлов на карте', D.nodes.length], ['Экранов и состояний', allScreens.length], ['Переходов', D.edges.length], ['Мелких зон нажатия', total.tap], ['Текстов с низким контрастом', total.contrast], ['Сочетаний шрифта', D.summary.families]]
+    .forEach(([l, v]) => document.getElementById('counts').append(el('div', { class: 'count' }, [el('span', { class: 'mono', text: l }), el('b', { text: String(v) })])));
+
+  // Таблицы
+  const tb = document.querySelector('#tContrast tbody');
+  D.summary.contrast.forEach(r => {
+    const [fg, , bg] = r.pair.split(' ');
+    const tr = el('tr');
+    const c2 = el('td'); c2.append(el('span', { class: 'sw', style: 'background:' + fg }), el('span', { class: 'mono', style: 'text-transform:none', text: r.pair }));
+    tr.append(el('td', { text: r.theme === 'dark' ? 'тёмная' : 'светлая' }), c2, el('td', { text: r.tok || '—' }),
+      el('td', { class: 'n ' + (parseFloat(r.v) < 3 ? 'sev2' : 'sev1'), text: r.v.split(' ')[0] }), el('td', { class: 'n', text: r.n }), el('td', { class: 'n', text: r.screens }));
+    tr.title = 'Например: ' + r.ex; tb.append(tr);
+  });
+  const tt = document.querySelector('#tTap tbody');
+  D.summary.taps.forEach(r => { const m = Math.min(...r.size.split('×').map(Number)); tt.append(el('tr', {}, [el('td', { class: 'n ' + (m < 32 ? 'sev2' : 'sev1'), text: r.size }), el('td', { class: 'n', text: r.n }), el('td', { class: 'n', text: r.screens }), el('td', { text: r.ex })])); });
+
+  // Размеры шрифта
+  document.getElementById('famCount').textContent = D.summary.families + ' СОЧЕТАНИЙ СЕМЕЙСТВО × РАЗМЕР';
+  (function () {
+    const svg = document.getElementById('sizes'); const data = D.summary.sizes; const W = 560, H = 150, pad = 22;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('preserveAspectRatio', 'none');
+    const max = Math.max(...data.map(d => d[1])); const bw = (W - pad) / data.length;
+    data.forEach(([fs, n], i) => {
+      const h = (H - 34) * n / max; const x = pad + i * bw;
+      svg.append(Object.assign(sv('rect', { x: x + 1, y: H - 20 - h, width: Math.max(1, bw - 2), height: h, fill: fs < 11 ? 'var(--amber)' : 'var(--ink)' }), {}));
+      const t = sv('text', { x: x + bw / 2, y: H - 6, 'text-anchor': 'middle', 'font-size': 8, 'font-family': 'Geist Mono, monospace', fill: 'var(--muted)' }); t.textContent = fs; svg.append(t);
+      const tl = sv('title'); tl.textContent = `${fs}px: ${n} текстов`; svg.lastChild.previousSibling.append(tl);
+    });
+    const lg = sv('text', { x: pad, y: 12, 'font-size': 9, 'font-family': 'Geist Mono, monospace', fill: 'var(--muted)' }); lg.textContent = 'ЖЁЛТЫМ — МЕНЬШЕ 11 PX'; svg.append(lg);
+  })();
+
+  // Переходы: сводка
+  (function () {
+    const f = D.flow, name = id => byId[id].title;
+    const deep = Object.entries(f.depth).filter(([, d]) => d >= 3).map(([id]) => name(id));
+    const n = document.getElementById('flowNote');
+    n.append(el('p', { text: `Глубже трёх шагов от вкладок: ${deep.join(', ')}.` }),
+      el('p', { text: `Доступны только из одного места: ${f.single.filter(id => !['week', 'year', 'onboarding'].includes(id)).map(name).join(', ')}.` }),
+      el('p', { text: 'Вход и «Первая группа» открываются до вкладок, поэтому от вкладок до них пути нет — так и задумано.' }));
+  })();
+
+  // Граф
+  const ORDER = ['Вход', 'Дела', 'Редакторы', 'Хочу', 'Смотреть', 'Заметки', 'Голос', 'Общее', 'Группы', 'Настройки', 'Календарь телефона'];
+  const NW = 150, NH = 46, CW = 196, VG = 22, TOP = 34;
+  const pos = {}; const cols = {};
+  D.nodes.forEach(n => { (cols[n.group] = cols[n.group] || []).push(n); });
+  ORDER.forEach((g, ci) => (cols[g] || []).forEach((n, ri) => (pos[n.id] = { x: 10 + ci * CW, y: TOP + ri * (NH + VG) })));
+  const GH = TOP + Math.max(...Object.values(cols).map(c => c.length)) * (NH + VG) + 10, GW = 10 + ORDER.length * CW;
+  const graph = document.getElementById('graph'); graph.setAttribute('width', GW); graph.setAttribute('height', GH); graph.setAttribute('viewBox', `0 0 ${GW} ${GH}`);
+  ORDER.forEach((g, ci) => { const gg = sv('g', { class: 'col' }); const t = sv('text', { x: 10 + ci * CW, y: 16 }); t.textContent = g.toUpperCase(); gg.append(t); graph.append(gg); });
+  const COLOR = { push: 'var(--e-push)', back: 'var(--e-push)', sheet: 'var(--e-sheet)', toast: 'var(--e-sheet)', replace: 'var(--e-replace)', view: 'var(--e-view)', tab: 'var(--e-tab)' };
+  const chrome = e => e.kind === 'tab' || /useChrome|VoiceHost/.test(e.src) && ['tasks', 'wishes', 'watch', 'ideas'].includes(e.a);
+  const edgeLayer = sv('g'); graph.append(edgeLayer);
+  const edges = D.edges.map(e => {
+    const a = pos[e.a], b = pos[e.b];
+    let x1, y1 = a.y + NH / 2, x2, y2 = b.y + NH / 2, d;
+    if (a.x === b.x) { x1 = a.x + NW; x2 = b.x + NW; const k = 40 + Math.abs(y2 - y1) * 0.15; d = `M${x1},${y1} C${x1 + k},${y1} ${x2 + k},${y2} ${x2},${y2}`; }
+    else { const fwd = b.x > a.x; x1 = fwd ? a.x + NW : a.x; x2 = fwd ? b.x : b.x + NW; const k = Math.max(30, Math.abs(x2 - x1) * 0.4) * (fwd ? 1 : -1); d = `M${x1},${y1} C${x1 + k},${y1} ${x2 - k},${y2} ${x2},${y2}`; }
+    const p = sv('path', { d, class: 'e', stroke: COLOR[e.kind] || 'var(--e-push)', 'marker-end': 'url(#arr)' });
+    if (['sheet', 'toast', 'view'].includes(e.kind)) p.setAttribute('stroke-dasharray', '4 3');
+    const tl = sv('title'); tl.textContent = `${byId[e.a].title} → ${byId[e.b].title}: ${e.why} (${e.src})`; p.append(tl);
+    edgeLayer.append(p); return { e, p };
+  });
+  const defs = sv('defs'); const mk = sv('marker', { id: 'arr', viewBox: '0 0 8 8', refX: 7, refY: 4, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' });
+  mk.append(sv('path', { d: 'M0,0 L8,4 L0,8 z', fill: 'var(--muted)' })); defs.append(mk); graph.prepend(defs);
+  const nodeEls = {};
+  D.nodes.forEach(n => {
+    const p = pos[n.id]; const g = sv('g', { class: 'node', transform: `translate(${p.x},${p.y})`, tabindex: 0, role: 'button', 'aria-label': n.title });
+    g.append(sv('rect', { width: NW, height: NH }));
+    const t1 = sv('text', { x: 8, y: 18 }); t1.textContent = n.title.length > 22 ? n.title.slice(0, 21) + '…' : n.title;
+    const t2 = sv('text', { x: 8, y: 34, class: 'r' }); t2.textContent = n.route;
+    let sev = 0; n.screens.forEach(s => ['light', 'dark'].forEach(t => finds(s, t).forEach(x => { if (x.k === 'contrast') sev++; })));
+    g.append(t1, t2);
+    if (sev) { const b = sv('text', { x: NW - 6, y: 34, 'text-anchor': 'end', class: 'badge', fill: 'var(--amber)' }); b.textContent = 'К ' + sev; g.append(b); }
+    const tl = sv('title'); tl.textContent = `${n.title} — ${n.route}`; g.append(tl);
+    g.addEventListener('mouseenter', () => focusNode(n.id)); g.addEventListener('mouseleave', () => focusNode(null));
+    g.addEventListener('click', () => openDetail(n.screens[0])); g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openDetail(n.screens[0]); } });
+    graph.append(g); nodeEls[n.id] = g;
+  });
+  let showChrome = false;
+  function applyChrome() { edges.forEach(({ e, p }) => (p.style.display = !showChrome && chrome(e) ? 'none' : '')); }
+  document.getElementById('tChrome').addEventListener('click', ev => { showChrome = !showChrome; ev.currentTarget.setAttribute('aria-pressed', showChrome); applyChrome(); });
+  applyChrome();
+  function focusNode(id) {
+    graph.classList.toggle('focus', !!id);
+    Object.values(nodeEls).forEach(g => g.classList.remove('on'));
+    edges.forEach(({ e, p }) => { const on = id && (e.a === id || e.b === id); p.classList.toggle('on', !!on); if (on) { nodeEls[e.a].classList.add('on'); nodeEls[e.b].classList.add('on'); } });
+    if (id) nodeEls[id].classList.add('on');
+  }
+
+  // Каркасы экранов
+  function wire(s, t, w) {
+    const svg = sv('svg', { viewBox: '0 0 390 844', width: w, role: 'img', 'aria-label': s });
+    const items = D.wire[s + '|' + t] || [];
+    svg.append(sv('rect', { width: 390, height: 844, fill: t === 'dark' ? '#151515' : '#E7E6E1' }));
+    const cp = sv('clipPath', { id: 'c' + s + t + w }); cp.append(sv('rect', { width: 390, height: 844 })); svg.append(cp);
+    const g = sv('g', { 'clip-path': `url(#c${s}${t}${w})` }); svg.append(g);
+    items.forEach(o => {
+      const [x, y, ww, hh] = o.r;
+      if (o.f || o.b) g.append(sv('rect', { x, y, width: ww, height: hh, rx: Math.min(o.rad || 0, hh / 2), fill: o.f || 'none', stroke: o.b ? o.b[1] : 'none', 'stroke-width': o.b ? o.b[0] : 0 }));
+      if (o.i) g.append(sv('rect', { x: x + ww * .2, y: y + hh * .2, width: ww * .6, height: hh * .6, fill: 'none', stroke: t === 'dark' ? '#888' : '#666', 'stroke-width': 1.2 }));
+      if (o.t) { const tx = sv('text', { x, y: y + Math.min(hh, o.fs * 1.25) * 0.8, 'font-size': o.fs, fill: o.c, 'font-family': o.m ? 'Geist Mono, monospace' : 'Geist, sans-serif', 'font-weight': o.bold ? 600 : 400 }); tx.textContent = o.t.length > 60 ? o.t.slice(0, 60) + '…' : o.t; g.append(tx); }
+    });
+    return svg;
+  }
+  const shots = document.getElementById('shots');
+  function renderShots() {
+    shots.replaceChildren();
+    const ORDER2 = ORDER;
+    ORDER2.forEach(gname => {
+      const ns = D.nodes.filter(n => n.group === gname); if (!ns.length) return;
+      shots.append(el('div', { class: 'groupTitle', text: gname.toUpperCase() }));
+      ns.forEach(n => n.screens.forEach(s => {
+        const c = cnt(s, theme);
+        const b = el('button', { class: 'shot', type: 'button', 'aria-label': `${n.title}: ${s}` });
+        b.append(wire(s, theme, 168));
+        const badges = el('span', { class: 'badges' });
+        if (c.contrast) badges.append(el('span', { class: 'sev1', text: 'К ' + c.contrast }));
+        if (c.tap) badges.append(el('span', { class: 'sev1', text: 'Н ' + c.tap }));
+        if (c.overlap) badges.append(el('span', { class: 'sev1', text: 'Т ' + c.overlap }));
+        b.append(el('span', { class: 'cap' }, [el('span', { text: n.title }), badges]), el('span', { class: 'mono', style: 'text-transform:none', text: s }));
+        b.addEventListener('click', () => openDetail(s));
+        shots.append(b);
+      }));
+    });
+  }
+  document.querySelectorAll('[data-theme-pick]').forEach(b => b.addEventListener('click', () => {
+    theme = b.dataset.themePick; document.querySelectorAll('[data-theme-pick]').forEach(x => x.setAttribute('aria-pressed', x === b)); renderShots();
+  }));
+  renderShots();
+
+  // Детали
+  const det = document.getElementById('detail');
+  function openDetail(s) {
+    const id = screenNode[s], n = byId[id];
+    det.replaceChildren(); det.hidden = false;
+    const close = el('button', { class: 'chip', type: 'button', text: 'ЗАКРЫТЬ' }); close.addEventListener('click', () => (det.hidden = true));
+    det.append(el('div', { class: 'top' }, [el('div', {}, [el('div', { class: 'eyebrow', text: `${n.group} · ${n.route}` }), el('h2', { text: n.title }), el('div', { class: 'mono', style: 'text-transform:none', text: s })]), close]));
+    if (n.screens.length > 1) {
+      const sw = el('div', { class: 'links' }); n.screens.forEach(x => { const b = el('button', { class: 'chip', type: 'button', 'aria-pressed': x === s, text: x }); b.addEventListener('click', () => openDetail(x)); sw.append(b); }); det.append(sw);
+    }
+    det.append(el('div', { class: 'pair' }, [wire(s, 'light', 260), wire(s, 'dark', 260)]));
+    const go = (title, list) => { if (!list.length) return; det.append(el('h3', { text: title })); const l = el('div', { class: 'links' }); list.forEach(([to, why]) => { const b = el('button', { class: 'chip', type: 'button', text: `${byId[to].title} · ${why}` }); b.addEventListener('click', () => openDetail(byId[to].screens[0])); l.append(b); }); det.append(l); };
+    go('Отсюда', D.edges.filter(e => e.a === id).map(e => [e.b, e.why]));
+    go('Сюда', D.edges.filter(e => e.b === id).map(e => [e.a, e.why]));
+    ['light', 'dark'].forEach(t => {
+      const f = finds(s, t); det.append(el('h3', { text: (t === 'light' ? 'Светлая тема' : 'Тёмная тема') + ` · ${f.length} замечаний` }));
+      if (!f.length) return;
+      const groups = {}; f.forEach(x => (groups[x.k] = groups[x.k] || []).push(x));
+      Object.entries(groups).forEach(([k, xs]) => {
+        const ul = el('ul'); xs.slice(0, 14).forEach(x => ul.append(el('li', { class: 'sev' + x.sev, text: `${x.what} — ${x.v}${x.pair ? ' · ' + x.pair : ''}` })));
+        if (xs.length > 14) ul.append(el('li', { text: `и ещё ${xs.length - 14}` }));
+        det.append(el('div', { class: 'mono', text: `${KIND[k]} · ${xs.length}` }), ul);
+      });
+    });
+    det.scrollTop = 0; close.focus();
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') det.hidden = true; });
+})();
+</script>

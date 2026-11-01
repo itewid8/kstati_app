@@ -44,7 +44,7 @@ type Lists = Pick<ReturnType<typeof useStore.getState>, 'tasks' | 'wishes' | 'wa
 type Plan = { [K in keyof Lists]: ListUndo<Lists[K][number]> };
 
 /** Выполнить правку и предложить «ОТМЕНИТЬ»: откатываются только затронутые записи (чужие правки остаются) */
-const withUndo = (label: string, run: () => void): void => {
+export const withUndo = (label: string, run: () => void): void => {
   const before = useStore.getState();
   run();
   const after = useStore.getState();

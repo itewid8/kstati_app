@@ -222,20 +222,25 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     return { text };
   });
 
-  /** Разбор текста — «Разобрать заново» */
+  /**
+   * Разбор текста — «Разобрать заново» и речь, распознанная самим телефоном (src: 'device'; SpeechKit не тратится,
+   * но команда считается в суточный лимит, как запись)
+   */
   app.post('/voice/text', async (req) => {
     const user = await requireUser(req, store);
-    const body = VoiceMeta.extend({ text: z.string().min(1).max(1000) }).parse(req.body);
-    const client = { api: apiLevel(req), app: appVersion(req) };
+    const body = VoiceMeta.extend({ text: z.string().min(1).max(1000), src: z.literal('device').optional() }).parse(req.body);
+    const source = body.src === 'device' ? 'device' : 'text';
+    if (source === 'device') body.text = normalizeTimes(body.text);
+    const client = { api: apiLevel(req), app: appVersion(req), ...(source === 'device' && body.lang && body.lang !== 'ru-RU' && { lang: body.lang }) };
     const context = await buildContext(user, body, client.api);
     const left = await takeVoiceQuota(user);
     const t0 = Date.now();
     try {
       const { result, raw, usage, attempts } = await parse(body.text, context);
-      await writeLog({ source: 'text', userId: user.id, ...client, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
+      await writeLog({ source, userId: user.id, ...client, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
       return { transcript: body.text, result, left };
     } catch (e) {
-      await writeLog({ source: 'text', userId: user.id, ...client, transcript: body.text, ctx: ctxSize(context), llmMs: Date.now() - t0, error: errText(e) });
+      await writeLog({ source, userId: user.id, ...client, transcript: body.text, ctx: ctxSize(context), llmMs: Date.now() - t0, error: errText(e) });
       throw e;
     }
   });

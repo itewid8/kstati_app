@@ -24,6 +24,8 @@ import {
   spokenUntil,
 } from './spoken.js';
 import { addUsage, complete, NO_USAGE, type Usage } from './yandex.js';
+import { quickParse } from './quick.js';
+import { config } from './config.js';
 import {
   GENRES,
   KINDS,
@@ -636,6 +638,14 @@ export async function parseText(input: string, ctx: Context, model?: string): Pr
   if (!input.trim()) return { result: { type: 'unknown' }, raw: '', usage: NO_USAGE, attempts: 0 };
   // «в 18 0 0» → «в 18:00»: время, записанное распознаванием через пробел
   const text = normalizeTimes(input);
+  // Простые команды («завтра в 7 йога», «хочу наушники») — без модели: бесплатно и мгновенно
+  if (config.quickRules) {
+    const quick = quickParse(text, ctx);
+    if (quick) {
+      const result = normalize(quick as RawAction[], ctx, text);
+      if (result.type === 'items') return { result, raw: 'rules', usage: NO_USAGE, attempts: 0 };
+    }
+  }
   const messages = buildMessages(text, ctx);
   let raw = '';
   let usage = NO_USAGE;

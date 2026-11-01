@@ -56,6 +56,8 @@ export const config = {
 
   /** Сколько голосовых команд в сутки на человека */
   voiceDailyLimit: Number(env('VOICE_DAILY_LIMIT', '30')),
+  /** Простые команды разбирать правилами, без YandexGPT (QUICK_RULES=0 — всё через модель) */
+  quickRules: env('QUICK_RULES', '1') !== '0',
 };
 
 /**
