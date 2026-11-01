@@ -23,6 +23,8 @@ export type VoiceCreateSheetProps = {
   levels: readonly number[];
   /** Идёт запись */
   recording: boolean;
+  /** Расход команды в шапке: «1 840 ТОК · 0,37 ₽» */
+  note?: string;
   /** Распознанная фраза (без кавычек) */
   phrase: string;
   fields: readonly RecognizedField[];
@@ -52,6 +54,7 @@ export const VoiceCreateSheet = memo(function VoiceCreateSheet({
   duration,
   levels,
   recording,
+  note,
   phrase,
   fields,
   visible,
@@ -62,7 +65,7 @@ export const VoiceCreateSheet = memo(function VoiceCreateSheet({
   onClose,
 }: VoiceCreateSheetProps) {
   const { c } = useTheme();
-  const header = useMemo(() => ({ duration, levels, live: recording }), [duration, levels, recording]);
+  const header = useMemo(() => ({ duration, levels, live: recording, ...(note && { note }) }), [duration, levels, recording, note]);
   const actions = useMemo<SheetAction[]>(
     () => [
       { key: 'cancel', label: 'ОТМЕНА', onPress: onCancel },

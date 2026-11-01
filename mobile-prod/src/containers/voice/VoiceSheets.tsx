@@ -14,7 +14,7 @@ import { problemSheet, type ProblemCard } from '@/adapters/voice/problem';
 import { recButtons, type RecButton, type RecMode } from '@/adapters/voice/recording';
 import type { PlansAnswer } from '@/lib/plans';
 import type { ChangeDraft, DraftItem } from '@/lib/types';
-import { beginRecording, cancelVoice, disarmRecording, finishRecording } from '@/lib/voice';
+import { beginRecording, cancelVoice, disarmRecording, finishRecording, useVoiceSpend } from '@/lib/voice';
 import { recDrag } from '@/ui/BottomNav';
 import {
   AskAgendaSheet,
@@ -41,6 +41,12 @@ import {
   saveVoiceItem,
 } from './actions';
 import { ProblemSheet } from './ProblemSheet';
+
+/** Шапка окна ответа: вместо ярлыка — расход команды («1 840 ТОК · 0,37 ₽»), если сервер его прислал */
+function useAnswerHeader(levels: readonly number[], ms: number, badge?: string) {
+  const note = useVoiceSpend((x) => x.note);
+  return useMemo(() => ({ ...sheetHeader(levels, ms, badge), ...(note && { note }) }), [levels, ms, badge, note]);
+}
 
 /** Общее для окон: волна и длительность последней записи, отступ снизу */
 export type SheetBase = { levels: readonly number[]; ms: number; bottomInset: number };
@@ -100,9 +106,11 @@ export const CreateSheet = memo(function CreateSheet({ item, transcript, s, leve
   const fields = useMemo(() => createFields(item, s), [item, s]);
   const onSave = useCallback(() => saveVoiceItem(item, transcript), [item, transcript]);
   const onEdit = useCallback(() => editVoiceItem(item, transcript), [item, transcript]);
+  const note = useVoiceSpend((x) => x.note);
   return (
     <VoiceCreateSheet
       duration={sheetHeader(levels, ms).duration}
+      note={note ?? undefined}
       levels={levels}
       recording={false}
       phrase={transcript}
@@ -126,7 +134,7 @@ export const DeleteSheet = memo(function DeleteSheet({ change, transcript, s, cl
   const [scope, setScope] = useState<DeleteScope>(data?.scope ?? 'all');
   const occ = data?.occ ?? null;
   const onDelete = useCallback(() => applyDelete(change, scope, occ), [change, scope, occ]);
-  const header = useMemo(() => sheetHeader(levels, ms, 'УДАЛИТЬ'), [levels, ms]);
+  const header = useAnswerHeader(levels, ms, 'УДАЛИТЬ');
   if (!data) return null;
   return (
     <AskDeleteSheet
@@ -149,7 +157,7 @@ export const DeleteSheet = memo(function DeleteSheet({ change, transcript, s, cl
 export const MoveSheet = memo(function MoveSheet({ change, transcript, s, clock, levels, ms, bottomInset }: ChangeProps) {
   const data = useMemo(() => moveSheetProps(change, s, clock), [change, s, clock]);
   const badge = data?.badge;
-  const header = useMemo(() => sheetHeader(levels, ms, badge), [levels, ms, badge]);
+  const header = useAnswerHeader(levels, ms, badge);
   const onConfirm = useCallback(() => applyMove(change), [change]);
   const onEdit = useCallback(() => editChange(change, s), [change, s]);
   if (!data) return null;
@@ -186,7 +194,7 @@ export const AgendaSheet = memo(function AgendaSheet({ answer, transcript, s, cl
   const mayFree = answer.who?.length === 1 && dayNo(answer.to) - dayNo(answer.from) <= 2;
   const maxHeight = height - insets.top - insets.bottom - TOP_GAP - AGENDA_CHROME - (mayFree ? FREE_BOX : 0);
   const data = useMemo(() => agendaSheetProps(answer, s, clock, { maxHeight }), [answer, s, clock, maxHeight]);
-  const header = useMemo(() => sheetHeader(levels, ms, 'ПОКАЗАТЬ'), [levels, ms]);
+  const header = useAnswerHeader(levels, ms, 'ПОКАЗАТЬ');
   const groupId = data.groupId;
   const view = data.view;
   const onOpen = useCallback(() => openAgenda(answer, { groupId, view }), [answer, groupId, view]);
@@ -210,7 +218,7 @@ export const AgendaSheet = memo(function AgendaSheet({ answer, transcript, s, cl
 
 export const ErrorSheet = memo(function ErrorSheet({ card, levels, ms, bottomInset }: SheetBase & { card: ProblemCard }) {
   const data = useMemo(() => problemSheet(card), [card]);
-  const header = useMemo(() => sheetHeader(levels, ms), [levels, ms]);
+  const header = useAnswerHeader(levels, ms);
   const add = data.add;
   const onAdd = useMemo(() => (add ? () => openAddMenu(add.prompt, add.title) : undefined), [add]);
   return (

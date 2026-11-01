@@ -11,12 +11,12 @@ import { config } from './config.js';
 import { sendMail } from './mail.js';
 import { createFeedbackIssue, type GithubDeps } from './githubFeedback.js';
 import { randomUUID } from 'node:crypto';
-import { writeLog } from './log.js';
+import { costOf, writeLog } from './log.js';
 import { parseText } from './parse.js';
 import { normalizeTimes } from './spoken.js';
 import type { Store, User } from './store/index.js';
 import type { Context } from './types.js';
-import { recognize, STT_LANGS, YandexError, type SttLang } from './yandex.js';
+import { recognize, STT_LANGS, YandexError, type SttLang, type Usage } from './yandex.js';
 
 /** Текст ошибки для журнала — с причиной из cause (код сети и т. п.), иначе видно только «fetch failed» */
 const errText = (e: unknown) => {
@@ -153,6 +153,13 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     };
   }
 
+  /** Расход команды для приложения: токены модели и рубли (модель + распознавание SpeechKit, если было) */
+  const spendOf = (usage: Usage | undefined, audioSec: number | null | false) => {
+    const tokens = usage?.total ?? 0;
+    const stt = audioSec === false ? 0 : Math.max(1, Math.ceil((audioSec ?? 0) / 15)) * config.sttPrice15s;
+    return { tokens, rub: Math.round(((usage ? costOf(usage, config.model) : 0) + stt) * 100) / 100 };
+  };
+
   /** Суточный лимит голосовых команд на человека */
   const quotaKey = (user: User) => `voice#${user.id}#${mskDay()}`;
   async function takeVoiceQuota(user: User) {
@@ -238,7 +245,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     try {
       const { result, raw, usage, attempts } = await parse(body.text, context);
       await writeLog({ source, userId: user.id, ...client, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
-      return { transcript: body.text, result, left };
+      return { transcript: body.text, result, left, spend: spendOf(usage, false) };
     } catch (e) {
       await writeLog({ source, userId: user.id, ...client, transcript: body.text, ctx: ctxSize(context), llmMs: Date.now() - t0, error: errText(e) });
       throw e;
@@ -267,14 +274,14 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       t1 = Date.now();
       if (!transcript) {
         await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript: '', result: 'unknown', sttMs: t1 - t0 });
-        return { transcript: '', result: { type: 'unknown' }, left };
+        return { transcript: '', result: { type: 'unknown' }, left, spend: spendOf(undefined, audioSec) };
       }
       const { result, raw, usage, attempts } = await parse(transcript, context);
       await writeLog({
         source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, result: result.type, detail: result,
         raw, attempts, tokens: usage, ctx: ctxSize(context), sttMs: t1 - t0, llmMs: Date.now() - t1,
       });
-      return { transcript, result, left };
+      return { transcript, result, left, spend: spendOf(usage, audioSec) };
     } catch (e) {
       await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, ctx: ctxSize(context), error: errText(e) });
       throw e;

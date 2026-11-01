@@ -26,14 +26,14 @@ function fail(e: unknown): VoiceFail {
 }
 
 /** POST /voice/text → ParseResult («Разобрать заново», текст без микрофона). left — сколько команд осталось на сегодня */
-export async function parseOnServer(text: string, src?: 'device'): Promise<{ ok: true; result: ParseResult; left?: number } | VoiceFail> {
+export async function parseOnServer(text: string, src?: 'device'): Promise<{ ok: true; result: ParseResult; left?: number; spend?: VoiceSpend } | VoiceFail> {
   try {
-    const json = await request<{ result: ParseResult; left?: number }>('/voice/text', {
+    const json = await request<{ result: ParseResult; left?: number; spend?: unknown }>('/voice/text', {
       token: useStore.getState().session?.token,
       body: { ...meta(), text, ...(src && { src, lang: useStore.getState().voiceLang }) },
       timeoutMs: 60_000,
     });
-    return { ok: true, result: json.result, ...(typeof json.left === 'number' && { left: json.left }) };
+    return { ok: true, result: json.result, ...(typeof json.left === 'number' && { left: json.left }), ...spendOf(json.spend) };
   } catch (e) {
     return fail(e);
   }
@@ -76,7 +76,7 @@ export function deleteRecording(uri: string | null | undefined) {
  * POST /voice: запись → { transcript, result }.
  * Файл читаем сами и шлём JSON с base64 — без FormData, с которым у fetch в Expo проблемы на Android.
  */
-export async function uploadVoice(uri: string): Promise<{ ok: true; transcript: string; result: ParseResult; left?: number } | VoiceFail> {
+export async function uploadVoice(uri: string): Promise<{ ok: true; transcript: string; result: ParseResult; left?: number; spend?: VoiceSpend } | VoiceFail> {
   let audio: string;
   try {
     audio = toBase64(await new File(fileUriOf(uri)).arrayBuffer());
@@ -85,18 +85,26 @@ export async function uploadVoice(uri: string): Promise<{ ok: true; transcript: 
   }
   try {
     const s = useStore.getState();
-    const json = await request<{ transcript: string; result: ParseResult; left?: number }>('/voice', {
+    const json = await request<{ transcript: string; result: ParseResult; left?: number; spend?: unknown }>('/voice', {
       token: s.session?.token,
       body: { ...meta(), audio, lang: s.voiceLang },
       timeoutMs: 60_000,
     });
-    return { ok: true, transcript: json.transcript, result: json.result, ...(typeof json.left === 'number' && { left: json.left }) };
+    return { ok: true, transcript: json.transcript, result: json.result, ...(typeof json.left === 'number' && { left: json.left }), ...spendOf(json.spend) };
   } catch (e) {
     return fail(e);
   }
 }
 
 export type VoiceQuota = { limit: number; used: number; left: number };
+
+/** Расход команды с сервера: токены модели и рубли (модель + распознавание сервером) */
+export type VoiceSpend = { tokens: number; rub: number };
+function spendOf(v: unknown): { spend?: VoiceSpend } {
+  if (!v || typeof v !== 'object') return {};
+  const { tokens, rub } = v as Record<string, unknown>;
+  return typeof tokens === 'number' && typeof rub === 'number' ? { spend: { tokens, rub } } : {};
+}
 
 /** GET /voice/quota — голосовые команды за сегодня (лимит не тратит). Нет связи или старый сервер — null */
 export async function fetchVoiceQuota(): Promise<VoiceQuota | null> {
