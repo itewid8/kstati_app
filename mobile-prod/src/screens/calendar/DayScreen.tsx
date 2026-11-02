@@ -19,13 +19,14 @@ import {
   type LaneBlock,
 } from '@/lib/calendarLayout';
 import type { ID } from '@/lib/types';
-import { size as S, useTheme, type LiftTarget } from '@/ui';
+import { size as S, useDesktop, useTheme, type LiftTarget } from '@/ui';
 import { AllDayBar, DAY_BAR } from './components/AllDayBar';
 import { CAL, CalendarScaffold, NO_INSETS, useScreenSize } from './components/CalendarScaffold';
 import { DayEventBlock } from './components/DayEventBlock';
 import { DAY_PHONE, PhoneBlock } from './components/PhoneBlock';
 import { HourLines } from './components/HourLines';
 import { useLongPressId } from './components/longPress';
+import { useDragMove } from './components/useDragMove';
 import { NowMarker } from './components/NowMarker';
 import { usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { PeriodArrows, PeriodNote, PeriodTitle, PeriodWeekday, TodayButton } from './components/PeriodBar';
@@ -56,7 +57,12 @@ export type DayScreenProps = CalendarChromeProps &
     /** Удержание дела или полосы (быстрые действия): id и нажатый блок */
     onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
     onLongPressBar?: (id: ID, lift: LiftTarget) => void;
+    /** Перенос мышью (веб, компьютер): на minutes минут, дни не меняются */
+    onMoveEvent?: (id: ID, days: number, minutes: number) => void;
   };
+
+/** Перенос мышью: шаг 15 минут */
+const SNAP_MIN = 15;
 
 const NO_PHONE: readonly PhoneSlot[] = [];
 
@@ -96,7 +102,11 @@ const DayEvent = memo(function DayEvent({
   byId,
   onOpenEvent,
   onLongPressEvent,
+  hourPx,
+  onMoveEvent,
 }: ItemProps & {
+  hourPx: number;
+  onMoveEvent?: (id: ID, days: number, minutes: number) => void;
   event: TimedEvent;
   lane: LaneBlock;
   gridX: number;
@@ -107,8 +117,19 @@ const DayEvent = memo(function DayEvent({
   const colors = usePeopleColors(event.people, byId);
   const open = useCallback(() => onOpenEvent?.(event.id), [onOpenEvent, event.id]);
   const hold = useLongPressId(event.id, onLongPressEvent);
+  const desktop = useDesktop();
+  const drop = useCallback(
+    (_dx: number, dy: number) => onMoveEvent?.(event.id, 0, Math.round((dy / hourPx) * (60 / SNAP_MIN)) * SNAP_MIN),
+    [hourPx, onMoveEvent, event.id],
+  );
+  const drag = useDragMove(desktop && !!onMoveEvent, drop);
   const who = namesOf(peopleOf(event.people, byId)).toUpperCase() + (event.parentTitle ? ` · ${event.parentTitle.toUpperCase()}` : '');
   return (
+    <View
+      ref={drag.ref}
+      pointerEvents="box-none"
+      style={[StyleSheet.absoluteFill, drag.offset && { transform: [{ translateY: drag.offset.y }], zIndex: 10, opacity: 0.85 }]}
+    >
     <DayEventBlock
       x={gridX + lane.x}
       y={gridY + lane.y}
@@ -126,6 +147,7 @@ const DayEvent = memo(function DayEvent({
       onPress={onOpenEvent ? open : undefined}
       onLongPress={hold}
     />
+    </View>
   );
 });
 
@@ -187,6 +209,7 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
     onOpenEvent,
     onOpenBar,
     onLongPressEvent,
+    onMoveEvent,
     onLongPressBar,
     phone = NO_PHONE,
     onOpenPhone,
@@ -284,6 +307,8 @@ export const DayScreen = memo(function DayScreen(props: DayScreenProps) {
             byId={byId}
             onOpenEvent={onOpenEvent}
             onLongPressEvent={onLongPressEvent}
+            hourPx={hourPx}
+            onMoveEvent={onMoveEvent}
           />
         ) : null;
       })}

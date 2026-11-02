@@ -83,6 +83,7 @@ export const AllDayBar = memo(function AllDayBar(props: Props) {
       accessibilityLabel={title}
       onPress={onPress}
       onLongPress={lift.onLongPress}
+      {...lift.menu}
       delayLongPress={LONG_PRESS_MS}
       style={[styles.bar, { left: x, top: y, width, height, paddingLeft }]}
     >

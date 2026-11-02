@@ -19,7 +19,7 @@ import {
   type IsoDate,
 } from '@/lib/calendarLayout';
 import type { ID } from '@/lib/types';
-import { fonts, size as S, useTheme, type LiftTarget } from '@/ui';
+import { fonts, size as S, useDesktop, useTheme, type LiftTarget } from '@/ui';
 import { AllDayBar, WEEK_BAR } from './components/AllDayBar';
 import { CAL, CalendarScaffold, NO_INSETS, useScreenSize } from './components/CalendarScaffold';
 import { HourLines } from './components/HourLines';
@@ -28,6 +28,7 @@ import { usePeopleColors, usePeopleMap } from './components/PeopleColor';
 import { PeriodArrows, PeriodNote, PeriodTitle, TodayButton } from './components/PeriodBar';
 import { PersonTabs } from './components/PersonTabs';
 import { useLongPressId } from './components/longPress';
+import { useDragMove } from './components/useDragMove';
 import { PhoneBlock, WEEK_PHONE } from './components/PhoneBlock';
 import { WeekEventBlock } from './components/WeekEventBlock';
 import { MONTHS_SHORT, WEEKDAYS, addDays, namesOf, pad2, parts, peopleOf, timeRange } from './format';
@@ -57,6 +58,8 @@ export type WeekScreenProps = CalendarChromeProps &
     /** Удержание дела или полосы (быстрые действия): id и нажатый блок */
     onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
     onLongPressBar?: (id: ID, lift: LiftTarget) => void;
+    /** Перенос мышью (веб, компьютер): на days дней и minutes минут */
+    onMoveEvent?: (id: ID, days: number, minutes: number) => void;
   };
 
 /** Вертикаль недели (px от верха экрана, без safe area) */
@@ -87,6 +90,11 @@ type DayEventsProps = {
   onLongPressEvent?: (id: ID, lift: LiftTarget) => void;
 };
 
+/** Перенос мышью: шаг 15 минут */
+const SNAP_MIN = 15;
+
+type DragGrid = { col: number; hourPx: number; dayIdx: number; onMoveEvent?: (id: ID, days: number, minutes: number) => void };
+
 const WeekEvent = memo(function WeekEvent({
   event,
   block,
@@ -95,12 +103,31 @@ const WeekEvent = memo(function WeekEvent({
   byId,
   onOpenEvent,
   onLongPressEvent,
-}: { event: TimedEvent; block: ColumnBlock } & Omit<DayEventsProps, 'blocks' | 'events'>) {
+  col,
+  hourPx,
+  dayIdx,
+  onMoveEvent,
+}: { event: TimedEvent; block: ColumnBlock } & Omit<DayEventsProps, 'blocks' | 'events'> & DragGrid) {
   const colors = usePeopleColors(event.people, byId);
   const who = namesOf(peopleOf(event.people, byId)) + (event.parentTitle ? ` · ${event.parentTitle}` : '');
   const open = useCallback(() => onOpenEvent?.(event.id), [onOpenEvent, event.id]);
   const hold = useLongPressId(event.id, onLongPressEvent);
+  const desktop = useDesktop();
+  const drop = useCallback(
+    (dx: number, dy: number) => {
+      const days = Math.min(DAYS - 1 - dayIdx, Math.max(-dayIdx, Math.round(dx / col)));
+      const minutes = Math.round((dy / hourPx) * (60 / SNAP_MIN)) * SNAP_MIN;
+      onMoveEvent?.(event.id, days, minutes);
+    },
+    [col, hourPx, dayIdx, onMoveEvent, event.id],
+  );
+  const drag = useDragMove(desktop && !!onMoveEvent, drop);
   return (
+    <View
+      ref={drag.ref}
+      pointerEvents="box-none"
+      style={[StyleSheet.absoluteFill, drag.offset && { transform: [{ translateX: drag.offset.x }, { translateY: drag.offset.y }], zIndex: 10, opacity: 0.85 }]}
+    >
     <WeekEventBlock
       colX={colX}
       gridY={gridY}
@@ -116,6 +143,7 @@ const WeekEvent = memo(function WeekEvent({
       onPress={onOpenEvent ? open : undefined}
       onLongPress={hold}
     />
+    </View>
   );
 });
 
@@ -179,6 +207,7 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
     onOpenEvent,
     onOpenBar,
     onLongPressEvent,
+    onMoveEvent,
     onLongPressBar,
     phone = NO_PHONE_DAYS,
     onOpenPhone,
@@ -313,6 +342,10 @@ export const WeekScreen = memo(function WeekScreen(props: WeekScreenProps) {
               byId={byId}
               onOpenEvent={onOpenEvent}
               onLongPressEvent={onLongPressEvent}
+              col={col}
+              hourPx={hourPx}
+              dayIdx={i}
+              onMoveEvent={onMoveEvent}
             />
           ) : null;
         });

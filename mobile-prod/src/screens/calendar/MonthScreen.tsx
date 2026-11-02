@@ -146,6 +146,7 @@ const CellItem = memo(function CellItem({ item, byId, onPress, onLongPressEvent 
       accessibilityLabel={item.title}
       onPress={onPress}
       onLongPress={lift.onLongPress}
+      {...lift.menu}
       delayLongPress={LONG_PRESS_MS}
       style={styles.item}
     >
@@ -244,6 +245,7 @@ const AgendaItem = memo(function AgendaItem({
       accessibilityLabel={`${row.time} ${row.title}`}
       onPress={onOpenEvent ? open : undefined}
       onLongPress={lift.onLongPress}
+      {...lift.menu}
       delayLongPress={LONG_PRESS_MS}
       style={[styles.agenda, { backgroundColor: c.panel, borderTopColor: c.hair }]}
     >

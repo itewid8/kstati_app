@@ -2,7 +2,7 @@ import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { size as S, space } from './tokens';
 import { useTheme } from './useTheme';
-import { DIALOG_WIDTH, useDesktop } from './desktop';
+import { DIALOG_WIDTH, useDesktop, useEscape } from './desktop';
 
 type Props = {
   visible: boolean;
@@ -21,6 +21,7 @@ type Props = {
 export const BottomSheet = memo(function BottomSheet({ visible, onClose, bottomInset = 0, children, style }: Props) {
   const { c } = useTheme();
   const desktop = useDesktop();
+  useEscape(onClose, visible && desktop);
   if (!visible) return null;
   if (desktop)
     return (

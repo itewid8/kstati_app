@@ -41,7 +41,7 @@ import {
 import { toISODate } from '@/lib/dates';
 import { useStore } from '@/lib/store';
 import { CalendarContentWrap } from '@/screens/calendar/components/CalendarScaffold';
-import { size as S } from '@/ui';
+import { size as S, useDesktop } from '@/ui';
 import { useInsets } from '../common';
 import { nextDay, prevDay } from './DayContainer';
 import { nextMonth, prevMonth } from './MonthContainer';
@@ -209,7 +209,10 @@ export function CalendarZoom({ view, children }: Props) {
       opacity.value = withTiming(1, FADE_IN);
     });
 
+  // На компьютере мышью дела переносят по сетке, а период листают стрелками
+  const desktop = useDesktop();
   const page = Gesture.Pan()
+    .enabled(!desktop)
     .maxPointers(1)
     .activeOffsetX([-16, 16])
     .failOffsetY([-12, 12])

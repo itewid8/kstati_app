@@ -40,6 +40,7 @@ export const ListRow = memo(function ListRow(props: Props) {
       ref={lift.ref}
       onPress={onPress}
       onLongPress={lift.onLongPress}
+      {...lift.menu}
       delayLongPress={LONG_PRESS_MS}
       disabled={!onPress && !lift.onLongPress}
       style={[styles.row, { paddingRight: rightInset, backgroundColor: c.panel, borderTopColor: c.hair }, style]}

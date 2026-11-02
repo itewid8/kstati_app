@@ -33,6 +33,25 @@ export const moveToDate = (t: Timing, date: IsoDate): ChangePatch | null => {
   return { date, ...(t.endDate ? { endDate: shiftIso(t.endDate, daysBetween(t.date, date)) } : null) };
 };
 
+/**
+ * Перенос мышью в календаре: на days дней и minutes минут, конец едет вместе. Дело без времени — только день.
+ * Ничего не меняется или нет даты — null
+ */
+export const moveBy = (t: Timing, days: number, minutes: number): ChangePatch | null => {
+  if (!t.date || (!days && !minutes)) return null;
+  if (!t.time) return days ? moveToDate(t, isoOf(dayNo(t.date) + days)) : null;
+  const at = (date: IsoDate, time: string) => dayNo(date) * DAY + toMin(time) + days * DAY + minutes;
+  const start = at(t.date, t.time);
+  const date = isoOf(Math.floor(start / DAY));
+  const patch: ChangePatch = { date, time: hhmm(((start % DAY) + DAY) % DAY) };
+  if (t.endTime) {
+    const end = at(t.endDate ?? t.date, t.endTime);
+    const endDate = isoOf(Math.floor(end / DAY));
+    return { ...patch, endTime: hhmm(((end % DAY) + DAY) % DAY), endDate: endDate > date ? endDate : null };
+  }
+  return t.endDate ? { ...patch, endDate: shiftIso(t.endDate, daysBetween(t.date, date)) } : patch;
+};
+
 /** На час позже: начало и конец сдвигаются вместе, через полночь — на следующий день. Без времени — null */
 const plusHour = (t: Timing): ChangePatch | null => {
   if (!t.date || !t.time) return null;

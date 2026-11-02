@@ -2,10 +2,10 @@
  * Компьютерная раскладка веб-версии (окно от 1024 px): боковая панель слева, содержимое справа.
  * В панели — группа, разделы, лента, профиль и запись голоса (на телефоне это верхняя панель и нижняя навигация).
  * Списки и формы — по центру шириной до CONTENT_MAX, календарь — во всю ширину.
- * Горячие клавиши: 1–4 — разделы, N — новое дело, R — запись голоса, Esc — закрыть окно голоса.
+ * Горячие клавиши: 1–4 — разделы, N — новое дело, R — запись голоса, Esc — закрыть редактор или окно голоса.
  */
 import { router, usePathname } from 'expo-router';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useChrome } from '@/containers/common/useChrome';
 import { nav } from '@/containers/common/nav';
@@ -61,7 +61,10 @@ function useHotkeys(onNavigate: (t: NavTab) => void) {
       } else if (k === 'r' || k === 'к') {
         e.preventDefault();
         toggleRecording();
-      } else if (e.key === 'Escape') cancelVoice();
+      } else if (e.key === 'Escape') {
+        if (window.location.pathname.startsWith('/edit/') && router.canGoBack()) router.back();
+        else cancelVoice();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -73,8 +76,11 @@ export function DesktopShell({ children }: { children: ReactNode }) {
   const signedIn = useSignedIn();
   const path = usePathname();
   const { c } = useTheme();
+  // Редактор — панель поверх раздела: раскладка остаётся как у раздела под ним
+  const under = useRef(path);
+  if (!path.startsWith('/edit/')) under.current = path;
   if (!desktop || !signedIn || /^\/(login|onboarding)/.test(path)) return <>{children}</>;
-  const full = path.startsWith('/tasks');
+  const full = /^\/(tasks|edit)/.test(under.current);
   return (
     <View style={[styles.row, { backgroundColor: c.bg }]}>
       <Sidebar active={tabOf(path)} />

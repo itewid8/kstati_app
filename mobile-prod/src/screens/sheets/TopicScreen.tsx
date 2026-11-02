@@ -125,6 +125,7 @@ const IdeaRow = memo(function IdeaRow(props: RowProps) {
       accessibilityLabel={idea.title}
       onPress={onOpen ? () => onOpen(idea.id) : undefined}
       onLongPress={lift.onLongPress}
+      {...lift.menu}
       delayLongPress={LONG_PRESS_MS}
       disabled={!onOpen && !lift.onLongPress}
       style={[styles.row, selected !== undefined && styles.selRow, { backgroundColor: c.panel, borderTopColor: c.hair }]}

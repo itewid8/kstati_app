@@ -7,6 +7,7 @@ import type { IsoDate } from '@/lib/calendarLayout';
 import { toISODate } from '@/lib/dates';
 import { useStore } from '@/lib/store';
 import { WeekScreen } from '@/screens/calendar/WeekScreen';
+import { moveTaskBy } from '../lists/bulk';
 import { holdTask } from '../quick/quickStore';
 import { useClock, usePersonColors, type StoreState } from '../common';
 import { openTaskKey, togglePerson, useCalendarChrome, useCalendarSnapshot } from './useCalendar';
@@ -62,6 +63,7 @@ export const WeekContainer = () => {
       onOpenBar={openTaskKey}
       onLongPressEvent={holdTask}
       onLongPressBar={holdTask}
+      onMoveEvent={moveTaskBy}
       onTogglePerson={togglePerson}
     />
   );

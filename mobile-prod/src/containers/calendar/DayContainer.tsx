@@ -6,6 +6,7 @@ import { phoneBarsIn, phoneSlotsOn } from '@/adapters/calendar/phone';
 import { toISODate } from '@/lib/dates';
 import { useStore } from '@/lib/store';
 import { DayScreen } from '@/screens/calendar/DayScreen';
+import { moveTaskBy } from '../lists/bulk';
 import { holdTask } from '../quick/quickStore';
 import { useClock, usePersonColors, type StoreState } from '../common';
 import { openTaskKey, togglePerson, useCalendarChrome, useCalendarSnapshot } from './useCalendar';
@@ -46,6 +47,7 @@ export const DayContainer = () => {
       onOpenEvent={openTaskKey}
       onOpenBar={openTaskKey}
       onLongPressEvent={holdTask}
+      onMoveEvent={moveTaskBy}
       onLongPressBar={holdTask}
       onTogglePerson={togglePerson}
     />

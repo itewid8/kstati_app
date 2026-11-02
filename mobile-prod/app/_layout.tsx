@@ -27,7 +27,7 @@ import { startSync } from '@/lib/sync';
 import { watchWidget } from '@/widget/sync';
 import type { ThemePref } from '@/lib/types';
 import { holdEnd, holdStart } from '@/lib/voice';
-import { RecButtonContext, useTheme, type RecButtonHandlers } from '@/ui';
+import { RecButtonContext, useDesktop, useTheme, type RecButtonHandlers } from '@/ui';
 import { uiFonts } from '@/ui/fonts';
 import { DesktopShell } from '@/components/DesktopShell';
 import { setForcedScheme } from '@/ui/forcedScheme';
@@ -47,6 +47,8 @@ const HOLD: RecButtonHandlers = { onPressIn: () => void holdStart(), onPressOut:
 
 /** Окна редактирования — экраны корневого стека, выезжают снизу */
 const EDITOR = { animation: 'slide_from_bottom' as const, animationDuration: 250 };
+/** На компьютере — панель справа поверх раздела (DesktopPanel) */
+const EDITOR_PANEL = { presentation: 'transparentModal' as const, animation: 'fade' as const, animationDuration: 150, contentStyle: { backgroundColor: 'transparent' } };
 
 /** Ошибка в интерфейсе — экран «Что-то сломалось» с отчётом вместо белого экрана */
 export function ErrorBoundary(props: { error: Error; retry: () => Promise<void> }) {
@@ -58,6 +60,7 @@ export default function RootLayout() {
   const theme = useStore((s) => s.theme);
   const hold = useStore((s) => s.micMode === 'hold');
   const signedIn = useSignedIn();
+  const editor = useDesktop() ? EDITOR_PANEL : EDITOR;
   useEffect(() => applyTheme(theme), [theme]);
   // Напоминания о делах — локальные уведомления на телефоне
   useEffect(() => watchReminders(), []);
@@ -107,8 +110,8 @@ export default function RootLayout() {
               <Stack.Protected guard={signedIn}>
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="onboarding" />
-                <Stack.Screen name="edit/task/[id]" options={EDITOR} />
-                <Stack.Screen name="edit/plan/[id]" options={EDITOR} />
+                <Stack.Screen name="edit/task/[id]" options={editor} />
+                <Stack.Screen name="edit/plan/[id]" options={editor} />
                 <Stack.Screen name="activity" />
                 <Stack.Screen name="group/[id]" />
                 <Stack.Screen name="settings/index" />
