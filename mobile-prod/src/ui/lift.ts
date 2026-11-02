@@ -3,8 +3,9 @@
  * свою копию без обработчиков — хост быстрых действий рисует её поднятой над затемнением (C-Quick*).
  * Компонент вызывает useLift и вешает ref и onLongPress на свой Pressable (delayLongPress = LONG_PRESS_MS).
  */
-import { useCallback, useRef, type ReactElement } from 'react';
+import { useCallback, useMemo, useRef, type ReactElement } from 'react';
 import type { View } from 'react-native';
+import { contextMenu } from './desktop';
 import type { LiftRect, LiftShape } from './liftMath';
 
 export type { LiftRect, LiftShape } from './liftMath';
@@ -26,5 +27,6 @@ export const useLift = (onLift: LiftHandler | undefined, shape: LiftShape, copy:
     if (!onLift || !view) return;
     view.measureInWindow((x, y, width, height) => onLift({ rect: { x, y, width, height }, shape, node: latest.current() }));
   }, [onLift, shape]);
-  return { ref, onLongPress: onLift ? onLongPress : undefined };
+  const menu = useMemo(() => contextMenu(onLift ? onLongPress : undefined), [onLift, onLongPress]);
+  return { ref, onLongPress: onLift ? onLongPress : undefined, menu };
 };

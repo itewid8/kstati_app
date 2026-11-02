@@ -8,7 +8,7 @@ import type { Idea, Topic, WatchItem, Wish } from '@/lib/types';
 import { quickIdeaFixture, quickTaskFixture, quickWatchFixture, quickWishFixture } from '@/screens/fixtures/quick';
 import { CLOCK, snapshot, task } from '../common/fixture';
 import { colorMap } from '../common/people';
-import { NO_TOPIC, giftTaskTitle, moveChange, moveToDate, movePatches, nextSaturday, quickView, splitIdea, taskCopy, topicSegments } from './index';
+import { NO_TOPIC, giftTaskTitle, moveBy, moveChange, moveToDate, movePatches, nextSaturday, quickView, splitIdea, taskCopy, topicSegments } from './index';
 import type { QuickEnv, QuickTarget } from './types';
 
 const ENV: QuickEnv = { today: CLOCK.today, gifts: true };
@@ -120,6 +120,13 @@ describe('перенос', () => {
   test('ДАТА… у раза серии: выбранный день, время прежнее', () => {
     assert.deepEqual(moveToDate({ date: '2026-10-05', time: '19:00', endDate: null, endTime: '20:00' }, '2026-10-08'), { date: '2026-10-08' });
     assert.equal(moveToDate({ date: '2026-10-05', time: '19:00' }, '2026-10-05'), null);
+  });
+  test('перенос мышью: день и время вместе с концом, через полночь, без времени — только день', () => {
+    assert.deepEqual(moveBy({ date: '2026-10-05', time: '19:00', endDate: null, endTime: '20:00' }, 2, 30), { date: '2026-10-07', time: '19:30', endTime: '20:30', endDate: null });
+    assert.deepEqual(moveBy({ date: '2026-10-05', time: '23:00', endDate: null, endTime: '23:30' }, 0, 45), { date: '2026-10-05', time: '23:45', endTime: '00:15', endDate: '2026-10-06' });
+    assert.deepEqual(moveBy({ date: '2026-10-05', time: '09:00', endDate: null, endTime: null }, -1, -60), { date: '2026-10-04', time: '08:00' });
+    assert.deepEqual(moveBy({ date: '2026-10-05', time: null, endDate: null, endTime: null }, 1, 60), { date: '2026-10-06' });
+    assert.equal(moveBy({ date: '2026-10-05', time: '09:00', endDate: null, endTime: null }, 0, 0), null);
   });
   test('правка: у серии — только этот раз (occ), у обычного дела — без occ', () => {
     const yoga = s.tasks.find((t) => t.id === 'yoga');

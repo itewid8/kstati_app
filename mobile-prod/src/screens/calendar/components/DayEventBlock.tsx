@@ -58,6 +58,7 @@ export const DayEventBlock = memo(function DayEventBlock(props: Props) {
       accessibilityLabel={`${title}, ${time}`}
       onPress={onPress}
       onLongPress={lift.onLongPress}
+      {...lift.menu}
       delayLongPress={LONG_PRESS_MS}
       style={[styles.block, { left: x, top: y, width, height }]}
     >

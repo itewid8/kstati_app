@@ -191,6 +191,7 @@ export const WeekEventBlock = memo(function WeekEventBlock(props: Props) {
             accessibilityLabel={i === 0 ? `${title}, ${time}, ${who}` : undefined}
             onPress={onPress}
             onLongPress={lift.onLongPress}
+            {...lift.menu}
             delayLongPress={LONG_PRESS_MS}
             style={[styles.band, { left: b.left, top: b.y0, width: bw, height: b.y1 - b.y0 }]}
           >

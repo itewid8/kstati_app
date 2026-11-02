@@ -5,7 +5,7 @@
  */
 import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Checkbox, Icon, LONG_PRESS_MS, Marquee, size as S, type as T, useTheme, type IconName } from '@/ui';
+import { Checkbox, Icon, LONG_PRESS_MS, Marquee, contextMenu, size as S, type as T, useTheme, type IconName } from '@/ui';
 
 type Props = {
   title: string;
@@ -43,6 +43,7 @@ export const AccessoryListRow = memo(function AccessoryListRow({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      {...contextMenu(onLongPress)}
       delayLongPress={LONG_PRESS_MS}
       disabled={!onPress && !onLongPress}
       style={[styles.row, { backgroundColor: c.panel, borderTopColor: c.hair }, style]}

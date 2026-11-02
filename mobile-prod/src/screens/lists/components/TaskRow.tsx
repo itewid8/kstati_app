@@ -76,6 +76,7 @@ export const TaskRow = memo(function TaskRow(props: Props) {
       ref={lift.ref}
       onPress={onPress}
       onLongPress={lift.onLongPress}
+      {...lift.menu}
       delayLongPress={LONG_PRESS_MS}
       disabled={!onPress && !lift.onLongPress}
       style={[

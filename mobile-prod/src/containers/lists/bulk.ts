@@ -7,7 +7,7 @@ import { shiftDay } from '@/adapters/calendar/events';
 import { parseKey } from '@/adapters/common/tasks';
 import { parseWishKey } from '@/adapters/lists/wishes';
 import { moveChange } from '@/adapters/quick/convert';
-import { moveToDate, nextSaturday } from '@/adapters/quick/task';
+import { moveBy, moveToDate, nextSaturday } from '@/adapters/quick/task';
 import { toISODate } from '@/lib/dates';
 import { syncParent, toggleOcc } from '@/lib/edits';
 import { notePlain } from '@/lib/note';
@@ -72,6 +72,17 @@ export function moveTasks(keys: readonly string[], to: MoveTarget) {
   });
   if (!changes.length) return st.notice('Уже там');
   withUndo(`Перенесено: ${changes.length}`, () => useStore.getState().applyChanges(changes));
+}
+
+/** Перенос мышью в календаре (веб): дело или этот раз серии — на days дней и minutes минут */
+export function moveTaskBy(key: string, days: number, minutes: number) {
+  const st = useStore.getState();
+  const r = resolve(key, st.tasks);
+  if (!r) return;
+  const base = r.occ ? instance(r.t, r.occ) : r.t;
+  const patch = moveBy(base, days, minutes);
+  if (!patch) return;
+  withUndo('Перенесено', () => useStore.getState().applyChanges([{ ...moveChange(r.t, r.occ, patch), key: `drag:${key}` }]));
 }
 
 /* ---------- Смотреть ---------- */

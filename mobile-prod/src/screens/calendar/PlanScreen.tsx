@@ -104,6 +104,7 @@ const PlanStepBlock = memo(function PlanStepBlock(props: StepProps) {
       accessibilityState={{ checked: !!step.done }}
       onPress={onOpenStep ? open : undefined}
       onLongPress={lift.onLongPress}
+      {...lift.menu}
       delayLongPress={LONG_PRESS_MS}
       style={[
         styles.step,
