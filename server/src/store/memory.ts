@@ -161,7 +161,7 @@ export class MemoryStore implements Store {
   async getCounters(counters: string[]) {
     return Object.fromEntries(counters.map((c) => [c, this.d.counters[c] ?? 0]));
   }
-  async incrUpTo(counter: string, limit: number) {
+  async incrUpTo(counter: string, limit: number, _ttlSec?: number) {
     const cur = this.d.counters[counter] ?? 0;
     if (cur >= limit) return null;
     return this.incr(counter);

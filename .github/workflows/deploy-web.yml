@@ -1,7 +1,7 @@
 # Выкладка веб-версии «Кстати» (kstati-app.ru) в Yandex Object Storage.
 # При push в main, если менялось приложение (mobile-prod/src, app, assets, app.json, package*.json), GitHub сам:
 #   1) собирает веб-версию: npx expo export -p web (адрес сервера — переменная PUBLIC_URL),
-#   2) кладёт рядом страницу удаления аккаунта (kstati-app.ru/delete-account — копия страницы сервера),
+#   2) кладёт рядом страницы удаления аккаунта, политики и подписок (kstati-app.ru/delete-account, /privacy, /admin — копии страниц сервера),
 #   3) загружает всё в бакет WEB_BUCKET (файлы с хешем в имени кэшируются надолго, index.html — нет).
 # Можно запустить вручную: GitHub → Actions → «Выкладка веб-версии» → Run workflow.
 #
@@ -21,6 +21,8 @@ on:
       - 'mobile-prod/app.json'
       - 'mobile-prod/package.json'
       - 'mobile-prod/package-lock.json'
+      - 'server/src/privacy.ts'
+      - 'server/src/admin.ts'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
@@ -59,6 +61,16 @@ jobs:
           for i in $(seq 1 30); do curl -fsS -o /dev/null "${{ vars.PUBLIC_URL }}/delete-account" && break; sleep 10; done
           curl -fsS "${{ vars.PUBLIC_URL }}/delete-account" | sed "s#var API = '';#var API = '${{ vars.PUBLIC_URL }}';#" > delete-account.html
           grep -q "var API = 'http" delete-account.html
+          for i in $(seq 1 30); do curl -fsS -o /dev/null "${{ vars.PUBLIC_URL }}/admin" && break; sleep 10; done
+          curl -fsS "${{ vars.PUBLIC_URL }}/admin" | sed "s#var API = '';#var API = '${{ vars.PUBLIC_URL }}';#" > admin.html
+          grep -q "var API = 'http" admin.html
+
+      - name: Политика конфиденциальности
+        run: |
+          # Ждём сервер с той же редакцией, что в коде (до 5 минут): иначе на сайт уйдёт старая
+          EDITION=$(grep -oP "EDITION = '\K[^']+" ../server/src/privacy.ts)
+          for i in $(seq 1 30); do curl -fsS "${{ vars.PUBLIC_URL }}/privacy" -o privacy.html && grep -qF "$EDITION" privacy.html && break; sleep 10; done
+          grep -qF "$EDITION" privacy.html
 
       - name: Загрузка в Object Storage
         env:
@@ -72,4 +84,6 @@ jobs:
           $S3 sync dist-web "s3://${{ vars.WEB_BUCKET }}" --delete --exclude "_expo/*" --exclude "assets/*" --cache-control "no-cache"
           # Без расширения: адрес kstati-app.ru/delete-account открывает страницу, а не приложение
           $S3 cp delete-account.html "s3://${{ vars.WEB_BUCKET }}/delete-account" --content-type "text/html; charset=utf-8" --cache-control "no-cache"
+          $S3 cp admin.html "s3://${{ vars.WEB_BUCKET }}/admin" --content-type "text/html; charset=utf-8" --cache-control "no-store"
+          $S3 cp privacy.html "s3://${{ vars.WEB_BUCKET }}/privacy" --content-type "text/html; charset=utf-8" --cache-control "no-cache"
           echo "✓ Веб-версия выложена"

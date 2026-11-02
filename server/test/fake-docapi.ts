@@ -10,6 +10,7 @@ type Table = { hash: string; range?: string; rows: Map<string, Row> };
 
 export function startFakeDocApi(): Promise<{ url: string; server: Server; calls: string[] }> {
   const tables = new Map<string, Table>();
+  const ttl = new Set<string>();
   const calls: string[] = [];
   const keyOf = (t: Table, k: Row) => `${k[t.hash]?.S}|${t.range ? k[t.range]?.S : ''}`;
   const val = (a?: AV) => (a?.S !== undefined ? a.S : a?.N !== undefined ? Number(a.N) : undefined);
@@ -34,6 +35,11 @@ export function startFakeDocApi(): Promise<{ url: string; server: Server; calls:
 
   const handlers: Record<string, (b: any) => unknown> = {
     ListTables: () => ({ TableNames: [...tables.keys()] }),
+    DescribeTimeToLive: (b) => ({ TimeToLiveDescription: { TimeToLiveStatus: ttl.has(b.TableName) ? 'ENABLED' : 'DISABLED' } }),
+    UpdateTimeToLive: (b) => {
+      ttl.add(b.TableName);
+      return { TimeToLiveSpecification: b.TimeToLiveSpecification };
+    },
     CreateTable: (b) => {
       const hash = b.KeySchema.find((k: any) => k.KeyType === 'HASH').AttributeName;
       const range = b.KeySchema.find((k: any) => k.KeyType === 'RANGE')?.AttributeName;
@@ -87,11 +93,12 @@ export function startFakeDocApi(): Promise<{ url: string; server: Server; calls:
       const k = keyOf(t, b.Key);
       const row = t.rows.get(k);
       if (!cond(b.ConditionExpression, row, b.ExpressionAttributeNames, b.ExpressionAttributeValues)) throw { type: 'ConditionalCheckFailedException' };
-      const m = String(b.UpdateExpression).match(/^ADD (#\w+) (:\w+)$/);
-      if (!m) throw new Error('fake: только ADD');
-      const attr = b.ExpressionAttributeNames[m[1]];
+      const m = String(b.UpdateExpression).match(/^(?:SET (#\w+) = (:\w+) )?ADD (#\w+) (:\w+)$/);
+      if (!m) throw new Error('fake: только [SET x = :v] ADD');
+      const attr = b.ExpressionAttributeNames[m[3]];
       const next = { ...(row ?? b.Key) };
-      next[attr] = { N: String(Number(row?.[attr]?.N ?? 0) + Number(b.ExpressionAttributeValues[m[2]].N)) };
+      if (m[1] && m[2]) next[b.ExpressionAttributeNames[m[1]]] = b.ExpressionAttributeValues[m[2]];
+      next[attr] = { N: String(Number(row?.[attr]?.N ?? 0) + Number(b.ExpressionAttributeValues[m[4]].N)) };
       t.rows.set(k, next);
       return { Attributes: { [attr]: next[attr] } };
     },

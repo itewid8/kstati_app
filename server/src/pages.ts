@@ -1,10 +1,12 @@
 /**
- * Веб-страницы сервера. /delete-account — удаление аккаунта без приложения (требование Google Play):
+ * Веб-страницы сервера. /privacy — политика конфиденциальности (src/privacy.ts). /delete-account — удаление аккаунта без приложения (требование Google Play):
  * вход по почте и паролю (или сброс пароля кодом из письма) → подтверждение → DELETE /me.
  * Отдаётся сервером (адрес API) и копируется при выкладке сайта на kstati-app.ru/delete-account: там API — другой
  * адрес (var API подставляет выкладка), сервер разрешает его по CORS. Токен — в X-Kstati-Token, как у приложения.
  */
 import type { FastifyInstance } from 'fastify';
+import { ADMIN_PAGE } from './admin.js';
+import { PRIVACY_PAGE } from './privacy.js';
 
 const PAGE = `<!doctype html>
 <html lang="ru">
@@ -124,4 +126,6 @@ ul { margin:0; padding-left:18px }
 
 export function registerPages(app: FastifyInstance) {
   app.get('/delete-account', async (_req, reply) => reply.type('text/html; charset=utf-8').header('cache-control', 'no-store').send(PAGE));
+  app.get('/privacy', async (_req, reply) => reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(PRIVACY_PAGE));
+  app.get('/admin', async (_req, reply) => reply.type('text/html; charset=utf-8').header('cache-control', 'no-store').send(ADMIN_PAGE));
 }

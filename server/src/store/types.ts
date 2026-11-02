@@ -27,6 +27,8 @@ export type User = {
   passHash?: string;
   vkId?: string;
   createdAt: string;
+  /** Подписка, выданная вручную (src/subs.ts): до даты включительно (ГГГГ-ММ-ДД) или бессрочно (null) */
+  plan?: { until: string | null; grantedAt: string; note?: string };
 };
 
 /** То, что видят другие участники групп */
@@ -266,7 +268,8 @@ export interface Store {
   /** Значения счётчиков (нет — 0) */
   getCounters(counters: string[]): Promise<Record<string, number>>;
   /** +1, если значение меньше limit. null — лимит исчерпан */
-  incrUpTo(counter: string, limit: number): Promise<number | null>;
+  /** ttlSec — через сколько секунд счётчик удаляется сам (YDB: TTL по атрибуту exp); нет — хранится всегда */
+  incrUpTo(counter: string, limit: number, ttlSec?: number): Promise<number | null>;
 
   /** Личные настройки (напоминания) — одна запись на человека */
   getPrefs(userId: string): Promise<Prefs | null>;

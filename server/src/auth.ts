@@ -12,6 +12,7 @@ import { promisify } from 'node:util';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { config } from './config.js';
+import { hasPlan } from './subs.js';
 import { sendMail, mailConfigured } from './mail.js';
 import { publicUser, type Store, type User } from './store/index.js';
 
@@ -38,15 +39,18 @@ export async function verifyPassword(pw: string, stored: string | undefined): Pr
 const b64url = (b: Buffer | string) => Buffer.from(b).toString('base64url');
 const TOKEN_DAYS = 90;
 
-export function signToken(userId: string): string {
+/** scope 'admin' — вход на страницу подписок (src/subs.ts): только паролем и на час */
+export function signToken(userId: string, scope?: 'admin'): string {
   const head = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const now = Math.floor(Date.now() / 1000);
-  const body = b64url(JSON.stringify({ sub: userId, iat: now, exp: now + TOKEN_DAYS * 86400 }));
+  const ttl = scope === 'admin' ? 3600 : TOKEN_DAYS * 86400;
+  const body = b64url(JSON.stringify({ sub: userId, iat: now, exp: now + ttl, ...(scope && { scope }) }));
   const sig = b64url(createHmac('sha256', config.jwtSecret).update(`${head}.${body}`).digest());
   return `${head}.${body}.${sig}`;
 }
 
-export function verifyToken(token: string): string | null {
+/** id аккаунта из токена; scope 'admin' — только из токена страницы подписок */
+export function verifyToken(token: string, scope?: 'admin'): string | null {
   const [head, body, sig] = token.split('.');
   if (!head || !body || !sig) return null;
   const want = b64url(createHmac('sha256', config.jwtSecret).update(`${head}.${body}`).digest());
@@ -54,6 +58,7 @@ export function verifyToken(token: string): string | null {
   try {
     const p = JSON.parse(Buffer.from(body, 'base64url').toString());
     if (typeof p.sub !== 'string' || typeof p.exp !== 'number' || p.exp * 1000 < Date.now()) return null;
+    if (scope && p.scope !== scope) return null;
     return p.sub;
   } catch {
     return null;
@@ -71,20 +76,27 @@ export class HttpError extends Error {
 }
 
 /** Кто делает запрос. Нет или неверный токен — 401 */
-export async function requireUser(req: FastifyRequest, store: Store): Promise<User> {
+export async function requireUser(req: FastifyRequest, store: Store, scope?: 'admin'): Promise<User> {
   // Яндекс Serverless Containers забирает заголовок Authorization себе (ждёт там IAM-токен и отвечает 403),
   // поэтому приложение шлёт токен в X-Kstati-Token. Authorization: Bearer оставлен для локальной отладки и curl.
   const x = req.headers['x-kstati-token'];
   const h = req.headers.authorization ?? '';
   const token = (Array.isArray(x) ? x[0] : x) || (h.startsWith('Bearer ') ? h.slice(7) : '');
-  const id = token ? verifyToken(token) : null;
+  const id = token ? verifyToken(token, scope) : null;
   const user = id ? await store.getUser(id) : null;
   if (!user) throw new HttpError(401, 'unauthorized');
   return user;
 }
 
 /** Что приложение получает о себе */
-export const meView = (u: User) => ({ ...publicUser(u), email: u.email ?? null, hasPassword: !!u.passHash, vk: !!u.vkId });
+export const meView = (u: User) => ({
+  ...publicUser(u),
+  email: u.email ?? null,
+  hasPassword: !!u.passHash,
+  vk: !!u.vkId,
+  /** Подписка: до даты или бессрочно (until: null); нет или истекла — null */
+  plan: u.plan && hasPlan(u) ? { until: u.plan.until } : null,
+});
 
 /* ---------- коды из писем ---------- */
 
@@ -173,6 +185,21 @@ async function vkExchange(code: string, verifier: string, deviceId: string, stat
 
 /* ---------- маршруты ---------- */
 
+/** Вход паролем. Ограничение перебора: 10 неудачных попыток за 15 минут на адрес (общее для приложения и /admin) */
+export async function passwordLogin(store: Store, email: string, password: string): Promise<User> {
+  const id = await store.getKey(`email#${email}`);
+  const user = id ? await store.getUser(id) : null;
+  const failKey = `loginfail#${email}`;
+  const fails = (await store.getTemp<number>(failKey)) ?? 0;
+  if (fails >= 10) throw new HttpError(429, 'too_many', 'Слишком много попыток — подождите 15 минут или сбросьте пароль');
+  if (!user || !(await verifyPassword(password, user.passHash))) {
+    await store.putTemp(failKey, fails + 1, 15 * 60);
+    throw new HttpError(401, 'bad_credentials', 'Неверная почта или пароль');
+  }
+  await store.deleteTemp(failKey);
+  return user;
+}
+
 export function registerAuth(app: FastifyInstance, store: Store) {
   const issue = (u: User) => ({ token: signToken(u.id), me: meView(u) });
 
@@ -205,18 +232,7 @@ export function registerAuth(app: FastifyInstance, store: Store) {
 
   app.post('/auth/login', async (req) => {
     const b = z.object({ email: Email, password: z.string().max(200) }).parse(req.body);
-    const id = await store.getKey(`email#${b.email}`);
-    const user = id ? await store.getUser(id) : null;
-    // Ограничение перебора: 10 неудачных попыток за 15 минут на адрес
-    const failKey = `loginfail#${b.email}`;
-    const fails = (await store.getTemp<number>(failKey)) ?? 0;
-    if (fails >= 10) throw new HttpError(429, 'too_many', 'Слишком много попыток — подождите 15 минут или сбросьте пароль');
-    if (!user || !(await verifyPassword(b.password, user.passHash))) {
-      await store.putTemp(failKey, fails + 1, 15 * 60);
-      throw new HttpError(401, 'bad_credentials', 'Неверная почта или пароль');
-    }
-    await store.deleteTemp(failKey);
-    return issue(user);
+    return issue(await passwordLogin(store, b.email, b.password));
   });
 
   /** Сброс пароля: код из письма + новый пароль → сразу вход */

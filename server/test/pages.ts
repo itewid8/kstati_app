@@ -4,6 +4,12 @@ import { buildApp } from '../src/app.js';
 import { MemoryStore } from '../src/store/memory.js';
 
 const app = await buildApp({ store: new MemoryStore() });
+const privacy = await app.inject({ method: 'GET', url: '/privacy' });
+assert.equal(privacy.statusCode, 200);
+assert.match(String(privacy.headers['content-type']), /text\/html/);
+assert.match(privacy.body, /Политика конфиденциальности/);
+assert.match(privacy.body, /support@kstati-app\.ru/);
+assert.ok(!/github/i.test(privacy.body), 'данные за границу не уходят');
 const page = await app.inject({ method: 'GET', url: '/delete-account' });
 assert.equal(page.statusCode, 200);
 assert.match(String(page.headers['content-type']), /text\/html/);

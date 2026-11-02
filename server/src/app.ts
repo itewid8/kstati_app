@@ -7,16 +7,16 @@ import { Data, registerData } from './api.js';
 import { toOggOpus } from './audio.js';
 import { HttpError, registerAuth, requireUser } from './auth.js';
 import { registerPages } from './pages.js';
+import { mskDay, registerSubs, voiceLimitOf } from './subs.js';
 import { API_LEVEL, apiLevel, appVersion } from './client.js';
 import { config } from './config.js';
-import { sendMail } from './mail.js';
-import { createFeedbackIssue, type GithubDeps } from './githubFeedback.js';
+import { sendMail, type MailFile } from './mail.js';
 import { randomUUID } from 'node:crypto';
 import { costOf, writeLog } from './log.js';
 import { parseText } from './parse.js';
 import { normalizeTimes } from './spoken.js';
 import type { Store, User } from './store/index.js';
-import type { Context } from './types.js';
+import type { Context, ParseResult } from './types.js';
 import { recognize, STT_LANGS, YandexError, type SttLang, type Usage } from './yandex.js';
 
 /** Текст ошибки для журнала — с причиной из cause (код сети и т. п.), иначе видно только «fetch failed» */
@@ -29,7 +29,6 @@ const errText = (e: unknown) => {
 const ctxSize = (c: Context) => ({ tasks: c.existing.tasks.length, watch: c.existing.watch.length, wishes: c.existing.wishes.length, ideas: c.existing.ideas?.length ?? 0, people: c.people.length });
 
 /** Сегодняшняя дата по Москве — для суточного лимита */
-const mskDay = () => new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
 
 const VoiceMeta = z.object({
   groupId: z.string().max(64),
@@ -43,14 +42,24 @@ const VoiceMeta = z.object({
   lang: z.enum(STT_LANGS).optional(),
 });
 
+/** Команда удалась — тратит суточный лимит: есть что создать, изменить или показать */
+export const voiceSucceeded = (r: ParseResult): boolean => {
+  if (r.type === 'items') return r.items.length > 0;
+  if (r.type === 'changes') return r.changes.length > 0;
+  return r.type !== 'unknown' && r.type !== 'notFound' && r.type !== 'unknownPerson';
+};
+
+/** Отзывы хранятся 12 месяцев (политика конфиденциальности) */
+const FEEDBACK_KEEP_SEC = 365 * 24 * 3600;
+/** Дневные счётчики лимитов удаляются через двое суток */
+const COUNTER_KEEP_SEC = 2 * 24 * 3600;
+
 export type Deps = {
   store: Store;
   /** Для тестов можно подменить распознавание и разбор */
   recognize?: (ogg: Buffer, lang?: SttLang) => Promise<string>;
   parse?: typeof parseText;
   toOgg?: typeof toOggOpus;
-  /** Отзывы в GitHub — для тестов подменяется сеть */
-  github?: GithubDeps;
 };
 
 export async function buildApp(deps: Deps): Promise<FastifyInstance> {
@@ -106,12 +115,13 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     model: config.model,
     db: config.db,
     api: API_LEVEL,
-    feedback: { github: !!(config.feedbackRepo && config.githubFeedbackToken), repo: config.feedbackRepo || null, email: !!config.feedbackEmail },
+    feedback: { email: !!config.feedbackEmail },
     films: !!config.poiskkinoKey,
   }));
 
   registerAuth(app, store);
   registerPages(app);
+  registerSubs(app, store);
   registerData(app, store, data);
 
   /** Контекст для ИИ собирает сервер из базы: люди моих групп, дела текущей группы, мои хотелки */
@@ -176,25 +186,41 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     return { tokens, rub: Math.round(((usage ? costOf(usage, config.model) : 0) + stt) * 100) / 100 };
   };
 
-  /** Суточный лимит голосовых команд на человека */
+  /**
+   * Суточный лимит голосовых команд на человека. Списывается только удачная команда: распознали речь и поняли, что
+   * сделать. Сбой распознавания или модели, пустая запись, «не понял», «не нашёл такое дело», неизвестный человек —
+   * лимит не тратят. До разбора лимит только проверяется (checkVoiceQuota), списание — после (spendVoiceQuota)
+   */
   const quotaKey = (user: User) => `voice#${user.id}#${mskDay()}`;
-  async function takeVoiceQuota(user: User) {
-    const n = await store.incrUpTo(quotaKey(user), config.voiceDailyLimit);
-    if (n === null) throw new HttpError(429, 'daily_limit', `На сегодня голосовые команды закончились (${config.voiceDailyLimit} в день). Завтра лимит обновится.`);
-    return config.voiceDailyLimit - n;
+  async function checkVoiceQuota(user: User): Promise<number> {
+    const key = quotaKey(user);
+    const limit = voiceLimitOf(user);
+    const used = (await store.getCounters([key]))[key] ?? 0;
+    if (used >= limit) throw new HttpError(429, 'daily_limit', `На сегодня голосовые команды закончились (${limit} в день). Завтра лимит обновится.`);
+    return limit - used;
+  }
+  async function spendVoiceQuota(user: User, result: ParseResult, left: number): Promise<number> {
+    if (!voiceSucceeded(result)) return left;
+    // Параллельные команды могли выбрать лимит — результат всё равно отдаём, счётчик выше лимита не растёт
+    const limit = voiceLimitOf(user);
+    const n = await store.incrUpTo(quotaKey(user), limit, COUNTER_KEEP_SEC);
+    return n === null ? 0 : limit - n;
   }
 
   /** S6: сколько голосовых команд потрачено сегодня (по Москве), без списания */
   app.get('/voice/quota', async (req) => {
     const user = await requireUser(req, store);
     const key = quotaKey(user);
-    const used = Math.min((await store.getCounters([key]))[key] ?? 0, config.voiceDailyLimit);
-    return { limit: config.voiceDailyLimit, used, left: config.voiceDailyLimit - used };
+    const limit = voiceLimitOf(user);
+    const used = Math.min((await store.getCounters([key]))[key] ?? 0, limit);
+    return { limit, used, left: limit - used };
   });
 
   /**
-   * Отзыв из приложения: ошибка или предложение. Хранится на сервере (ключ feedback#…) и уходит письмом на FEEDBACK_EMAIL.
-   * Письмо не дошло — отзыв всё равно сохранён, человеку ошибку не показываем.
+   * Отзыв из приложения: ошибка или предложение. Хранится на сервере 12 месяцев (ключ feedback#…, как в политике
+   * конфиденциальности) и уходит письмом на FEEDBACK_EMAIL — снимок экрана и сведения из приложения вложениями.
+   * Только российские сервисы (Yandex Cloud): данные за границу не уходят. Письмо не дошло — отзыв всё равно сохранён.
+   * issue в ответе — для старых версий приложения, всегда null
    */
   const Feedback = z.object({
     kind: z.enum(['bug', 'idea']),
@@ -208,27 +234,23 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   app.post('/feedback', async (req) => {
     const user = await requireUser(req, store);
     const body = Feedback.parse(req.body);
-    const n = await store.incrUpTo(`feedback#${user.id}#${mskDay()}`, config.feedbackDailyLimit);
+    const n = await store.incrUpTo(`feedback#${user.id}#${mskDay()}`, config.feedbackDailyLimit, COUNTER_KEEP_SEC);
     if (n === null) throw new HttpError(429, 'daily_limit', 'На сегодня отзывов достаточно — спасибо! Завтра можно снова.');
     const ts = new Date().toISOString();
     const id = randomUUID().slice(0, 8);
     const context = body.context && JSON.stringify(body.context).length <= 40_000 ? body.context : null;
     const entry = { id, ts, userId: user.id, name: user.name, email: user.email ?? null, kind: body.kind, text: body.text, app: appVersion(req) ?? null, api: apiLevel(req), device: body.device ?? null };
-    // Задача в GitHub (со снимком); не вышло — отзыв всё равно сохранён и уйдёт письмом
-    const issue = await createFeedbackIssue(
-      { id, kind: body.kind, text: body.text, user: { id: user.id, name: user.name, email: user.email ?? null }, app: entry.app, api: entry.api, device: entry.device, ts, context, screenshot: body.screenshot ?? null },
-      deps.github,
-    ).catch((e) => {
-      req.log.error({ err: errText(e) }, 'Отзыв не отправлен в GitHub');
-      return null;
-    });
-    await store.claimKey(`feedback#${ts}#${user.id}`, JSON.stringify({ ...entry, context, issue, screenshot: !!body.screenshot }));
+    await store.putTemp(`feedback#${ts}#${user.id}`, { ...entry, context, screenshot: !!body.screenshot }, FEEDBACK_KEEP_SEC);
     if (config.feedbackEmail) {
       const subject = `${body.kind === 'bug' ? 'Ошибка' : 'Предложение'} от ${user.name || user.id}`;
-      const text = [body.text, '', `Кто: ${user.name} (${user.email ?? user.id})`, `Приложение: ${entry.app ?? '—'} · API ${entry.api}`, `Устройство: ${entry.device ?? '—'}`, `Когда: ${ts}`, ...(issue ? [`Задача: ${issue}`] : [])].join('\n');
-      await sendMail(config.feedbackEmail, subject, text).catch((e) => req.log.error({ err: errText(e) }, 'Отзыв не отправлен письмом'));
+      const text = [body.text, '', `Кто: ${user.name} (${user.email ?? user.id})`, `Приложение: ${entry.app ?? '—'} · API ${entry.api}`, `Устройство: ${entry.device ?? '—'}`, `Когда: ${ts}`, `Отзыв: ${id}`].join('\n');
+      const files: MailFile[] = [
+        ...(body.screenshot ? [{ name: `screen-${id}.jpg`, type: 'image/jpeg', base64: body.screenshot }] : []),
+        ...(context ? [{ name: `context-${id}.json`, type: 'application/json', base64: Buffer.from(JSON.stringify(context, null, 2)).toString('base64') }] : []),
+      ];
+      await sendMail(config.feedbackEmail, subject, text, files).catch((e) => req.log.error({ err: errText(e) }, 'Отзыв не отправлен письмом'));
     }
-    return { ok: true, issue };
+    return { ok: true, issue: null };
   });
 
   /**
@@ -238,7 +260,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   app.post('/feedback/voice', async (req) => {
     const user = await requireUser(req, store);
     const body = z.object({ audio: z.string().min(1).max(1_500_000), lang: z.enum(STT_LANGS).optional() }).parse(req.body);
-    const n = await store.incrUpTo(`feedback-voice#${user.id}#${mskDay()}`, config.feedbackDailyLimit * 3);
+    const n = await store.incrUpTo(`feedback-voice#${user.id}#${mskDay()}`, config.feedbackDailyLimit * 3, COUNTER_KEEP_SEC);
     if (n === null) throw new HttpError(429, 'daily_limit', 'На сегодня записей достаточно — допишите текстом.');
     const conv = await toOgg(Buffer.from(body.audio, 'base64'));
     const text = (await stt(conv.ogg, body.lang ?? 'ru-RU')).trim();
@@ -256,11 +278,12 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     if (source === 'device') body.text = normalizeTimes(body.text);
     const client = { api: apiLevel(req), app: appVersion(req), ...(source === 'device' && body.lang && body.lang !== 'ru-RU' && { lang: body.lang }) };
     const context = await buildContext(user, body, client.api);
-    const left = await takeVoiceQuota(user);
+    const before = await checkVoiceQuota(user);
     const t0 = Date.now();
     try {
       const { result, raw, usage, attempts } = await parse(body.text, context);
       await writeLog({ source, userId: user.id, ...client, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
+      const left = await spendVoiceQuota(user, result, before);
       return { transcript: body.text, result, left, spend: spendOf(usage, false) };
     } catch (e) {
       await writeLog({ source, userId: user.id, ...client, transcript: body.text, ctx: ctxSize(context), llmMs: Date.now() - t0, error: errText(e) });
@@ -275,7 +298,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     const lang = body.lang ?? 'ru-RU';
     const client = { api: apiLevel(req), app: appVersion(req), ...(lang !== 'ru-RU' && { lang }) };
     const context = await buildContext(user, body, client.api);
-    const left = await takeVoiceQuota(user);
+    const before = await checkVoiceQuota(user);
     const audio = Buffer.from(body.audio, 'base64');
 
     const t0 = Date.now();
@@ -290,13 +313,14 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       t1 = Date.now();
       if (!transcript) {
         await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript: '', result: 'unknown', sttMs: t1 - t0 });
-        return { transcript: '', result: { type: 'unknown' }, left, spend: spendOf(undefined, audioSec) };
+        return { transcript: '', result: { type: 'unknown' }, left: before, spend: spendOf(undefined, audioSec) };
       }
       const { result, raw, usage, attempts } = await parse(transcript, context);
       await writeLog({
         source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, result: result.type, detail: result,
         raw, attempts, tokens: usage, ctx: ctxSize(context), sttMs: t1 - t0, llmMs: Date.now() - t1,
       });
+      const left = await spendVoiceQuota(user, result, before);
       return { transcript, result, left, spend: spendOf(usage, audioSec) };
     } catch (e) {
       await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, ctx: ctxSize(context), error: errText(e) });
