@@ -120,7 +120,7 @@ export async function lookupFilm(store: Store, title: string, year: number | nul
     }
   }
   const day = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
-  if ((await store.incrUpTo(`poiskkino#${day}`, config.poiskkinoDaily)) === null) return null;
+  if ((await store.incrUpTo(`poiskkino#${day}`, config.poiskkinoDaily, 2 * 24 * 3600)) === null) return null;
   try {
     const url = `${config.poiskkinoUrl}/v1.4/movie/search?page=1&limit=10&query=${encodeURIComponent(title.trim())}`;
     const res = await (deps.fetch ?? fetch)(url, { headers: { 'X-API-KEY': config.poiskkinoKey, accept: 'application/json' }, signal: AbortSignal.timeout(4000) });

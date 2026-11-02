@@ -286,15 +286,19 @@ export class YdbStore implements Store {
     const rows = await this.kvBatch(counters.map((c) => `cnt#${c}`));
     return Object.fromEntries(counters.map((c) => [c, Number(rows.get(`cnt#${c}`)?.n?.N ?? 0)]));
   }
-  async incrUpTo(counter: string, limit: number) {
+  async incrUpTo(counter: string, limit: number, ttlSec?: number) {
     try {
       const r = await this.call<{ Attributes?: Row }>('UpdateItem', {
         TableName: this.t.kv,
         Key: { k: S(`cnt#${counter}`) },
-        UpdateExpression: 'ADD #n :one',
+        UpdateExpression: ttlSec ? 'SET #e = :exp ADD #n :one' : 'ADD #n :one',
         ConditionExpression: 'attribute_not_exists(#n) OR #n < :lim',
-        ExpressionAttributeNames: { '#n': 'n' },
-        ExpressionAttributeValues: { ':one': { N: '1' }, ':lim': { N: String(limit) } },
+        ExpressionAttributeNames: { '#n': 'n', ...(ttlSec && { '#e': 'exp' }) },
+        ExpressionAttributeValues: {
+          ':one': { N: '1' },
+          ':lim': { N: String(limit) },
+          ...(ttlSec && { ':exp': { N: String(Math.floor(Date.now() / 1000) + ttlSec) } }),
+        },
         ReturnValues: 'UPDATED_NEW',
       });
       return Number(r.Attributes?.n?.N ?? 1);
@@ -342,5 +346,11 @@ export class YdbStore implements Store {
       });
       log(`+ ${name} создана`);
     }
+    // Временные записи (коды, отзывы, дневные счётчики) YDB удаляет сам по атрибуту exp — сроки из политики конфиденциальности
+    const ttl = await this.call<{ TimeToLiveDescription?: { TimeToLiveStatus?: string } }>('DescribeTimeToLive', { TableName: this.t.kv });
+    if (!/^ENABL/.test(ttl.TimeToLiveDescription?.TimeToLiveStatus ?? '')) {
+      await this.call('UpdateTimeToLive', { TableName: this.t.kv, TimeToLiveSpecification: { Enabled: true, AttributeName: 'exp' } });
+      log(`+ ${this.t.kv}: удаление по exp включено`);
+    } else log(`✓ ${this.t.kv}: удаление по exp уже включено`);
   }
 }

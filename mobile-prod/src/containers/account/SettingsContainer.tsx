@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { settingsProps, voiceLangOf } from '@/adapters/account/settings';
 import { fetchVoiceQuota } from '@/lib/api';
+import { contactSupport, openPrivacy } from '@/lib/links';
 import { useStore } from '@/lib/store';
 import type { MicMode, ThemePref } from '@/lib/types';
 import { SettingsScreen, type RecognitionLang } from '@/screens/account/SettingsScreen';
@@ -87,7 +88,8 @@ export function SettingsContainer() {
     <SettingsScreen
       {...data}
       insets={insets}
-      showAboutLinks={false}
+      onContactSupport={contactSupport}
+      onOpenPrivacy={openPrivacy}
       canSave={canSave}
       onBack={backToProfile}
       onChangeTheme={onChangeTheme}

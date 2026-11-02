@@ -5,8 +5,8 @@ import type { RecognitionLang, SettingsScreenProps } from '@/screens/account/Set
 import { upper } from '../common/ru';
 import type { DataOf } from '../snapshot';
 
-/** Дневной лимит голосовых команд, пока сервер не ответил (VOICE_DAILY_LIMIT на сервере) */
-export const VOICE_LIMIT = 30;
+/** Дневной лимит удачных голосовых команд, пока сервер не ответил (VOICE_DAILY_LIMIT на сервере) */
+export const VOICE_LIMIT = 3;
 
 export type SettingsInput = {
   theme: ThemePref;

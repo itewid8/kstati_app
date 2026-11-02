@@ -3,6 +3,8 @@ import { config } from './config.js';
 const headers = () => ({
   Authorization: `Api-Key ${config.apiKey}`,
   'x-folder-id': config.folderId,
+  // Яндекс не сохраняет запросы у себя (политика конфиденциальности, раздел 5)
+  'x-data-logging-enabled': 'false',
 });
 
 /**

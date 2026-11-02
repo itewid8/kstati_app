@@ -31,6 +31,10 @@ globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestIni
 const CANNED: Record<string, Record<string, unknown>[]> = {
   'что я делаю на выходных': [{ intent: 'query_plans', scope: 'me', from: '2026-10-10', to: '2026-10-11', query: '' }],
   'удали баню в субботу': [{ intent: 'delete', target: ['t5'], query: 'баня' }],
+  // Лимит тратят только удачные команды: эти три — дела, остальные фразы без ответа «модели» — «не понял»
+  'купить хлеб': [{ intent: 'add', type: 'task', title: 'купить хлеб' }],
+  'купить молоко': [{ intent: 'add', type: 'task', title: 'купить молоко' }],
+  'купить сыр': [{ intent: 'add', type: 'task', title: 'купить сыр' }],
 };
 
 async function scenario(name: string, store: Store) {
@@ -390,13 +394,13 @@ async function scenario(name: string, store: Store) {
   assert.equal((await voice()).status, 200);
   assert.equal(sttLangs.at(-1), 'ru-RU');
   assert.equal((await voice('de-DE')).status, 400);
-  // S6: счётчик голоса без списания (до блока Саша потратил 1)
+  // S6: счётчик голоса без списания. Потрачено 3: две «что я делаю» и «удали баню»; «хочу наушники» голосом — «не понял»
   const q1 = await ok('GET', '/voice/quota', undefined, T1);
-  assert.deepEqual(q1, { limit: 50, used: 6, left: 44 });
+  assert.deepEqual(q1, { limit: 50, used: 3, left: 47 });
   assert.deepEqual(await ok('GET', '/voice/quota', undefined, T1), q1, 'запрос счётчика лимит не тратит');
   assert.equal((await call('GET', '/voice/quota')).status, 401);
   // Отзыв: сохраняется на сервере, пустой и без входа — нет
-  assert.deepEqual(await ok('POST', '/feedback', { kind: 'bug', text: 'Зависает при правке заметки', device: 'iOS 18' }, T1), { ok: true, issue: null }, 'GitHub не настроен — без задачи');
+  assert.deepEqual(await ok('POST', '/feedback', { kind: 'bug', text: 'Зависает при правке заметки', device: 'iOS 18' }, T1), { ok: true, issue: null }, 'отзыв принят (issue — для старых версий)');
   assert.equal((await call('POST', '/feedback', { kind: 'idea', text: '  ' }, T1)).status, 400);
   assert.equal((await call('POST', '/feedback', { kind: 'idea', text: 'x' })).status, 401);
   const fv = await ok('POST', '/feedback/voice', { audio: Buffer.from('m4a').toString('base64') }, T1);
@@ -429,11 +433,14 @@ async function scenario(name: string, store: Store) {
   /* ---------- голос ---------- */
   const v = await ok('POST', '/voice', { groupId: 'g1', today: '2026-09-26', now: '12:00', audio: Buffer.from('m4a').toString('base64') }, T2);
   assert.equal(v.transcript, 'хочу наушники');
-  assert.equal(v.left, 2);
+  assert.equal(v.left, 3, '«не понял» лимит не тратит');
   assert.match(parsed.at(-1)!, /people=Саша \| tasks=3 \| wishes=0/);
   assert.equal((await call('POST', '/voice/text', { groupId: 'nope', today: '2026-09-26', now: '12:00', text: 'x' }, T2)).status, 403);
-  await ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'купить хлеб' }, T2);
-  await ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'купить молоко' }, T2);
+  const vt2 = (text: string) => ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text }, T2);
+  assert.equal((await vt2('купить хлеб')).left, 2);
+  assert.equal((await vt2('непонятно что')).left, 2, 'непонятая фраза лимит не тратит');
+  assert.equal((await vt2('купить молоко')).left, 1);
+  assert.equal((await vt2('купить сыр')).left, 0);
   const lim = await call('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'ещё' }, T2);
   assert.equal(lim.status, 429);
   assert.equal(lim.json.error, 'daily_limit');

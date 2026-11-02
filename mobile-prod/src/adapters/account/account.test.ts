@@ -43,7 +43,7 @@ describe('settingsProps (C-Settings)', () => {
     assert.deepEqual(got, fx);
   });
 
-  test('без счётчика с сервера — 0 из 30; язык; пустые напоминания', () => {
+  test('без счётчика с сервера — 0 из 3; язык; пустые напоминания', () => {
     const got = settingsProps({
       theme: 'dark',
       micMode: 'hold',
@@ -54,7 +54,7 @@ describe('settingsProps (C-Settings)', () => {
       vpnOn: true,
       version: '0.1.0 (1)',
     });
-    assert.deepEqual([got.voiceUsed, got.voiceLimit, got.language, got.serverOnline], [0, 30, 'auto', false]);
+    assert.deepEqual([got.voiceUsed, got.voiceLimit, got.language, got.serverOnline], [0, 3, 'auto', false]);
     assert.equal(got.timedReminders, 'НЕ НАПОМИНАТЬ');
     assert.equal(got.allDayReminders, 'В ДЕНЬ СОБЫТИЯ В 09:00 · ЗА НЕДЕЛЮ В 20:00');
     assert.equal(remindersSummary(['m30', 'm0']), 'В МОМЕНТ НАЧАЛА · ЗА 30 МИН');
