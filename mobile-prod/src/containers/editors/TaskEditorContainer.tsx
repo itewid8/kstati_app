@@ -1,14 +1,15 @@
 /**
  * Окно дела (C-EditDate / -Repeat / -Remind / -Who). Правки — в черновике (useEditorState), в хранилище — по «СОХРАНИТЬ»;
  * «назад» ничего не меняет. Новое дело: из «+», из календаря (date, time), подзадача плана (parentId),
- * из голоса (s.editorSeed — забираем при открытии). Открытый раз серии (occ) правит всю серию.
+ * из голоса (s.editorSeed — забираем при открытии). Открытый раз серии (occ): при сохранении — вопрос, что править:
+ * только этот раз, этот и все следующие или все повторы. «⋯ → Завершить повторы» — серия кончается, прошлые разы остаются.
  * Новое дело открывается чистым шаблоном, без окон поверх: название и описание правятся прямо в окне,
  * «СОХРАНИТЬ» недоступна, пока нет названия.
  */
 import { router, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, StyleSheet, View, type TextInput } from 'react-native';
-import { canSaveDraft, draftFromSeed, draftFromTask, emptyDraft, initialUi, type EditorState } from '@/adapters/editors/draft';
+import { canSaveDraft, draftFromSeed, draftFromTask, draftToItem, emptyDraft, initialUi, seriesDiff, type EditorDraft, type EditorState } from '@/adapters/editors/draft';
 import { endLabel } from '@/adapters/editors/labels';
 import { taskEditorProps } from '@/adapters/editors/taskEditor';
 import { colorOf } from '@/adapters/common/people';
@@ -90,6 +91,47 @@ function seriesDeleteActions(task: Task, ref: SeriesRef | null, verb: boolean): 
     { label: capital(`${prefix}${rest}`), danger: true, onPress: () => endSeriesBefore(task.id, ref.occ) },
     all,
   ];
+}
+
+/** Сохранить правку раза серии: только этот раз или этот и все следующие; «все» — обычное сохранение */
+function saveSeries(d: EditorDraft, scope: 'one' | 'following' | 'all') {
+  if (scope === 'all' || !d.id || !d.occ) {
+    if (!saveDraft(d)) return notSaved(d);
+    return leaveEditor();
+  }
+  if (!useStore.getState().saveSeriesEdit(d.id, d.occ, scope, draftToItem(d, { occurrence: true }))) return notSaved(d);
+  leaveEditor();
+}
+
+/**
+ * Окно открыто на разе серии — что спросить перед сохранением: меню «только этот / этот и следующие / все»,
+ * 'none' — ничего не поменяли, null — сохранить как обычно (не серия; поменяли только конец серии; правило с первого раза)
+ */
+function seriesQuestion(d: EditorDraft, s: Parameters<typeof draftFromTask>[1]): { title: string; actions: MenuAction[] } | 'none' | null {
+  const task = d.id ? useStore.getState().tasks.find((t) => t.id === d.id) : undefined;
+  if (!task?.repeat || !task.date || !d.occ) return null;
+  const diff = seriesDiff(d, draftFromTask(task, s, d.occ));
+  if (!diff.changed) return 'none';
+  if (diff.endOnly) return null;
+  const first = d.occ <= task.date;
+  const actions: MenuAction[] = [];
+  if (!diff.rule) actions.push({ label: 'Только этот раз', onPress: () => saveSeries(d, 'one') });
+  if (!first) actions.push({ label: 'Этот и все следующие', onPress: () => saveSeries(d, 'following') });
+  actions.push({ label: 'Все повторы', onPress: () => saveSeries(d, 'all') });
+  return actions.length > 1 ? { title: 'Изменить повторяющееся дело', actions } : null;
+}
+
+/** «Завершить повторы»: прошлые разы остаются, будущих больше нет. Последний раз — сегодня, открытый раз или своя дата */
+function endActions(task: Task, occ: IsoDate | null, today: IsoDate, pickDate: () => void): MenuAction[] {
+  const end = (last: IsoDate) => () => {
+    useStore.getState().endSeries(task.id, last);
+    leaveEditor();
+  };
+  const actions: MenuAction[] = [];
+  if (task.date && today >= task.date) actions.push({ label: 'Сегодня', onPress: end(today) });
+  if (occ && occ !== today && task.date && occ >= task.date) actions.push({ label: capital(shortDate(occ)), onPress: end(occ) });
+  actions.push({ label: 'Выбрать дату…', onPress: pickDate });
+  return actions;
 }
 
 export const TaskEditorContainer = signedInOnly(function TaskEditorRoot(props: TaskEditorContainerProps) {
@@ -180,6 +222,12 @@ function TaskEditor({ start }: { start: EditorState }) {
     const d = latest.current.draft;
     // Кнопка без названия недоступна; на всякий случай — курсор в заголовок
     if (!canSaveDraft(d)) return titleRef.current?.focus();
+    const ask = seriesQuestion(d, ctx.current.snapshot);
+    if (ask === 'none') return leaveEditor();
+    if (ask) {
+      Keyboard.dismiss();
+      return useStore.getState().setMenu(ask);
+    }
     // Новое дело без группы не сохраняется — не закрываем окно молча
     if (!saveDraft(d)) return notSaved(d);
     leaveEditor();
@@ -204,7 +252,11 @@ function TaskEditor({ start }: { start: EditorState }) {
     if (planId) actions.push({ label: 'Открыть план', onPress: () => openPlan(planId) });
     else if (!d.repeat) actions.push({ label: 'Сделать планом', onPress: makePlan });
     if (d.date) actions.push({ label: 'Без даты', onPress: () => dispatch({ type: 'clearDate' }) });
-    if (task?.repeat && task.date) actions.push(...seriesDeleteActions(task, seriesRef(task, d.occ, ctx.current.today), true));
+    if (task?.repeat && task.date) {
+      const ended = endActions(task, d.occ, ctx.current.today, () => setSheet('until'));
+      actions.push({ label: 'Завершить повторы', onPress: () => st.setMenu({ title: 'Последний раз', actions: ended }) });
+      actions.push(...seriesDeleteActions(task, seriesRef(task, d.occ, ctx.current.today), true));
+    }
     else if (task) actions.push({ label: 'Удалить', danger: true, onPress: () => removeTask(task.id) });
     if (actions.length) st.setMenu({ title: d.title.trim() || 'Дело', actions });
   }, [dispatch, latest, makePlan, openPlan]);

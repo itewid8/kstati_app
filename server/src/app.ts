@@ -8,6 +8,7 @@ import { toOggOpus } from './audio.js';
 import { HttpError, registerAuth, requireUser } from './auth.js';
 import { registerPages } from './pages.js';
 import { mskDay, registerSubs, voiceLimitOf } from './subs.js';
+import { recordSpend, registerSpend } from './spend.js';
 import { API_LEVEL, apiLevel, appVersion } from './client.js';
 import { config } from './config.js';
 import { sendMail, type MailFile } from './mail.js';
@@ -122,6 +123,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   registerAuth(app, store);
   registerPages(app);
   registerSubs(app, store);
+  registerSpend(app, store);
   registerData(app, store, data);
 
   /** Контекст для ИИ собирает сервер из базы: люди моих групп, дела текущей группы, мои хотелки */
@@ -284,7 +286,9 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       const { result, raw, usage, attempts } = await parse(body.text, context);
       await writeLog({ source, userId: user.id, ...client, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
       const left = await spendVoiceQuota(user, result, before);
-      return { transcript: body.text, result, left, spend: spendOf(usage, false) };
+      const spend = spendOf(usage, false);
+      await recordSpend(store, user.id, source, spend, 0, raw === 'rules');
+      return { transcript: body.text, result, left, spend };
     } catch (e) {
       await writeLog({ source, userId: user.id, ...client, transcript: body.text, ctx: ctxSize(context), llmMs: Date.now() - t0, error: errText(e) });
       throw e;
@@ -313,7 +317,9 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       t1 = Date.now();
       if (!transcript) {
         await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript: '', result: 'unknown', sttMs: t1 - t0 });
-        return { transcript: '', result: { type: 'unknown' }, left: before, spend: spendOf(undefined, audioSec) };
+        const spend = spendOf(undefined, audioSec);
+        await recordSpend(store, user.id, 'voice', spend, audioSec ?? 0);
+        return { transcript: '', result: { type: 'unknown' }, left: before, spend };
       }
       const { result, raw, usage, attempts } = await parse(transcript, context);
       await writeLog({
@@ -321,7 +327,9 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
         raw, attempts, tokens: usage, ctx: ctxSize(context), sttMs: t1 - t0, llmMs: Date.now() - t1,
       });
       const left = await spendVoiceQuota(user, result, before);
-      return { transcript, result, left, spend: spendOf(usage, audioSec) };
+      const spend = spendOf(usage, audioSec);
+      await recordSpend(store, user.id, 'voice', spend, audioSec ?? 0, raw === 'rules');
+      return { transcript, result, left, spend };
     } catch (e) {
       await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, ctx: ctxSize(context), error: errText(e) });
       throw e;

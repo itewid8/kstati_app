@@ -2,8 +2,8 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TASKS } from '@/adapters/common/fixture';
-import { applyChangeList, saveDraftItems, type Lists } from './edits';
-import type { DraftItem } from './types';
+import { applyChangeList, editSeriesOcc, saveDraftItems, type Lists } from './edits';
+import type { DraftItem, Task } from './types';
 
 const lists = (): Lists => ({
   tasks: TASKS,
@@ -86,5 +86,54 @@ describe('applyChangeList', () => {
     assert.equal(moved?.endTime, '19:00');
     assert.equal(moved?.repeat, null);
     assert.equal(r.deleted, 0);
+  });
+});
+
+describe('editSeriesOcc (правка раза серии из окна)', () => {
+  const yoga: Task = {
+    id: 'yoga', groupId: 'g1', createdBy: 's', title: 'Йога', date: '2026-10-05', time: '19:00', endTime: '20:00', doneAt: null, createdAt: '',
+    repeat: { freq: 'week', every: 1, weekdays: [1] }, doneDates: ['2026-10-05', '2026-10-26'], skipDates: ['2026-11-02'],
+  };
+  const base = (): Lists => ({ ...lists(), tasks: [yoga], overrides: { yoga: ['m15'] } as Lists['overrides'] });
+  const item = (data: Partial<Extract<DraftItem, { type: 'task' }>['data']>): Extract<DraftItem, { type: 'task' }> => ({
+    key: 'yoga', type: 'task', id: 'yoga', data: { title: 'Йога', date: '2026-10-19', time: '19:00', endTime: '20:00', note: '', repeat: yoga.repeat, ...data },
+  });
+
+  test('только этот раз: раз выпадает из серии, вместо него — отдельное дело с правками, в той же группе', () => {
+    const r = editSeriesOcc(base(), 'yoga', '2026-10-19', 'one', item({ time: '20:00', endTime: '21:00' }), '2026-10-10T10:00:00.000Z');
+    const s = r.lists.tasks.find((t) => t.id === 'yoga')!;
+    const one = r.lists.tasks.find((t) => t.id === r.id)!;
+    assert.deepEqual(s.skipDates, ['2026-10-19', '2026-11-02']);
+    assert.deepEqual([one.date, one.time, one.endTime, one.repeat, one.groupId, one.doneAt], ['2026-10-19', '20:00', '21:00', null, 'g1', null]);
+    assert.deepEqual(r.lists.overrides[r.id!], ['m15'], 'свои напоминания — как у серии');
+  });
+
+  test('только этот раз, отмеченный сделанным: новое дело тоже сделано', () => {
+    const r = editSeriesOcc(base(), 'yoga', '2026-10-26', 'one', item({ date: '2026-10-26', title: 'Йога в зале' }), '2026-10-27T10:00:00.000Z');
+    const one = r.lists.tasks.find((t) => t.id === r.id)!;
+    assert.equal(one.title, 'Йога в зале');
+    assert.ok(one.doneAt);
+  });
+
+  test('этот и все следующие: прежняя серия кончается накануне, новая — с правками; отметки после раза переезжают', () => {
+    const r = editSeriesOcc(base(), 'yoga', '2026-10-19', 'following', item({ date: '2026-10-20', time: '08:00', endTime: '09:00', repeat: { freq: 'week', every: 1, weekdays: [2] } }), '');
+    const old = r.lists.tasks.find((t) => t.id === 'yoga')!;
+    const next = r.lists.tasks.find((t) => t.id === r.id)!;
+    assert.equal(old.repeat?.until, '2026-10-18');
+    assert.deepEqual([old.doneDates, old.skipDates], [['2026-10-05'], []]);
+    assert.deepEqual([next.date, next.time, next.repeat?.weekdays], ['2026-10-20', '08:00', [2]]);
+    assert.deepEqual([next.doneDates, next.skipDates], [['2026-10-27'], ['2026-11-03']], 'со сдвигом на день');
+  });
+
+  test('этот и следующие у серии со счётчиком: счётчик становится датой последнего раза', () => {
+    const counted: Task = { ...yoga, repeat: { freq: 'week', every: 1, weekdays: [1], count: 4 }, doneDates: [], skipDates: [] };
+    const r = editSeriesOcc({ ...base(), tasks: [counted] }, 'yoga', '2026-10-19', 'following', item({ repeat: counted.repeat }), '');
+    const next = r.lists.tasks.find((t) => t.id === r.id)!;
+    assert.deepEqual([next.repeat?.count, next.repeat?.until], [null, '2026-10-26']);
+  });
+
+  test('не серия — ничего не меняется', () => {
+    const r = editSeriesOcc({ ...base(), tasks: [{ ...yoga, repeat: null }] }, 'yoga', '2026-10-19', 'one', item({}), '');
+    assert.equal(r.id, null);
   });
 });

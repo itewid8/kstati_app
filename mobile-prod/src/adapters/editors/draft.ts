@@ -594,10 +594,11 @@ export const draftPeople = (d: Pick<EditorDraft, 'people' | 'createdBy'>): ID[] 
  * Черновик → запись для saveItems. Раз серии: сдвиг даты от открытого раза переносится на начало серии
  * (правка меняет всю серию). Повтор сняли — дело остаётся на дате открытого раза
  */
-export function draftToItem(d: EditorDraft): Extract<DraftItem, { type: 'task' }> {
+/** occurrence — даты этого раза серии как есть (правка «только этот раз» / «этот и следующие»), без пересчёта в начало серии */
+export function draftToItem(d: EditorDraft, opts: { occurrence?: boolean } = {}): Extract<DraftItem, { type: 'task' }> {
   let date = d.date;
   let endDate = d.endDate;
-  if (d.occ && d.seriesDate && d.repeat && d.date) {
+  if (!opts.occurrence && d.occ && d.seriesDate && d.repeat && d.date) {
     const start = shiftDay(d.seriesDate, dayNo(d.date) - dayNo(d.occ));
     const delta = dayNo(start) - dayNo(d.date);
     endDate = endDate ? shiftDay(endDate, delta) : null;
@@ -621,4 +622,20 @@ export function draftToItem(d: EditorDraft): Extract<DraftItem, { type: 'task' }
     share: d.share,
   };
   return d.id ? { key: d.id, type: 'task', id: d.id, data } : { key: 'new', type: 'task', data };
+}
+
+/**
+ * Что поменяли в окне раза серии (base — тот же раз до правок): changed — есть что сохранять;
+ * rule — меняли правило повтора (тогда «только этот раз» не предлагаем); endOnly — поменяли лишь конец серии
+ * (дату «до» или число повторов) — это правка всей серии без вопроса
+ */
+export function seriesDiff(d: EditorDraft, base: EditorDraft): { changed: boolean; rule: boolean; endOnly: boolean } {
+  const a = draftToItem(d, { occurrence: true }).data;
+  const b = draftToItem(base, { occurrence: true }).data;
+  const json = (x: unknown) => JSON.stringify(x ?? null);
+  const changed = json(a) !== json(b);
+  const rule = json(a.repeat) !== json(b.repeat);
+  const noEnd = (r: typeof a.repeat) => (r ? { ...r, until: null, count: null } : null);
+  const endOnly = rule && json(noEnd(a.repeat)) === json(noEnd(b.repeat)) && json({ ...a, repeat: null }) === json({ ...b, repeat: null });
+  return { changed, rule, endOnly };
 }

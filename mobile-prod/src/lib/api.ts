@@ -111,6 +111,22 @@ export async function fetchVoiceQuota(): Promise<VoiceQuota | null> {
   }
 }
 
+/** Расход за день (сервер, src/spend.ts): команды, токены, копейки; kop — целые копейки */
+export type SpendPart = { n: number; tokens: number; kop: number };
+export type SpendDay = SpendPart & { day: string; sttSec: number; rules: number; src: Partial<Record<'voice' | 'device' | 'text', SpendPart>> };
+
+/** GET /stats/spend — мои расходы по дням (старые первыми). Нет связи или старый сервер — null */
+export async function fetchSpend(days: number): Promise<SpendDay[] | null> {
+  const token = useStore.getState().session?.token;
+  if (!token) return null;
+  try {
+    const r = await request<{ days?: SpendDay[] } | null>(`/stats/spend?days=${days}`, { token, timeoutMs: 15_000 });
+    return Array.isArray(r?.days) ? r.days : null;
+  } catch {
+    return null;
+  }
+}
+
 /** GET /health — уровень API сервера (старый сервер поля api не отдаёт — это уровень 1). Нет связи — null */
 export async function fetchHealth(): Promise<{ api: number } | null> {
   try {

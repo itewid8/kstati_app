@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, passwordLogin, requireUser, signToken } from './auth.js';
 import { config } from './config.js';
+import { readDays, type DayStat } from './spend.js';
 import type { Store, User } from './store/types.js';
 
 /** День по Москве — как у суточного лимита */
@@ -51,6 +52,26 @@ export function registerSubs(app: FastifyInstance, store: Store) {
     }
     req.log.info({ userId: user.id }, 'Вход на страницу подписок');
     return { token: signToken(user.id, 'admin') };
+  });
+
+  /** Расходы всех за N дней: по дням и по людям (больше всего потратившие — первыми) */
+  app.get('/admin/stats', async (req) => {
+    await requireAdmin(req, store);
+    const { days } = z.object({ days: z.coerce.number().int().min(1).max(90).default(30) }).parse(req.query);
+    type Part = { n: number; tokens: number; kop: number };
+    const list = await readDays<DayStat & { users?: Record<string, Part> }>(store, 'all', days);
+    const per = new Map<string, Part>();
+    for (const d of list)
+      for (const [id, p] of Object.entries(d.users ?? {})) {
+        const was = per.get(id) ?? { n: 0, tokens: 0, kop: 0 };
+        per.set(id, { n: was.n + p.n, tokens: was.tokens + p.tokens, kop: was.kop + p.kop });
+      }
+    const users = await store.getUsers([...per.keys()]);
+    const byId = new Map(users.map((u) => [u.id, u]));
+    const people = [...per.entries()]
+      .map(([id, p]) => ({ id, name: byId.get(id)?.name ?? 'Удалён', email: byId.get(id)?.email ?? null, plan: byId.get(id) ? hasPlan(byId.get(id)!) : false, ...p }))
+      .sort((a, b) => b.kop - a.kop);
+    return { days: list.map(({ users: _u, ...d }) => d), people };
   });
 
   /** Список выданных подписок (и истёкших — их можно продлить) */
