@@ -5,6 +5,7 @@ import { hashPassword, signToken } from '../src/auth.js';
 import { config } from '../src/config.js';
 import { MemoryStore } from '../src/store/memory.js';
 import { hasPlan, mskDay } from '../src/subs.js';
+import { recordSpend } from '../src/spend.js';
 
 config.adminEmails = ['admin@kstati.ru'];
 config.voiceDailyLimit = 3;
@@ -76,4 +77,21 @@ assert.deepEqual((await call('GET', '/voice/quota', undefined, M)).json, { limit
 assert.deepEqual((await call('GET', '/admin/subs', undefined, A)).json.subs.map((s: any) => s.name), ['Друг']);
 assert.equal((await call('DELETE', '/admin/subs/m1', undefined, signToken('m1', 'admin'))).status, 403);
 
-console.log('✓ подписки вручную: только администратор, лимит, срок, отзыв');
+// Расходы: по дням у человека и у всех; правила без модели считаются отдельно
+await recordSpend(store, 'm1', 'voice', { tokens: 1800, rub: 0.53 }, 4.2);
+await recordSpend(store, 'm1', 'device', { tokens: 0, rub: 0 }, 0, true);
+await recordSpend(store, 'f1', 'device', { tokens: 1500, rub: 0.3 }, 0);
+const mine = (await call('GET', '/stats/spend?days=7', undefined, M)).json.days;
+assert.equal(mine.length, 7);
+const today = mine.at(-1);
+assert.deepEqual([today.day, today.n, today.tokens, today.kop, today.sttSec, today.rules], [mskDay(), 2, 1800, 53, 4.2, 1]);
+assert.deepEqual(today.src.voice, { n: 1, tokens: 1800, kop: 53 });
+assert.equal(mine[0].n, 0, 'пустой день — нули');
+assert.equal((await call('GET', '/stats/spend?days=500', undefined, M)).status, 400);
+assert.equal((await call('GET', '/admin/stats', undefined, M)).status, 401);
+const all = (await call('GET', '/admin/stats?days=1', undefined, A)).json;
+assert.deepEqual([all.days[0].n, all.days[0].kop], [3, 83]);
+assert.deepEqual(all.people.map((p: any) => [p.name, p.kop, p.n]), [['Мама', 53, 2], ['Друг', 30, 1]]);
+assert.equal(all.days[0].users, undefined, 'по людям — только в people');
+
+console.log('✓ подписки вручную: только администратор, лимит, срок, отзыв; расходы');

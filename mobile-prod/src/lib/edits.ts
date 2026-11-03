@@ -7,7 +7,7 @@ import { toISODate } from './dates';
 import { normTitle } from './dupes';
 import { uid } from './ids';
 import { newTaskShare } from './visibility';
-import { instance, nextOpen } from './recur';
+import { dayNo, instance, isoOf, nextOpen, occurrences } from './recur';
 import { daysBetween, hhmm, normalizeEnd, shiftIso, toMin } from './span';
 import type { ChangeDraft, ChangePatch, DraftItem, ID, Idea, Task, TaskReminderOverride, Topic, WatchItem, Wish } from './types';
 
@@ -196,6 +196,72 @@ export function saveDraftItems(lists: Lists, items: readonly DraftItem[], ctx: S
   }
   const saved: SavedIds = ideaTopicId === undefined ? ids : Object.assign(ids, { ideaTopicId });
   return { lists: { tasks, wishes, watch, overrides, topics, ideas }, ids: saved };
+}
+
+/* ---------- правка повторяющегося дела из окна ---------- */
+
+/** Что правим у серии: только этот раз или этот и все следующие («все повторы» — обычное сохранение) */
+export type SeriesScope = 'one' | 'following';
+
+/**
+ * Правка раза серии из окна дела. item — черновик в датах этого раза (не начала серии).
+ *  - one: раз выпадает из серии (skipDates), вместо него — отдельное дело без повтора с правками;
+ *  - following: серия заканчивается накануне раза, с него начинается новая серия с правками; отметки и удалённые
+ *    разы после раза переезжают в новую (со сдвигом, если раз перенесли), счётчик повторов становится датой конца.
+ * С первого раза серии «этот и следующие» — это правка всей серии: вызывающий сохраняет обычным путём.
+ * Новое дело — в той же группе и с той же видимостью, что и серия; свои напоминания — из черновика или как у серии.
+ */
+export function editSeriesOcc(lists: Lists, id: ID, occ: string, scope: SeriesScope, item: Extract<DraftItem, { type: 'task' }>, now: string): { lists: Lists; id: ID | null } {
+  const t0 = lists.tasks.find((t) => t.id === id);
+  if (!t0?.repeat || !t0.date) return { lists, id: null };
+  const { mine, shared, repeat, ...data } = item.data;
+  const fields = normalizeEnd({ ...data, repeat: null, ...(shared !== undefined && { reminders: shared }) });
+  if (fields.kind === 'task') fields.kind = undefined;
+  if (fields.parentId && !lists.tasks.some((t) => t.id === fields.parentId && !t.parentId)) fields.parentId = null;
+  const { occ: _occ, ...once } = instance(t0, occ);
+  const nid = uid();
+  const delta = fields.date ? dayNo(fields.date) - dayNo(occ) : 0;
+  const shift = (d: string) => isoOf(dayNo(d) + delta);
+  let added: Task;
+  let rest: Task[];
+  if (scope === 'one') {
+    const done = t0.doneDates?.includes(occ);
+    added = { ...once, ...fields, id: nid, createdAt: now, repeat: null, doneDates: [], skipDates: [], doneAt: done ? now : null };
+    rest = lists.tasks.map((t) => (t.id === id ? skipOcc(t, occ) : t));
+  } else {
+    // Счётчик повторов → дата последнего раза прежней серии (со сдвигом)
+    let rep = fields.date ? (repeat ?? t0.repeat) : null;
+    if (rep?.count) {
+      const all = occurrences({ ...t0, skipDates: [] }, t0.date, '2100-12-31');
+      const last = all[Math.min(all.length, rep.count) - 1];
+      rep = { ...rep, count: null, until: last ? shift(last) : rep.until ?? null };
+    }
+    added = {
+      ...once,
+      ...fields,
+      id: nid,
+      createdAt: now,
+      repeat: rep,
+      doneAt: null,
+      doneDates: (t0.doneDates ?? []).filter((d) => d >= occ).map(shift),
+      skipDates: (t0.skipDates ?? []).filter((d) => d > occ).map(shift),
+    };
+    const until = isoOf(dayNo(occ) - 1);
+    rest = lists.tasks.map((t) =>
+      t.id === id && t.repeat
+        ? {
+            ...t,
+            repeat: { ...t.repeat, until, count: null },
+            doneDates: (t.doneDates ?? []).filter((d) => d < occ),
+            skipDates: (t.skipDates ?? []).filter((d) => d < occ),
+          }
+        : t,
+    );
+  }
+  let tasks = syncParent([...rest, added], added.parentId);
+  const own = mine ?? lists.overrides[id];
+  const overrides = own ? { ...lists.overrides, [nid]: own } : lists.overrides;
+  return { lists: { ...lists, tasks, overrides }, id: nid };
 }
 
 /* ---------- голосовые правки ---------- */

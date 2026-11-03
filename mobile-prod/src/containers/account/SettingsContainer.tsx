@@ -16,6 +16,9 @@ import { accountRoutes } from './routes';
 import { phoneRoutes } from '../calendar/usePhone';
 import { noteImportRoute } from '@/components/ShareHost';
 
+/** Расходы на ИИ (прототип, отладка) */
+const openSpend = () => router.push('/settings/spend');
+
 /** «0.1.0 (1)»: версия и номер сборки из app.json */
 const VERSION = (() => {
   const cfg = Constants.expoConfig;
@@ -90,6 +93,7 @@ export function SettingsContainer() {
       insets={insets}
       onContactSupport={contactSupport}
       onOpenPrivacy={openPrivacy}
+      onOpenSpend={openSpend}
       canSave={canSave}
       onBack={backToProfile}
       onChangeTheme={onChangeTheme}

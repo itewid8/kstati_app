@@ -22,7 +22,7 @@ import { uid as newUid } from './ids';
 import type { IncomingNote } from './noteImport';
 import { addToTrash, removedEntries, restore as restoreFromTrash, trashKey, type TrashEntry } from './trash';
 import { PERSONAL as PERSONAL_VIEW, newTaskShare as shareFor } from './visibility';
-import { applyChangeList, ownTopic, saveDraftItems, skipOcc, syncParent, toggleOcc, type Lists, type SavedIds } from './edits';
+import { applyChangeList, editSeriesOcc, ownTopic, saveDraftItems, skipOcc, syncParent, toggleOcc, type Lists, type SavedIds, type SeriesScope } from './edits';
 import { captureList, isEmptyUndo, revertList, type ListUndo } from './undo';
 import type { Revs } from './remote';
 import type { PlansAnswer } from './plans';
@@ -293,6 +293,8 @@ type Actions = {
   deleteTask: (id: ID, occ?: string) => void;
   /** Завершить серию: больше не повторять после этой даты (включительно) */
   endSeries: (id: ID, lastDate: string) => void;
+  /** Правка раза серии из окна: только этот раз или этот и все следующие (item — в датах этого раза). id нового дела */
+  saveSeriesEdit: (id: ID, occ: string, scope: SeriesScope, item: Extract<DraftItem, { type: 'task' }>) => ID | null;
   deleteWish: (id: ID) => void;
   /** Своя хотелка: получил / не получил */
   setReceived: (id: ID, received: boolean) => void;
@@ -817,6 +819,14 @@ export const useStore = create<State & Actions>()(
         tasks: before.tasks.map((t) => (t.id === id && t.repeat ? { ...t, repeat: { ...t.repeat, until: lastDate, count: null } } : t)),
       });
       withUndo('Повторы завершены', before);
+    },
+    saveSeriesEdit: (id, occ, scope, item) => {
+      const { tasks, wishes, watch, overrides, topics, ideas } = get();
+      const res = editSeriesOcc({ tasks, wishes, watch, overrides, topics, ideas }, id, occ, scope, item, new Date().toISOString());
+      if (!res.id) return null;
+      set({ tasks: res.lists.tasks, overrides: res.lists.overrides });
+      withUndo(scope === 'one' ? 'Изменён только этот раз' : 'Изменены этот и следующие', { tasks });
+      return res.id;
     },
     deleteTasksMany: (keys) => {
       const before = { tasks: get().tasks };

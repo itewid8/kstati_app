@@ -8,7 +8,7 @@ export const ADMIN_PAGE = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Подписки · Кстати</title>
+<title>Подписки и расходы · Кстати</title>
 <style>
 :root { --bg:#E7E6E1; --panel:#F4F3EF; --ink:#111; --muted:#5E5E58; --line:#161616; --red:#C8231A; --green:#1F7A3A; color-scheme: light }
 @media (prefers-color-scheme: dark) { :root { --bg:#151515; --panel:#1E1E1E; --ink:#F2F2F0; --muted:#9A9A95; --line:#E8E8E4; --red:#FF6B61; --green:#5BD282; color-scheme: dark } }
@@ -39,6 +39,9 @@ ul.subs li:first-child { border-top:0 }
 .state { font:600 10px/1.3 ui-monospace,Menlo,monospace; letter-spacing:.06em; text-transform:uppercase; text-align:right; white-space:nowrap }
 .state.off { color:var(--red) }
 .acts { display:flex; flex-direction:column; gap:6px }
+.tot b { display:block; font-size:22px; letter-spacing:-.02em; font-variant-numeric:tabular-nums }
+.tot span { color:var(--muted); font-size:12px }
+.num { font:600 12px/1.3 ui-monospace,Menlo,monospace; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums }
 [hidden] { display:none !important }
 </style>
 </head>
@@ -72,6 +75,12 @@ ul.subs li:first-child { border-top:0 }
     <button type="submit">Выдать</button>
   </form>
 
+  <div id="stats" class="box" hidden>
+    <div class="cap" id="statsCap">Расходы за 30 дней</div>
+    <div class="row" id="totals"></div>
+    <ul class="subs" id="people"></ul>
+  </div>
+
   <div id="list" class="box" hidden>
     <div class="cap" id="count">Выдано</div>
     <ul class="subs" id="subs"></ul>
@@ -95,7 +104,7 @@ ul.subs li:first-child { border-top:0 }
       });
     }, function () { throw new Error('Нет связи с сервером'); });
   }
-  function signOut() { token = null; try { sessionStorage.removeItem('kstati-admin'); } catch (e) {} $('login').hidden = false; $('grant').hidden = true; $('list').hidden = true; }
+  function signOut() { token = null; try { sessionStorage.removeItem('kstati-admin'); } catch (e) {} $('login').hidden = false; $('grant').hidden = true; $('list').hidden = true; $('stats').hidden = true; }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function ru(isoDay) { var p = isoDay.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; }
@@ -134,7 +143,30 @@ ul.subs li:first-child { border-top:0 }
       ul.appendChild(li);
     });
   }
+  function rub(kop) { return (kop / 100).toFixed(2).replace('.', ',') + ' ₽'; }
+  function fmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  function stats(j) {
+    var t = j.days.reduce(function (a, d) { return { n: a.n + d.n, tokens: a.tokens + d.tokens, kop: a.kop + d.kop }; }, { n: 0, tokens: 0, kop: 0 });
+    var tot = $('totals'); tot.textContent = '';
+    [[fmt(t.n), 'команд'], [fmt(t.tokens), 'токенов'], [rub(t.kop), t.n ? 'в среднем ' + rub(Math.round(t.kop / t.n)) : 'расход']].forEach(function (x) {
+      var d = document.createElement('div'); d.className = 'tot';
+      var b = document.createElement('b'); b.textContent = x[0]; var sp = document.createElement('span'); sp.textContent = x[1];
+      d.appendChild(b); d.appendChild(sp); tot.appendChild(d);
+    });
+    var ul = $('people'); ul.textContent = '';
+    j.people.forEach(function (p) {
+      var li = document.createElement('li');
+      var who = document.createElement('div'); who.className = 'who';
+      var b = document.createElement('b'); b.textContent = p.name + (p.plan ? ' · подписка' : '');
+      var sp = document.createElement('span'); sp.textContent = (p.email || '') + ' · ' + fmt(p.n) + ' команд · ' + fmt(p.tokens) + ' ток.';
+      who.appendChild(b); who.appendChild(sp);
+      var num = document.createElement('div'); num.className = 'num'; num.textContent = rub(p.kop);
+      li.appendChild(who); li.appendChild(num); ul.appendChild(li);
+    });
+    $('stats').hidden = false;
+  }
   function load() {
+    call('GET', '/admin/stats?days=30').then(stats, function () {});
     return call('GET', '/admin/subs').then(function (j) {
       $('login').hidden = true; $('grant').hidden = false; $('list').hidden = false; render(j.subs || []);
     });

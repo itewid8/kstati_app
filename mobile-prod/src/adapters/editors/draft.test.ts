@@ -11,6 +11,7 @@ import {
   reduceDraft,
   reduceEditor,
   repeatPresetOf,
+  seriesDiff,
   titleInput,
   type DraftAction,
   type EditorDraft,
@@ -282,5 +283,21 @@ describe('reduceDraft — именинник', () => {
     assert.deepEqual(item.type === 'task' && item.data.celebrant, { name: 'Бабушка' });
     const other = draftToItem(apply(d, { type: 'kind', kind: 'important' }));
     assert.equal(other.type === 'task' && other.data.celebrant, null, 'не день рождения — без именинника');
+  });
+});
+
+describe('seriesDiff (что спросить при сохранении раза серии)', () => {
+  const base = draftFromTask(YOGA, s, '2026-10-10');
+  test('ничего не меняли', () => assert.deepEqual(seriesDiff(base, base), { changed: false, rule: false, endOnly: false }));
+  test('перенесли раз — правка без смены правила: можно «только этот раз»', () => {
+    assert.deepEqual(seriesDiff({ ...base, time: '11:00' }, base), { changed: true, rule: false, endOnly: false });
+  });
+  test('поменяли правило повтора — «только этот раз» не предлагаем', () => {
+    const d = { ...base, repeat: { ...base.repeat!, every: 2 } };
+    assert.deepEqual(seriesDiff(d, base), { changed: true, rule: true, endOnly: false });
+  });
+  test('поменяли только конец серии — правка всей серии без вопроса', () => {
+    const d = { ...base, repeat: { ...base.repeat!, until: '2026-11-30' } };
+    assert.deepEqual(seriesDiff(d, base), { changed: true, rule: true, endOnly: true });
   });
 });

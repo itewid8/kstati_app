@@ -49,6 +49,8 @@ export type SettingsScreenProps = {
   onEditAllDayReminders?: () => void;
   onContactSupport?: () => void;
   onOpenPrivacy?: () => void;
+  /** «Расходы на ИИ» (прототип, отладка) */
+  onOpenSpend?: () => void;
   /** Отзыв: ошибка или предложение */
   onOpenFeedback?: () => void;
   /** Кнопка-жучок поверх приложения (меняется сразу, без СОХРАНИТЬ) */
@@ -150,6 +152,7 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
     onEditAllDayReminders,
     onContactSupport,
     onOpenPrivacy,
+    onOpenSpend,
     onOpenFeedback,
     onOpenWidget,
     onCancel,
@@ -214,6 +217,7 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
 
           <SectionBox title="ЛИМИТ ГОЛОСОВЫХ КОМАНД НА СЕГОДНЯ" count={`${pad2(voiceUsed)} / ${pad2(voiceLimit)}`}>
             <VoiceMeter used={voiceUsed} limit={voiceLimit} />
+            {onOpenSpend ? <AccountRow label="Расходы на ИИ" onPress={onOpenSpend} /> : null}
           </SectionBox>
 
           <SectionBox title="СОЕДИНЕНИЕ">
