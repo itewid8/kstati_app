@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+    <title>Кстати</title>
+    <meta name="description" content="Дела, хотелки и списки голосом — для пары, семьи и друзей" />
+    <!-- Установка на рабочий стол (PWA): манифест и иконки — mobile-prod/public -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Кстати" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+      }
+      /* Фон до загрузки — как у приложения (светлая и тёмная тема) */
+      body {
+        overflow: hidden;
+        background-color: #E7E6E1;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background-color: #0B0B0B;
+        }
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>Для работы «Кстати» нужен JavaScript.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

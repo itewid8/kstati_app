@@ -7,7 +7,7 @@
  * название зачёркивается — дело остаётся на месте (полоса из двух цветов есть и в ListRow).
  */
 import { memo, useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import type { TaskKind } from '@/lib/types';
 import { Checkbox, Hatch, Icon, KIND_ICON, LONG_PRESS_MS, Marquee, fonts, size as S, useLift, useTheme, type LiftHandler } from '@/ui';
@@ -152,8 +152,9 @@ const styles = StyleSheet.create({
   stepTitle: { flex: 1, minWidth: 0, fontFamily: fonts.sans500, fontSize: 12, lineHeight: 16 },
   done: { textDecorationLine: 'line-through' },
   titleBox: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  // Не flex: 0 — в браузере это flex-basis 0%, и название сжимается до нулевой ширины
-  titleShrink: { flexGrow: 0, flexShrink: 1, flexBasis: 'auto' },
+  // Название по ширине текста. На телефоне — flex: 0, как было: там flexBasis 'auto' рядом с flex: 1 из title
+  // Yoga считает нулём, и строка пустеет. В браузере наоборот: flex: 0 — это flex-basis 0%, нужна явная тройка
+  titleShrink: Platform.OS === 'web' ? { flexGrow: 0, flexShrink: 1, flexBasis: 'auto' } : { flex: 0 },
   expand: { width: 22, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: -6 },
   time: { fontFamily: fonts.mono600, fontSize: 12, letterSpacing: -0.24 },
   stepTime: { fontSize: 11, letterSpacing: -0.22 },
