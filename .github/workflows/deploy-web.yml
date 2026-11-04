@@ -17,6 +17,7 @@ on:
       - 'mobile-prod/src/**'
       - 'mobile-prod/app/**'
       - 'mobile-prod/assets/**'
+      - 'mobile-prod/public/**'
       - 'mobile-prod/modules/*/index.ts'
       - 'mobile-prod/app.json'
       - 'mobile-prod/package.json'
