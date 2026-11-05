@@ -633,7 +633,20 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
   return { type: 'unknown' };
 }
 
-export type ParseOutput = { result: ParseResult; raw: string; usage: Usage; attempts: number };
+/**
+ * path — как разобрали (для статистики расходов): rules — правилами без модели; compact — короткий промпт;
+ * fallback — короткий, затем полный («непонятно» с первого раза); full — сразу полный (PROMPT_MODE=full)
+ */
+export type ParsePath = 'rules' | 'compact' | 'fallback' | 'full';
+export type ParseOutput = { result: ParseResult; raw: string; usage: Usage; attempts: number; path?: ParsePath };
+
+/**
+ * Стоит ли переспрашивать полным промптом после «непонятно» по короткому. Нет: в фразе меньше трёх слов
+ * (обрывок, шум — полный промпт тоже не поймёт) и если модель уже дважды не дала JSON. Так повтор,
+ * самый дорогой путь (короткий + полный промпт), остаётся только для настоящих фраз
+ */
+export const worthFullRetry = (text: string, first: Pick<ParseOutput, 'attempts' | 'raw'>): boolean =>
+  text.trim().split(/\s+/).filter((w) => /[а-яёa-z0-9]/i.test(w)).length >= 3 && first.attempts < 2;
 
 /** Полный разбор: модель → проверка схемы (один повтор) → нормализация */
 export async function parseText(input: string, ctx: Context, model?: string): Promise<ParseOutput> {
@@ -645,17 +658,17 @@ export async function parseText(input: string, ctx: Context, model?: string): Pr
     const quick = quickParse(text, ctx);
     if (quick) {
       const result = normalize(quick as RawAction[], ctx, text);
-      if (result.type === 'items') return { result, raw: 'rules', usage: NO_USAGE, attempts: 0 };
+      if (result.type === 'items') return { result, raw: 'rules', usage: NO_USAGE, attempts: 0, path: 'rules' };
     }
   }
   // Сначала короткий промпт (только нужные фразе правила); «непонятно» — повтор с полным
   if (config.promptMode === 'compact') {
     const first = await ask(buildCompactMessages(text, ctx), text, ctx, model);
-    if (first.result.type !== 'unknown') return first;
+    if (first.result.type !== 'unknown' || !worthFullRetry(text, first)) return { ...first, path: 'compact' };
     const full = await ask(buildMessages(text, ctx), text, ctx, model);
-    return { ...full, usage: addUsage(first.usage, full.usage), attempts: first.attempts + full.attempts };
+    return { ...full, usage: addUsage(first.usage, full.usage), attempts: first.attempts + full.attempts, path: 'fallback' };
   }
-  return ask(buildMessages(text, ctx), text, ctx, model);
+  return { ...(await ask(buildMessages(text, ctx), text, ctx, model)), path: 'full' };
 }
 
 /** Один разбор моделью: не JSON — один повтор */

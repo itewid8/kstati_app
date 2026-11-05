@@ -78,8 +78,8 @@ assert.deepEqual((await call('GET', '/admin/subs', undefined, A)).json.subs.map(
 assert.equal((await call('DELETE', '/admin/subs/m1', undefined, signToken('m1', 'admin'))).status, 403);
 
 // Расходы: по дням у человека и у всех; правила без модели считаются отдельно
-await recordSpend(store, 'm1', 'voice', { tokens: 1800, rub: 0.53 }, 4.2);
-await recordSpend(store, 'm1', 'device', { tokens: 0, rub: 0 }, 0, true);
+await recordSpend(store, 'm1', 'voice', { tokens: 1800, rub: 0.53 }, 4.2, { path: 'fallback', calls: 2, text: 'перенеси ужин на восемь', result: 'changes' });
+await recordSpend(store, 'm1', 'device', { tokens: 0, rub: 0 }, 0, { path: 'rules', text: 'завтра в 7 йога', result: 'items' });
 await recordSpend(store, 'f1', 'device', { tokens: 1500, rub: 0.3 }, 0);
 const mine = (await call('GET', '/stats/spend?days=7', undefined, M)).json.days;
 assert.equal(mine.length, 7);
@@ -88,6 +88,9 @@ assert.deepEqual([today.day, today.n, today.tokens, today.kop, today.sttSec, tod
 assert.deepEqual(today.src.voice, { n: 1, tokens: 1800, kop: 53 });
 assert.equal(mine[0].n, 0, 'пустой день — нули');
 assert.equal((await call('GET', '/stats/spend?days=500', undefined, M)).status, 400);
+const recent = (await call('GET', '/stats/spend?days=7', undefined, M)).json.recent;
+assert.deepEqual(recent.map((c: any) => [c.text, c.path, c.calls, c.tokens, c.kop]), [['завтра в 7 йога', 'rules', 0, 0, 0], ['перенеси ужин на восемь', 'fallback', 2, 1800, 53]], 'последние команды — новые первыми');
+assert.equal((await call('GET', '/stats/spend', undefined, F)).json.recent.length, 1, 'у каждого свои');
 assert.equal((await call('GET', '/admin/stats', undefined, M)).status, 401);
 const all = (await call('GET', '/admin/stats?days=1', undefined, A)).json;
 assert.deepEqual([all.days[0].n, all.days[0].kop], [3, 83]);

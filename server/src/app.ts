@@ -283,11 +283,11 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     const before = await checkVoiceQuota(user);
     const t0 = Date.now();
     try {
-      const { result, raw, usage, attempts } = await parse(body.text, context);
+      const { result, raw, usage, attempts, path } = await parse(body.text, context);
       await writeLog({ source, userId: user.id, ...client, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
       const left = await spendVoiceQuota(user, result, before);
       const spend = spendOf(usage, false);
-      await recordSpend(store, user.id, source, spend, 0, raw === 'rules');
+      await recordSpend(store, user.id, source, spend, 0, { path, calls: attempts, text: body.text, result: result.type });
       return { transcript: body.text, result, left, spend };
     } catch (e) {
       await writeLog({ source, userId: user.id, ...client, transcript: body.text, ctx: ctxSize(context), llmMs: Date.now() - t0, error: errText(e) });
@@ -318,17 +318,17 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       if (!transcript) {
         await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript: '', result: 'unknown', sttMs: t1 - t0 });
         const spend = spendOf(undefined, audioSec);
-        await recordSpend(store, user.id, 'voice', spend, audioSec ?? 0);
+        await recordSpend(store, user.id, 'voice', spend, audioSec ?? 0, { result: 'unknown' });
         return { transcript: '', result: { type: 'unknown' }, left: before, spend };
       }
-      const { result, raw, usage, attempts } = await parse(transcript, context);
+      const { result, raw, usage, attempts, path } = await parse(transcript, context);
       await writeLog({
         source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, result: result.type, detail: result,
         raw, attempts, tokens: usage, ctx: ctxSize(context), sttMs: t1 - t0, llmMs: Date.now() - t1,
       });
       const left = await spendVoiceQuota(user, result, before);
       const spend = spendOf(usage, audioSec);
-      await recordSpend(store, user.id, 'voice', spend, audioSec ?? 0, raw === 'rules');
+      await recordSpend(store, user.id, 'voice', spend, audioSec ?? 0, { path, calls: attempts, text: transcript, result: result.type });
       return { transcript, result, left, spend };
     } catch (e) {
       await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, ctx: ctxSize(context), error: errText(e) });

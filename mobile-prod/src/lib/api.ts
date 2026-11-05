@@ -115,13 +115,17 @@ export async function fetchVoiceQuota(): Promise<VoiceQuota | null> {
 export type SpendPart = { n: number; tokens: number; kop: number };
 export type SpendDay = SpendPart & { day: string; sttSec: number; rules: number; src: Partial<Record<'voice' | 'device' | 'text', SpendPart>> };
 
-/** GET /stats/spend — мои расходы по дням (старые первыми). Нет связи или старый сервер — null */
-export async function fetchSpend(days: number): Promise<SpendDay[] | null> {
+/** Одна команда (сервер, последние 30): путь разбора — rules | compact | fallback | full; нет — речь не распознана */
+export type SpendCommand = { ts: string; src: 'voice' | 'device' | 'text'; path?: string; calls: number; tokens: number; kop: number; sttSec: number; text: string; result: string };
+export type SpendData = { days: SpendDay[]; recent: SpendCommand[] };
+
+/** GET /stats/spend — мои расходы по дням (старые первыми) и последние команды. Нет связи или старый сервер — null */
+export async function fetchSpend(days: number): Promise<SpendData | null> {
   const token = useStore.getState().session?.token;
   if (!token) return null;
   try {
-    const r = await request<{ days?: SpendDay[] } | null>(`/stats/spend?days=${days}`, { token, timeoutMs: 15_000 });
-    return Array.isArray(r?.days) ? r.days : null;
+    const r = await request<{ days?: SpendDay[]; recent?: SpendCommand[] } | null>(`/stats/spend?days=${days}`, { token, timeoutMs: 15_000 });
+    return Array.isArray(r?.days) ? { days: r.days, recent: Array.isArray(r.recent) ? r.recent : [] } : null;
   } catch {
     return null;
   }

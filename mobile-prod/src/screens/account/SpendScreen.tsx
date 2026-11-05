@@ -1,6 +1,6 @@
 /**
  * Расходы на ИИ (из Настроек, прототип и отладка): сумма за период, команды, токены, цена команды,
- * столбики по дням (сегодня — красным), разбивка по источникам. Презентационный экран: данные — пропсами.
+ * столбики по дням (сегодня — красным), разбивка по источникам, последние команды (повтор — красным: это дорого). Презентационный экран: данные — пропсами.
  */
 import { memo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -101,6 +101,20 @@ export const SpendScreen = memo(function SpendScreen({ periods, view, insets = N
                 </View>
               ))}
             </SectionBox>
+
+            {v.recent.length ? (
+              <SectionBox title="ПОСЛЕДНИЕ КОМАНДЫ" count={String(v.recent.length)}>
+                {v.recent.map((r, i) => (
+                  <View key={r.key} style={[styles.row, { backgroundColor: c.panel }, i > 0 && { borderTopWidth: S.hairline, borderTopColor: c.hair }]}>
+                    <View style={styles.text}>
+                      <Text numberOfLines={2} style={[styles.title, { color: c.text }]}>{r.text}</Text>
+                      <Text style={[styles.meta, { color: r.warn ? c.red : c.muted }]}>{r.meta.toUpperCase()}</Text>
+                    </View>
+                    <Text style={[styles.value, { color: r.warn ? c.red : c.text }]}>{r.value}</Text>
+                  </View>
+                ))}
+              </SectionBox>
+            ) : null}
           </>
         ) : null}
       </View>
