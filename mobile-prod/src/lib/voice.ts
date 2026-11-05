@@ -99,9 +99,10 @@ function speechLevel(v: number) {
 /** Распознавания на телефоне нет: один раз говорим, что голос пойдёт через сервер */
 function speechNoticeDue(): boolean {
   const s = useStore.getState();
-  if (!API_URL || s.speechNotice || deviceSpeechAvailable()) return false;
+  // В браузере не предупреждаем: там запись на сервер — обычный путь (телефоны, Firefox), а не замена
+  if (!API_URL || Platform.OS === 'web' || s.speechNotice || deviceSpeechAvailable()) return false;
   s.setSpeechNotice(true);
-  s.setCard({ source: 'voice', transcript: '', problem: 'info', query: Platform.OS === 'web' ? 'В этом браузере нет распознавания речи' : 'На этом телефоне нет встроенного распознавания речи' });
+  s.setCard({ source: 'voice', transcript: '', problem: 'info', query: 'На этом телефоне нет встроенного распознавания речи' });
   return true;
 }
 

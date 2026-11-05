@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SpendDay } from '@/lib/api';
-import { spendView } from './spend';
+import { commandRow, spendView } from './spend';
 
 const day = (d: string, kop: number, n: number, extra: Partial<SpendDay> = {}): SpendDay => ({ day: d, n, tokens: n * 1500, kop, sttSec: 0, rules: 0, src: {}, ...extra });
 
@@ -23,5 +23,20 @@ describe('spendView (расходы на ИИ)', () => {
   test('пусто', () => {
     const v = spendView([day('2026-11-03', 0, 0)], '2026-11-03');
     assert.deepEqual([v.empty, v.total, v.totals[2]?.value], [true, '0,00 ₽', '—']);
+  });
+});
+
+describe('commandRow (последние команды)', () => {
+  test('путь разбора и источник словами, повтор — предупреждение', () => {
+    const base = { ts: '2026-11-05T17:41:00.000Z', src: 'device' as const, calls: 1, tokens: 2140, kop: 43, sttSec: 0, text: 'Перенеси ужин на восемь', result: 'changes' };
+    const r = commandRow({ ...base, path: 'compact' }, 0);
+    assert.equal(r.meta, '5 ноя 20:41 · распознал телефон · модель · 2 140 ток.');
+    assert.deepEqual([r.value, r.warn], ['0,43 ₽', false]);
+    const f = commandRow({ ...base, path: 'fallback', calls: 2 }, 1);
+    assert.match(f.meta, /модель ×2, повтор полным промптом/);
+    assert.equal(f.warn, true);
+    const q = commandRow({ ...base, path: 'rules', tokens: 0, kop: 0 }, 2);
+    assert.equal(q.meta, '5 ноя 20:41 · распознал телефон · без модели');
+    assert.match(commandRow({ ...base, src: 'voice', path: undefined, text: '' }, 3).meta, /голос на сервере · речь не распознана/);
   });
 });

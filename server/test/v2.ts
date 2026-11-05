@@ -95,8 +95,7 @@ assert.deepEqual(ask({ scope: 'us' }, 2), { scope: { kind: 'us' }, from: '2026-1
 const [sys, user] = buildMessages('удали йогу в субботу', ctx());
 assert.match(user.text, /task:y1 \| Йога \| 2026-09-05 19:00 \| повтор: каждую сб/);
 assert.match(user.text, /task:d1 \| Ужин у родителей \| 2026-10-10 19:00\n/, 'у обычного дела пометки нет');
-assert.match(sys.text, /"me" — только сам говорящий/);
-assert.match(sys.text, /«Удали йогу в субботу»/);
+assert.match(sys.text, /"me" — «я», «мои»/);
 assert.match(sys.text, /«Перенеси стоматолога на пятницу на два и добавь Карину»/);
 assert.match(sys.text, /«Что я делаю на выходных\?» → .*"scope":"me"/);
 

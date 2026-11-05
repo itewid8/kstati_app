@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { spendView } from '@/adapters/account/spend';
-import { fetchSpend, type SpendDay } from '@/lib/api';
+import { fetchSpend, type SpendData } from '@/lib/api';
 import { SpendScreen } from '@/screens/account/SpendScreen';
 import { useClock, useInsets } from '../common';
 
@@ -17,7 +17,7 @@ export function SpendContainer() {
   const insets = useInsets();
   const clock = useClock();
   const [days, setDays] = useState(30);
-  const [data, setData] = useState<SpendDay[] | null | 'error'>(null);
+  const [data, setData] = useState<SpendData | null | 'error'>(null);
 
   useEffect(() => {
     let live = true;
@@ -28,7 +28,7 @@ export function SpendContainer() {
     };
   }, [days]);
 
-  const view = useMemo(() => (data === null || data === 'error' ? data : spendView(data, clock.today)), [data, clock.today]);
+  const view = useMemo(() => (data === null || data === 'error' ? data : spendView(data.days, clock.today, data.recent)), [data, clock.today]);
   const periods = useMemo(() => PERIODS.map((p) => ({ ...p, on: p.key === days })), [days]);
   const onPeriod = useCallback((d: number) => setDays(d), []);
 

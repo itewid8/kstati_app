@@ -1,5 +1,6 @@
 /**
  * Статистика расходов на распознавание и модель: по дням (Москва), на человека и по всем.
+ * Последние 30 команд с текстом фразы — spendlog#<id>, 90 дней (как журнал голосовых команд).
  * Запись spend#<id>#<день> — человек, spend#all#<день> — все вместе и по людям (для /admin). Хранится 12 месяцев
  * (политика конфиденциальности, цель «защита сервиса и учёт расходов»).
  * Пишется на каждый разбор, удачный или нет: деньги тратятся в любом случае. Копейки — целыми, чтобы не копить ошибку.
@@ -22,11 +23,30 @@ const add = (p: Part | undefined, tokens: number, kop: number): Part => ({ n: (p
 export const mskDayOf = (ms: number) => new Date(ms + 3 * 3600_000).toISOString().slice(0, 10);
 
 /** Учесть одну команду. Ошибки хранилища не мешают ответу: статистика — не главное */
-/** byRules — команду разобрали правила, без модели (src/quick.ts) */
-export async function recordSpend(store: Store, userId: string, src: SpendSource, spend: { tokens: number; rub: number }, sttSec: number, byRules = false, now = Date.now()) {
+/** Одна команда для экрана «Расходы»: что сказали, как разобрали, сколько стоило. Последние 30, хранятся 90 дней */
+export type SpendCommand = {
+  ts: string;
+  src: SpendSource;
+  /** rules | compact | fallback | full; нет — речь не распознана */
+  path?: string;
+  /** Обращений к модели: 2 и больше — был повтор */
+  calls: number;
+  tokens: number;
+  kop: number;
+  sttSec: number;
+  text: string;
+  result: string;
+};
+const RECENT = 30;
+const RECENT_KEEP_SEC = 90 * 24 * 3600;
+
+export type SpendInfo = { path?: string; calls?: number; text?: string; result?: string };
+
+/** Учесть одну команду (по дням и в списке последних) */
+export async function recordSpend(store: Store, userId: string, src: SpendSource, spend: { tokens: number; rub: number }, sttSec: number, info: SpendInfo = {}, now = Date.now()) {
   const day = mskDayOf(now);
   const kop = Math.round(spend.rub * 100);
-  const rules = byRules ? 1 : 0;
+  const rules = info.path === 'rules' ? 1 : 0;
   const bump = <T extends DayStat>(d: T): T => ({
     ...d,
     ...add(d, spend.tokens, kop),
@@ -40,6 +60,19 @@ export async function recordSpend(store: Store, userId: string, src: SpendSource
     const all = (await store.getTemp<AllDay>(`spend#all#${day}`)) ?? { ...empty(), users: {} };
     const next = bump(all);
     await store.putTemp(`spend#all#${day}`, { ...next, users: { ...all.users, [userId]: add(all.users[userId], spend.tokens, kop) } }, KEEP_SEC);
+    const cmd: SpendCommand = {
+      ts: new Date(now).toISOString(),
+      src,
+      ...(info.path && { path: info.path }),
+      calls: info.calls ?? 0,
+      tokens: spend.tokens,
+      kop,
+      sttSec: Math.round(sttSec * 10) / 10,
+      text: (info.text ?? '').slice(0, 200),
+      result: info.result ?? '',
+    };
+    const recent = (await store.getTemp<SpendCommand[]>(`spendlog#${userId}`)) ?? [];
+    await store.putTemp(`spendlog#${userId}`, [cmd, ...recent].slice(0, RECENT), RECENT_KEEP_SEC);
   } catch (e) {
     console.warn('Расход не записан:', (e as Error).message);
   }
@@ -61,6 +94,7 @@ export function registerSpend(app: FastifyInstance, store: Store) {
   app.get('/stats/spend', async (req) => {
     const user = await requireUser(req, store);
     const { days } = Days.parse(req.query);
-    return { days: await readDays(store, user.id, days) };
+    const recent = (await store.getTemp<SpendCommand[]>(`spendlog#${user.id}`)) ?? [];
+    return { days: await readDays(store, user.id, days), recent };
   });
 }

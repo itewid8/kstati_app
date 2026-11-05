@@ -2,7 +2,7 @@
  * Компактный промпт (src/prompt.ts): нужные части правил на месте, лишних нет, промпт заметно короче полного.
  */
 import assert from 'node:assert/strict';
-import { normalize } from '../src/parse.js';
+import { normalize, worthFullRetry } from '../src/parse.js';
 import { buildCompactMessages, buildMessages, pickBlocks } from '../src/prompt.js';
 import type { Context } from '../src/types.js';
 
@@ -48,13 +48,13 @@ for (const p of ['Добавь Дюну и Аватар', 'Перенеси уж
 }
 // «Перенеси ужин»: правила правок и только похожие записи
 const [cs, cu] = buildCompactMessages('Перенеси ужин на восемь', ctx);
-assert.match(cs.text, /update \/ mark \/ unmark \/ delete — ТОЛЬКО/);
+assert.match(cs.text, /update \/ mark \/ unmark \/ delete — только при глаголе/);
 assert.doesNotMatch(cs.text, /query_plans/);
 assert.match(cu.text, /task:t3 \| Ужин у родителей/);
 assert.doesNotMatch(cu.text, /Дело номер/);
 // «Добавь Дюну»: без записей, календаря и тем
 const [, du] = buildCompactMessages('Добавь Дюну и Аватар', ctx);
-assert.doesNotMatch(du.text, /Существующие записи|Календарь|Мои темы/);
+assert.doesNotMatch(du.text, /Существующие записи|Дни:|Мои темы/);
 assert.ok(compact < full * 0.6, `компактный ${compact} против полного ${full}`);
 // «Перенеси стоматолога на пятницу на два» — день берём из «на пятницу», а не из последнего «на два» (eval 01.11)
 {
@@ -63,4 +63,21 @@ assert.ok(compact < full * 0.6, `компактный ${compact} против п
   assert.equal(r.type, 'changes');
   if (r.type === 'changes') assert.equal(r.changes[0].patch?.date, '2026-10-02');
 }
+// «Купить молоко» при теме со списком продуктов — дело: правил заметок нет (пункт темы — только с глаголом правки)
+{
+  const c3 = { ...ctx, topics: [{ id: 'p1', title: 'Покупки', body: '- [ ] Молоко' }] };
+  assert.doesNotMatch([...pickBlocks('Завтра купить молоко', c3).blocks].join(), /ideas/);
+  assert.match([...pickBlocks('Молоко купил', c3).blocks].join(), /ideas/);
+}
+// Дни — одной строкой на две недели вперёд, без таблицы на 5 недель
+{
+  const [, u] = buildCompactMessages('Перенеси ужин на субботу', ctx);
+  assert.match(u.text, /Дни: сб 2026-09-26, вс 2026-09-27,/);
+  assert.equal((u.text.match(/\d{4}-\d{2}-\d{2}/g) ?? []).length, 1 + 14 + 1, 'сегодня + 14 дней + дело с датой');
+}
+// Повтор полным промптом — только для настоящих фраз
+assert.equal(worthFullRetry('э', { attempts: 1, raw: '' }), false);
+assert.equal(worthFullRetry('так это', { attempts: 1, raw: '' }), false);
+assert.equal(worthFullRetry('позвонить в банк про кредит', { attempts: 1, raw: '' }), true);
+assert.equal(worthFullRetry('позвонить в банк про кредит', { attempts: 2, raw: '' }), false, 'модель дважды не дала JSON');
 console.log(`✓ компактный промпт: ${Math.round((100 * compact) / full)}% от полного на 6 фразах`);

@@ -2,6 +2,11 @@
  * Браузер: распознавание речи самим браузером (Web Speech API — Chrome, Edge, Яндекс Браузер, Safari).
  * Тот же интерфейс, что у deviceSpeech.ts. Нет API (Firefox) — available() = false, голос пишется и идёт на сервер.
  * Громкость для волны и автостопа — с микрофона через AudioContext (само распознавание её не даёт).
+ *
+ * Только на компьютере. В браузере телефона (и в установленной на рабочий стол веб-версии) распознавание браузера
+ * ненадёжно: на Android микрофон не делится между распознаванием и измерением громкости — слов нет; на iPhone
+ * в установленной веб-версии распознавание не работает и запись зависает. Там голос пишется (MediaRecorder)
+ * и распознаётся на сервере — как на телефонах без встроенного распознавания.
  */
 type SR = {
   lang: string;
@@ -23,8 +28,13 @@ const Ctor: SRCtor | null =
 let broken = false;
 const FATAL = new Set(['language-not-supported', 'service-not-allowed', 'bad-grammar']);
 
+/** Телефон или планшет: iPhone, iPad (и iPadOS, который называет себя Mac), Android */
+const MOBILE =
+  typeof navigator !== 'undefined' &&
+  (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
+
 export function deviceSpeechAvailable(): boolean {
-  return !!Ctor && !broken;
+  return !!Ctor && !broken && !MOBILE;
 }
 
 export type SpeechOutcome = { text: string } | { error: 'network' | 'denied' | 'failed'; detail: string };

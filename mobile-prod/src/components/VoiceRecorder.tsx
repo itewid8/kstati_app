@@ -48,7 +48,8 @@ export function VoiceRecorder() {
       },
       stop: async () => {
         try {
-          await rec.stop();
+          // Браузер может не ответить на остановку записи — ждём не дольше 5 с, окно «разбор» не висит
+          await Promise.race([rec.stop(), new Promise((r) => setTimeout(r, 5000))]);
           return rec.uri ?? null;
         } catch {
           return null;
