@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { applyListEdit, listBody, spokenList } from './lists.js';
-import { buildCompactMessages, buildMessages } from './prompt.js';
+import { buildCompactMessages, buildMessages, buildTunedMessages, pickBlocks } from './prompt.js';
 import { occurrences } from './recur.js';
 import { changesRepeat, firstDate, spokenRepeat, stopsRepeat, stripRepeat } from './repeat.js';
 import {
@@ -288,6 +288,22 @@ function listEdit(a: RawAction, ctx: Context): DraftItem | null {
   return r.changes.length ? { key: randomUUID(), type: 'topic', id: t.id, data: { title: t.title, body: r.body, changes: r.changes } } : null;
 }
 
+/**
+ * Группа из «Моих групп», названная во фразе с предлогом: «в Футболе», «у Родителей» (по основе названия).
+ * Названия-местоимения и общие слова («Мы», «Семья», «Друзья») не считаем: «у нас в семье» — это категория
+ */
+function groupInText(text: string, ctx: Context): string | null {
+  const t = text.toLowerCase().replace(/ё/g, 'е');
+  const common = /^(мы|мы с .*|семья|друзья|родители|наши|наша|мои|моя)$/i;
+  for (const g of ctx.groups ?? []) {
+    const name = g.name.trim();
+    if (!name || common.test(name)) continue;
+    const stem = name.toLowerCase().replace(/ё/g, 'е').slice(0, Math.max(4, name.length - 2));
+    if (new RegExp(`(^|\\s)(в|во|у|для|из)\\s+${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(t)) return name;
+  }
+  return null;
+}
+
 /* ---------- сборка результата ---------- */
 
 export function normalize(input: RawAction[], ctx: Context, transcript: string): ParseResult {
@@ -295,8 +311,10 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
   // 1. Вопросы — сразу переход на экран
   const qw = actions.find((a) => a.intent === 'query_watch');
   if (qw) {
+    // «Наш старый фильм» — вид названный во фразе берём сами, если модель его пропустила (eval 05.11)
+    const saidKind = spokenKind(transcript);
     const filters: WatchFilters = {
-      kind: manyOf(KINDS, qw.kind),
+      kind: manyOf(KINDS, qw.kind).length ? manyOf(KINDS, qw.kind) : saidKind ? [saidKind] : [],
       genre: manyOf(GENRES, qw.genre ?? qw.genres),
       origin: manyOf(ORIGINS, qw.origin),
       fresh: manyOf(['new', 'old'] as const, qw.fresh),
@@ -332,11 +350,17 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     else if (qp2.scope === 'people' && others.length) scope = { kind: 'people', names: others };
     else if (qp2.scope === 'category' && cat) scope = { kind: 'category', category: cat };
     else if (qp2.scope === 'groups' && names(qp2.groups).length) scope = { kind: 'groups', names: names(qp2.groups) };
+    // Модель назвала категорию или группу, но не тот scope («people» без имён и с category: friends) — верим полю
+    else if (cat && !others.length) scope = { kind: 'category', category: cat };
+    else if (names(qp2.groups).length && !others.length) scope = { kind: 'groups', names: names(qp2.groups) };
+    // Группа из «Моих групп» названа во фразе («что у нас в Футболе») — это она, что бы ни ответила модель
+    const said = groupInText(transcript, ctx);
+    if (said && scope.kind !== 'groups' && scope.kind !== 'people' && !meOnly) scope = { kind: 'groups', names: [said] };
     let from = date(qp2.from) ?? ctx.today;
     let to = date(qp2.to) ?? addDaysIso(ctx.today, 6);
     // Период, названный во фразе, считаем сами — модель путается в календаре
-    const said = spokenPeriod(transcript, ctx.today);
-    if (said) ({ from, to } = said);
+    const period = spokenPeriod(transcript, ctx.today);
+    if (period) ({ from, to } = period);
     if (to < from) [from, to] = [to, from];
     // Чьи дела показывать, если модель назвала («что Карина делает в субботу» → who: ["Карина"]) — только api ≥ 2
     if (api >= 2 && !who) {
@@ -637,7 +661,7 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
  * path — как разобрали (для статистики расходов): rules — правилами без модели; compact — короткий промпт;
  * fallback — короткий, затем полный («непонятно» с первого раза); full — сразу полный (PROMPT_MODE=full)
  */
-export type ParsePath = 'rules' | 'compact' | 'fallback' | 'full';
+export type ParsePath = 'rules' | 'compact' | 'fallback' | 'full' | 'tuned';
 export type ParseOutput = { result: ParseResult; raw: string; usage: Usage; attempts: number; path?: ParsePath };
 
 /**
@@ -662,9 +686,18 @@ export async function parseText(input: string, ctx: Context, model?: string): Pr
     }
   }
   // Сначала короткий промпт (только нужные фразе правила); «непонятно» — повтор с полным
-  if (config.promptMode === 'compact') {
+  // Дообученная модель: правила в ней, в запросе только контекст. «Не понял» — страховка коротким промптом
+  if (config.promptMode === 'tuned' && config.tunedModel) {
+    const tuned = await ask(buildTunedMessages(text, ctx), text, ctx, config.tunedModel);
+    if (tuned.result.type !== 'unknown' || !worthFullRetry(text, tuned)) return { ...tuned, path: 'tuned' };
+    const compact = await ask(buildCompactMessages(text, ctx), text, ctx, model);
+    return { ...compact, usage: addUsage(tuned.usage, compact.usage), attempts: tuned.attempts + compact.attempts, path: 'fallback' };
+  }
+  if (config.promptMode !== 'full') {
     const first = await ask(buildCompactMessages(text, ctx), text, ctx, model);
-    if (first.result.type !== 'unknown' || !worthFullRetry(text, first)) return { ...first, path: 'compact' };
+    // Вопрос («какая погода завтра»): правила вопросов в коротком промпте и так есть — полный не поможет
+    const question = [...pickBlocks(text, ctx).blocks].every((b) => b === 'qwatch' || b === 'qwish' || b === 'plans' || b === 'ideas');
+    if (first.result.type !== 'unknown' || question || !worthFullRetry(text, first)) return { ...first, path: 'compact' };
     const full = await ask(buildMessages(text, ctx), text, ctx, model);
     return { ...full, usage: addUsage(first.usage, full.usage), attempts: first.attempts + full.attempts, path: 'fallback' };
   }

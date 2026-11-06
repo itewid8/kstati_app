@@ -75,6 +75,23 @@ assert.ok(compact < full * 0.6, `компактный ${compact} против п
   assert.match(u.text, /Дни: сб 2026-09-26, вс 2026-09-27,/);
   assert.equal((u.text.match(/\d{4}-\d{2}-\d{2}/g) ?? []).length, 1 + 14 + 1, 'сегодня + 14 дней + дело с датой');
 }
+// Чьи планы: модель перепутала scope — сервер верит category; названная группа — groups (eval 05.11)
+{
+  const g = { ...ctx, groups: [{ name: 'Семья', category: 'couple' as const }, { name: 'Футбол', category: 'friends' as const }] };
+  const q = (raw: Record<string, unknown>, phrase: string) => {
+    const r = normalize([{ intent: 'query_plans', from: '2026-09-26', to: '2026-09-27', query: '', ...raw }] as never, g, phrase);
+    return r.type === 'queryPlans' ? r.plans.scope : null;
+  };
+  assert.deepEqual(q({ scope: 'people', category: 'friends' }, 'Какие у наших друзей планы на выходные?'), { kind: 'category', category: 'friends' });
+  assert.deepEqual(q({ scope: 'people', category: 'friends' }, 'Что у нас в Футболе в воскресенье?'), { kind: 'groups', names: ['Футбол'] });
+  assert.deepEqual(q({ scope: 'us' }, 'Что у нас в семье на выходных?'), { kind: 'us' }, '«Семья» — общее слово, не группа');
+  assert.deepEqual(q({ scope: 'people', people: ['Карина'] }, 'Что у нас с Кариной в Футболе?'), { kind: 'people', names: ['Карина'] }, 'названы люди — люди');
+}
+// «Какой-нибудь наш старый фильм»: модель пропустила kind — «фильм» во фразе (eval 05.11)
+{
+  const r = normalize([{ intent: 'query_watch', origin: ['ru'], fresh: ['old'] }] as never, ctx, 'Какой-нибудь наш старый фильм');
+  assert.deepEqual(r.type === 'queryWatch' ? r.filters : null, { kind: ['movie'], genre: [], origin: ['ru'], fresh: ['old'] });
+}
 // Повтор полным промптом — только для настоящих фраз
 assert.equal(worthFullRetry('э', { attempts: 1, raw: '' }), false);
 assert.equal(worthFullRetry('так это', { attempts: 1, raw: '' }), false);

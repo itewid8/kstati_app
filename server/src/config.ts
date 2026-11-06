@@ -67,7 +67,10 @@ export const config = {
   webOrigins: env('WEB_ORIGINS', 'https://app.kstati-app.ru,https://kstati-app.ru').split(',').map((s) => s.trim()).filter(Boolean),
   quickRules: env('QUICK_RULES', '1') !== '0',
   /** Промпт модели: compact — только нужные фразе правила (полный — если не понял), full — всегда полный */
-  promptMode: env('PROMPT_MODE', 'compact') === 'full' ? ('full' as const) : ('compact' as const),
+  /** compact — короткий промпт; full — полный; tuned — дообученная модель (TUNED_MODEL), «не понял» — повтор коротким */
+  promptMode: (['full', 'tuned'].includes(env('PROMPT_MODE')) ? env('PROMPT_MODE') : 'compact') as 'compact' | 'full' | 'tuned',
+  /** Адрес дообученной модели из Yandex AI Studio (ds://…) — для PROMPT_MODE=tuned */
+  tunedModel: env('TUNED_MODEL'),
 };
 
 /**
