@@ -10,6 +10,7 @@
     "start:prod": "node dist/index.js",
     "test": "tsx test/subs.ts && tsx test/repeat.ts && tsx test/ideas.ts && tsx test/lists.ts && tsx test/films.ts && tsx test/feedback.ts && tsx test/duration.ts && tsx test/v2.ts && tsx test/personal.ts && tsx test/e2e.ts && tsx test/compat-v1.ts",
     "eval": "tsx eval/run.ts",
+    "train:data": "tsx train/generate.ts",
     "typecheck": "tsc --noEmit",
     "stats": "tsx scripts/stats.ts",
     "tables": "tsx scripts/ydb-tables.ts",

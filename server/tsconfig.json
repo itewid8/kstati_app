@@ -14,6 +14,7 @@
     "src",
     "eval",
     "scripts",
-    "test"
+    "test",
+    "train"
   ]
 }

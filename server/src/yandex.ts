@@ -75,7 +75,8 @@ export async function complete(messages: Msg[], model = config.model): Promise<{
       method: 'POST',
       headers: { ...headers(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        modelUri: `gpt://${config.folderId}/${model}`,
+        // Дообученная модель приходит готовым адресом (ds://…), базовая — именем в каталоге
+        modelUri: /^(ds|gpt):\/\//.test(model) ? model : `gpt://${config.folderId}/${model}`,
         // Ответ — короткий JSON; 600 токенов с запасом хватает и на несколько записей
         completionOptions: { stream: false, temperature: 0, maxTokens: 600 },
         // Режим «только JSON»; если модель его не поддерживает — повторяем без него
