@@ -25,5 +25,13 @@ inspect.txt
 # Файлы, отложенные на удаление
 _to_delete/
 
+# Архивы обмена с Claude (в них бывают исходники вместе с .env) — только локально
+Claude outputs/
+*.tgz
+
+# Сборка Gradle внутри своих нативных модулей — появляется при каждой сборке Android
+mobile-prod/modules/*/android/build/
+mobile-prod/modules/*/android/.gradle/
+
 # Локальные ключи (токен GitHub для разбора отзывов) — никогда не в git
 .secrets/

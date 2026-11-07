@@ -18,6 +18,17 @@ permissions:
   contents: read
 
 jobs:
+  hygiene:
+    name: Лишние файлы
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Архивы, .env, выгрузки из базы и сборка не должны попадать в git (утечка ключа 22.10.2026 — через архив в «Claude outputs»)
+      - name: Нет архивов, ключей и сборки
+        run: |
+          bad=$(git ls-files | grep -iE '\.(tgz|tar|gz|zip|7z|apk|aab|ipa|jks|keystore|p8|p12|pem)$|(^|/)\.env($|\.)|(^|/)deploy\.env$|(^|/)build/|inspect\.txt$|^_to_delete/|^Claude outputs/' | grep -v '\.env\.example$' || true)
+          if [ -n "$bad" ]; then echo "В репозитории лишние файлы:"; echo "$bad"; exit 1; fi
+
   server:
     name: Сервер
     runs-on: ubuntu-latest
