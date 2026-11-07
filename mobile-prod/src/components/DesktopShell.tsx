@@ -39,6 +39,8 @@ if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getEle
       [role="button"]:not([aria-disabled="true"]):hover, [role="tab"]:hover, [role="checkbox"]:hover, [role="switch"]:hover { opacity: .82 }
     }
     :focus-visible { outline: 2px solid #2F6BDB !important; outline-offset: 2px }
+    /* Поля ввода — без рамки фокуса: фокус и так виден по курсору, а рамка с отступом вылезала за поле */
+    input:focus-visible, textarea:focus-visible, [contenteditable="true"]:focus-visible { outline: none !important }
     * { scrollbar-width: thin }
   `;
   document.head.appendChild(el);

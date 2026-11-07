@@ -49,26 +49,6 @@ describe('mergePull', () => {
     assert.equal(uploadPrefs, false);
   });
 
-  test('группа пришла целиком с той же одной правкой: остальные дела — прежние объекты', () => {
-    const tasks = TASKS.map((t) => toTask(JSON.parse(JSON.stringify(t)), t.groupId)!);
-    const s = local({ tasks });
-    const raw = quiet(s) as { items: Record<string, unknown[]>; revs: { groups: Record<string, number> } };
-    raw.revs.groups.g1 = 6;
-    raw.items.g1 = tasks.map((t) => ({ ...t, type: 'task', updatedAt: 'x', ...(t.id === 'gift' && { title: 'Подарок Лене!' }) }));
-    const { patch } = mergePull(s, parseSync(raw));
-    assert.ok(patch.tasks);
-    assert.notEqual(patch.tasks, s.tasks);
-    for (const t of patch.tasks) {
-      if (t.id === 'gift') assert.equal(t.title, 'Подарок Лене!');
-      else assert.equal(t, tasks.find((x) => x.id === t.id), t.id);
-    }
-    assert.deepEqual(patch.revs?.groups.g1, 6);
-    // Люди и группы не поменялись — в патче их нет
-    assert.equal(patch.users, undefined);
-    assert.equal(patch.groups, undefined);
-    assert.equal(patch.me, undefined);
-  });
-
   test('дела группы, созданной на телефоне во время запроса, не пропадают', () => {
     const fresh: Group = { id: 'gNew', name: 'Новая', category: 'other', inviteCode: '', memberIds: ['s'], ownerId: 's', adminIds: [] };
     const mine: Task = { ...TASKS[0]!, id: 'newTask', groupId: 'gNew' };
@@ -85,15 +65,6 @@ describe('mergePull', () => {
     const tasks = patch.tasks ?? s.tasks;
     assert.ok(tasks.some((t) => t.id === 'newTask'));
     assert.ok((patch.groups ?? s.groups).some((g) => g.id === 'gNew'));
-  });
-
-  test('записи группы, из которой вышли, убираются', () => {
-    const s = local();
-    const raw = quiet(s) as { groups: Group[] };
-    raw.groups = raw.groups.filter((g) => g.id !== 'g1');
-    const { patch } = mergePull(s, parseSync(raw));
-    assert.deepEqual(patch.tasks, []);
-    assert.equal(patch.currentGroupId, 'g2');
   });
 
   test('неотправленная правка группы: её записи с сервера не берём', () => {
@@ -154,7 +125,7 @@ describe('мапперы', () => {
   });
 });
 
-describe('mergePull — личный календарь (API 3)', () => {
+describe('mergePull — личный календарь', () => {
   const v3 = (s: LocalData, extra: Record<string, unknown> = {}) => {
     const q = quiet(s) as Record<string, any>;
     return { ...q, revs: { ...q.revs, groups: { ...q.revs.groups, '@me': 7 } }, ...extra };

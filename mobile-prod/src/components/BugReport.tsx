@@ -58,7 +58,6 @@ function appState(): Record<string, unknown> {
     micMode: pick('micMode'),
     voiceLang: pick('voiceLang'),
     net: pick('net'),
-    serverApi: pick('serverApi'),
     outbox: len('outbox'),
     counts: { groups: len('groups'), tasks: len('tasks'), watch: len('watch'), wishes: len('wishes'), topics: len('topics'), ideas: len('ideas') },
   };
@@ -130,13 +129,13 @@ const eventsWord = (n: number) => {
 function infoRows(ctx: Record<string, unknown>, crash: BugReportDraft['crash']): [string, string][] {
   const app = (ctx.app ?? {}) as { version?: string; build?: string | number };
   const dev = (ctx.device ?? {}) as { os?: string; osVersion?: string; model?: string | null };
-  const st = (ctx.state ?? {}) as { serverApi?: number; net?: string; outbox?: number; tasksView?: string };
+  const st = (ctx.state ?? {}) as { net?: string; outbox?: number; tasksView?: string };
   const events = Array.isArray(ctx.events) ? ctx.events.length : 0;
   const route = String(ctx.route ?? '');
   const os = dev.os === 'ios' ? 'iOS' : dev.os === 'android' ? 'Android' : (dev.os ?? '');
   const rows: [string, string][] = [
     ['ЭКРАН', route || '—'],
-    ['ВЕРСИЯ', `${app.version ?? '—'} (${app.build ?? '—'})${st.serverApi ? ` · API ${st.serverApi}` : ''}`],
+    ['ВЕРСИЯ', `${app.version ?? '—'} (${app.build ?? '—'})`],
     ['ТЕЛЕФОН', [dev.model, `${os} ${dev.osVersion ?? ''}`.trim()].filter(Boolean).join(' · ')],
     ['СВЯЗЬ', `${st.net === 'offline' ? 'НЕТ СВЯЗИ' : 'СЕРВЕР ОТВЕЧАЕТ'} · ${st.outbox ?? 0} В ОЧЕРЕДИ`],
     ['ЖУРНАЛ', `${events} ${eventsWord(events)} · БЕЗ ТЕКСТОВ`],

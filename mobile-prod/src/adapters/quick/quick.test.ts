@@ -8,10 +8,10 @@ import type { Idea, Topic, WatchItem, Wish } from '@/lib/types';
 import { quickIdeaFixture, quickTaskFixture, quickWatchFixture, quickWishFixture } from '@/screens/fixtures/quick';
 import { CLOCK, snapshot, task } from '../common/fixture';
 import { colorMap } from '../common/people';
-import { NO_TOPIC, giftTaskTitle, moveBy, moveChange, moveToDate, movePatches, nextSaturday, quickView, splitIdea, taskCopy, topicSegments } from './index';
+import { NO_TOPIC, giftTaskTitle, moveBy, moveChange, moveToDate, movePatches, nextSaturday, quickView, splitIdea, taskClipText, topicSegments } from './index';
 import type { QuickEnv, QuickTarget } from './types';
 
-const ENV: QuickEnv = { today: CLOCK.today, gifts: true };
+const ENV: QuickEnv = { today: CLOCK.today };
 
 const wishes: Wish[] = [
   { id: 'w1', ownerId: 'k', title: 'Наушники Sony WH-1000XM5', note: '', link: 'https://www.ozon.ru/product/1', receivedAt: null, createdAt: '2026-09-28T10:00:00.000Z' },
@@ -68,17 +68,17 @@ describe('C-QuickTask', () => {
     assert.ok(next && next.kind === 'task');
     assert.equal(next.occ, '2026-10-05');
   });
-  test('подзадача и план — ОТКРЫТЬ ПЛАН; план не копируется', () => {
+  test('подзадача и план — ОТКРЫТЬ ПЛАН; план копируется в буфер вместе с подзадачами', () => {
     const step = view({ kind: 'task', id: 'meet' });
     assert.ok(step && step.kind === 'task');
     assert.equal(step.planId, 'trip');
     assert.equal(step.sheet.card.tag, 'КОМАНДИРОВКА В КАЗАНЬ');
-    assert.deepEqual(labels(step.sheet.tiles), ['ГОТОВО', 'ИЗМЕНИТЬ', 'ОТКРЫТЬ ПЛАН', 'КОПИЯ']);
+    assert.deepEqual(labels(step.sheet.tiles), ['ГОТОВО', 'ИЗМЕНИТЬ', 'ОТКРЫТЬ ПЛАН', 'СКОПИРОВАТЬ']);
     const plan = view({ kind: 'task', id: 'trip' });
     assert.ok(plan && plan.kind === 'task');
     assert.equal(plan.planId, 'trip');
     assert.equal(plan.sheet.card.tag, 'ПЛАН · 1/2');
-    assert.equal(plan.sheet.tiles.find((t) => t.key === 'copy')?.disabled, true);
+    assert.equal(plan.sheet.tiles.find((t) => t.key === 'copy')?.disabled, undefined);
   });
   test('без времени +1 ЧАС выключен; без даты — «БЕЗ ДАТЫ»', () => {
     const gift = view({ kind: 'task', id: 'gift' });
@@ -138,17 +138,10 @@ describe('перенос', () => {
   });
 });
 
-describe('КОПИЯ дела', () => {
-  test('новый id, те же дата, время и люди, не отмечена', () => {
-    const src = task('x', '2026-10-05', '09:30', 'Стоматолог', [], { createdBy: 'k', doneAt: '2026-10-05T10:00:00.000Z', endTime: '10:30', occ: '2026-10-05' });
-    const copy = taskCopy(src, { id: 'new', meId: 's', now: CLOCK.nowIso });
-    assert.equal(copy.id, 'new');
-    assert.equal(copy.date, '2026-10-05');
-    assert.equal(copy.time, '09:30');
-    assert.equal(copy.endTime, '10:30');
-    assert.deepEqual(copy.people, ['k']);
-    assert.equal(copy.doneAt, null);
-    assert.equal('occ' in copy, false);
+describe('СКОПИРОВАТЬ дело', () => {
+  test('название, подзадачи плана и описание — строками', () => {
+    assert.equal(taskClipText({ title: 'Стоматолог', note: '' }), 'Стоматолог');
+    assert.equal(taskClipText({ title: 'Поход', note: 'Взять карту' }, [{ title: 'Палатка' }, { title: 'Еда' }]), 'Поход\n— Палатка\n— Еда\nВзять карту');
   });
 });
 
@@ -158,10 +151,6 @@ describe('C-QuickWish', () => {
     assert.ok(v && v.kind === 'wish');
     assert.deepEqual(v.sheet, quickWishFixture.sheet);
     assert.equal(v.link, 'https://www.ozon.ru/product/1');
-  });
-  test('сервер без API 2 — ПОДАРЮ выключена', () => {
-    const v = view({ kind: 'wish', ownerId: 'k', id: 'w1' }, { ...ENV, gifts: false });
-    assert.equal(v?.sheet.tiles[0]?.disabled, true);
   });
   test('своя — ПОЛУЧИЛ / ИЗМЕНИТЬ / ССЫЛКА и УДАЛИТЬ; подарок не виден; ссылка не http — выключена', () => {
     const v = view({ kind: 'wish', ownerId: 's', id: 'w2' });

@@ -28,6 +28,20 @@
           background-color: #0B0B0B;
         }
       }
+      /* Автозаполнение браузера не перекрашивает поля: фон и цвет текста — как у приложения */
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus {
+        transition: background-color 600000s 0s, color 600000s 0s;
+      }
+      input:autofill {
+        background-color: transparent !important;
+      }
+      /* Без рамки фокуса браузера вокруг полей ввода: фокус видно по курсору */
+      input:focus,
+      textarea:focus {
+        outline: none;
+      }
       #root {
         display: flex;
         height: 100%;

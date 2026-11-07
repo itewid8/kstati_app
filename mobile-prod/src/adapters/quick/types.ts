@@ -12,8 +12,8 @@ export type QuickTarget =
 
 export type QuickSnapshot = Pick<Snapshot, 'me' | 'users' | 'groups' | 'tasks' | 'wishes' | 'watch' | 'topics' | 'ideas'>;
 
-/** Сегодня и можно ли дарить (сервер API 2; без него подарок срежется) */
-export type QuickEnv = { today: IsoDate; gifts: boolean };
+/** Сегодня */
+export type QuickEnv = { today: IsoDate };
 
 /** Ряд «ПЕРЕНЕСТИ»: date — окно даты, остальное — сразу */
 export type MoveKey = 'tomorrow' | 'hour' | 'weekend' | 'date';

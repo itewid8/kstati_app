@@ -332,20 +332,17 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
   const qp2 = actions.find((a) => a.intent === 'query_plans');
   if (qp2) {
     const names = (v: unknown) => (Array.isArray(v) ? v.map(str).filter(Boolean).slice(0, 5) : []);
-    const api = ctx.api ?? 1;
     let scope: PlansScope = { kind: 'current' };
     const cat = oneOf<GroupCategory>(CATEGORIES, qp2.category);
-    // «Я» среди людей — это сам говорящий, а не человек из групп (старое приложение ответило бы «Не нашёл человека «Я»»)
+    // «Я» среди людей — это сам говорящий, а не человек из групп
     const people = names(qp2.people);
     const others = people.filter((n) => !isMe(n));
     const meOnly = qp2.scope === 'me' || (qp2.scope === 'people' && people.length > 0 && !others.length);
     let who: string[] | undefined;
     if (meOnly) {
-      // «Что я делаю на выходных» — все мои группы, только мои дела. Старому приложению — текущая группа, как раньше
-      if (api >= 2) {
-        scope = { kind: 'me' };
-        who = [ctx.me.id];
-      }
+      // «Что я делаю на выходных» — все мои группы, только мои дела
+      scope = { kind: 'me' };
+      who = [ctx.me.id];
     } else if (qp2.scope === 'us') scope = { kind: 'us' };
     else if (qp2.scope === 'people' && others.length) scope = { kind: 'people', names: others };
     else if (qp2.scope === 'category' && cat) scope = { kind: 'category', category: cat };
@@ -362,8 +359,8 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     const period = spokenPeriod(transcript, ctx.today);
     if (period) ({ from, to } = period);
     if (to < from) [from, to] = [to, from];
-    // Чьи дела показывать, если модель назвала («что Карина делает в субботу» → who: ["Карина"]) — только api ≥ 2
-    if (api >= 2 && !who) {
+    // Чьи дела показывать, если модель назвала («что Карина делает в субботу» → who: ["Карина"])
+    if (!who) {
       const ids = names(qp2.who).map((n) => matchPerson(n, ctx)).filter((x): x is string => !!x);
       if (ids.length) who = [...new Set(ids)];
     }
@@ -589,9 +586,8 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
         const dow = plainWeekday(tail);
         const saidDate = spokenPeriod(tail, ctx.today);
         // День недели при переносе — ближайший к старой дате записи.
-        // Названный раз серии (S3) — для api ≥ 2 считаем от него: «перенеси йогу в субботу на воскресенье» → следующий день.
-        // Старому приложению — как раньше, от даты серии (оно переносит серию целиком)
-        const ref = change.occ && (ctx.api ?? 1) >= 2 ? change.occ : old?.date;
+        // Названный раз серии считаем от него: «перенеси йогу в субботу на воскресенье» → следующий день
+        const ref = change.occ ?? old?.date;
         if (dow !== null && ref && patch.date !== undefined) patch.date = nearestWeekday(dow, ref, ctx.today);
         else if (saidDate && saidDate.from === saidDate.to) patch.date = saidDate.from;
         // Модель вернула «перенос» без изменений по сути — убираем поля, совпадающие со старыми

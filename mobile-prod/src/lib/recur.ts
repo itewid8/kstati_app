@@ -58,7 +58,7 @@ export function occurrences(task: Pick<Task, 'date' | 'repeat' | 'skipDates'>, f
   if (r.until) end = Math.min(end, dayNo(r.until));
   // Со счётчиком повторов считаем с самого начала серии, иначе — с начала промежутка
   let n = r.count ? start : Math.max(start, dayNo(from));
-  // Не дальше 50 лет от первого дня: давняя дата со счётчиком иначе перебирает миллионы дней (docs/security/REVIEW-v2.md, V2-1)
+  // Не дальше 50 лет от первого дня: давняя дата со счётчиком иначе перебирает миллионы дней
   end = Math.min(end, n + 366 * 50);
   let seen = 0;
   const fromNo = dayNo(from);

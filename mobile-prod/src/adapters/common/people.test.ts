@@ -52,7 +52,7 @@ describe('люди на экранах', () => {
 
 describe('wishOwnerOf', () => {
   const wishes = [{ id: 'w1', ownerId: 'k' }];
-  test('подарок (API 2): автор — даритель, владелец — в scope', () => {
+  test('подарок: автор — даритель, владелец — в scope', () => {
     assert.equal(wishOwnerOf({ scope: 'u:k', actor: 'd', itemId: 'w1' }, wishes), 'k');
   });
   test('нет владельца в событии — по хотелке в хранилище, иначе автор', () => {

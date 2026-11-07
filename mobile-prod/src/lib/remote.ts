@@ -187,7 +187,7 @@ export function toTopic(v: unknown, ownerId: ID): Topic | null {
     title: str(r.title),
     groupIds: strs(r.groupIds),
     createdAt: str(r.createdAt),
-    // Нет поля (старый сервер) — не трогаем архив; null — не в архиве
+    // Нет поля — не трогаем архив; null — не в архиве
     ...('archivedAt' in r && { archivedAt: strOrNull(r.archivedAt) }),
     // Текст самой темы (сервер не присылает пустой)
     ...(typeof r.body === 'string' && r.body && { body: r.body }),
@@ -279,7 +279,7 @@ export type SyncResponse = {
   revs: Revs;
   /** Дела и «Смотреть» групп, где ревизия поменялась */
   items: Record<ID, { tasks: Task[]; watch: WatchItem[] }>;
-  /** API 3: все видимые мне дела одним списком (только если что-то поменялось); нет — дела не менялись или старый сервер */
+  /** Все видимые мне дела одним списком (только если что-то поменялось); нет — дела не менялись */
   tasks?: Task[];
   wishes: Record<ID, Wish[]>;
   /** Личные напоминания; null — сервер их ещё не знает */
@@ -391,15 +391,10 @@ export function mergePull(s: LocalData, res: SyncResponse): { patch: PullPatch; 
   const replaced = new Set(fromServer.map(([gid]) => gid));
   const keep = <T extends { groupId: ID }>(local: T[]) => local.filter((x) => alive.has(x.groupId) && !replaced.has(x.groupId));
   const watch = [...keep(s.watch), ...fromServer.flatMap(([, x]) => x.watch)];
-  // Дела. Сервер API 3 (есть ревизия «@me») шлёт все видимые дела одним списком, когда что-то поменялось.
+  // Дела: сервер шлёт все видимые дела одним списком, когда что-то поменялось.
   // Есть неотправленные правки дел — свой список не трогаем, а ревизию личного календаря сбрасываем: заберём заново
-  const v3 = PERSONAL in res.revs.groups;
-  const pendingTasks = v3 && s.outbox.some((o) => o.op === 'task.put' || (o.op === 'item.delete' && !s.watch.some((w) => w.id === o.id)));
-  const tasks = !v3
-    ? [...keep(s.tasks), ...fromServer.flatMap(([, x]) => x.tasks)]
-    : res.tasks && !pendingTasks
-      ? res.tasks
-      : s.tasks;
+  const pendingTasks = s.outbox.some((o) => o.op === 'task.put' || (o.op === 'item.delete' && !s.watch.some((w) => w.id === o.id)));
+  const tasks = res.tasks && !pendingTasks ? res.tasks : s.tasks;
 
   const wishFromServer = Object.entries(res.wishes).filter(([owner]) => !pending.owners.has(owner));
   const replacedOwners = new Set(wishFromServer.map(([o]) => o));

@@ -1,5 +1,5 @@
 /**
- * Личный календарь и видимость дел в группах (сервер API 3: server/src/visibility.ts — правило то же).
+ * Личный календарь и видимость дел в группах (на сервере server/src/visibility.ts — правило то же).
  *
  * Дело принадлежит человеку (createdBy). Группа видит его, если:
  *   1. не стоит «Только я» (only);
@@ -26,7 +26,7 @@ export function visibleIn(t: Shareable, g: ModeGroup): boolean {
   return t.groupId === g.id || !selectsOnly(g, t.createdBy);
 }
 
-/** Где дело видно: своё — считаем по группам, чужое — как прислал сервер (старый сервер — его группа) */
+/** Где дело видно: своё — считаем по группам, чужое — как прислал сервер */
 export function taskGroups(t: Pick<Task, 'createdBy' | 'groupId' | 'only' | 'share' | 'in'>, groups: readonly ModeGroup[], meId: ID | undefined): ID[] {
   if (t.createdBy === meId || (!t.in && t.groupId === PERSONAL)) return groups.filter((g) => visibleIn(t, g)).map((g) => g.id);
   const known = new Set(groups.map((g) => g.id));

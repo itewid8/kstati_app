@@ -51,6 +51,11 @@ export function signToken(userId: string, scope?: 'admin'): string {
 
 /** id аккаунта из токена; scope 'admin' — только из токена страницы подписок */
 export function verifyToken(token: string, scope?: 'admin'): string | null {
+  return tokenClaims(token, scope)?.sub ?? null;
+}
+
+/** Проверенные поля токена: чей и когда выдан */
+function tokenClaims(token: string, scope?: 'admin'): { sub: string; iat: number } | null {
   const [head, body, sig] = token.split('.');
   if (!head || !body || !sig) return null;
   const want = b64url(createHmac('sha256', config.jwtSecret).update(`${head}.${body}`).digest());
@@ -59,7 +64,7 @@ export function verifyToken(token: string, scope?: 'admin'): string | null {
     const p = JSON.parse(Buffer.from(body, 'base64url').toString());
     if (typeof p.sub !== 'string' || typeof p.exp !== 'number' || p.exp * 1000 < Date.now()) return null;
     if (scope && p.scope !== scope) return null;
-    return p.sub;
+    return { sub: p.sub, iat: typeof p.iat === 'number' ? p.iat : 0 };
   } catch {
     return null;
   }
@@ -82,9 +87,10 @@ export async function requireUser(req: FastifyRequest, store: Store, scope?: 'ad
   const x = req.headers['x-kstati-token'];
   const h = req.headers.authorization ?? '';
   const token = (Array.isArray(x) ? x[0] : x) || (h.startsWith('Bearer ') ? h.slice(7) : '');
-  const id = token ? verifyToken(token, scope) : null;
-  const user = id ? await store.getUser(id) : null;
-  if (!user) throw new HttpError(401, 'unauthorized');
+  const claims = token ? tokenClaims(token, scope) : null;
+  const user = claims ? await store.getUser(claims.sub) : null;
+  // Пароль меняли или сбрасывали после выдачи токена — старые входы больше не действуют
+  if (!user || (user.tokensAfter && claims!.iat < user.tokensAfter)) throw new HttpError(401, 'unauthorized');
   return user;
 }
 
@@ -102,14 +108,16 @@ export const meView = (u: User) => ({
 
 const normEmail = (e: string) => e.trim().toLowerCase();
 const codeHash = (email: string, code: string) => createHash('sha256').update(`${email}|${code}|${config.jwtSecret}`).digest('hex');
-type CodeRec = { hash: string; attempts: number };
+type CodeRec = { hash: string };
 const CODE_TTL = 15 * 60;
 
 async function sendCode(store: Store, purpose: 'register' | 'reset', email: string): Promise<string | undefined> {
   // Не чаще раза в минуту на адрес
   if (await store.getTemp(`cooldown#${purpose}#${email}`)) throw new HttpError(429, 'too_often', 'Код уже отправлен, подождите минуту');
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-  await store.putTemp(`code#${purpose}#${email}`, { hash: codeHash(email, code), attempts: 0 } satisfies CodeRec, CODE_TTL);
+  await store.putTemp(`code#${purpose}#${email}`, { hash: codeHash(email, code) } satisfies CodeRec, CODE_TTL);
+  // Новый код — новые 5 попыток
+  await store.deleteCounter(`codetry#${purpose}#${email}`);
   await store.putTemp(`cooldown#${purpose}#${email}`, 1, 60);
   const subject = purpose === 'register' ? `Код для регистрации: ${code}` : `Код для сброса пароля: ${code}`;
   const text =
@@ -126,15 +134,16 @@ async function checkCode(store: Store, purpose: 'register' | 'reset', email: str
   const key = `code#${purpose}#${email}`;
   const rec = await store.getTemp<CodeRec>(key);
   if (!rec) throw new HttpError(400, 'code_expired', 'Код устарел — запросите новый');
-  if (rec.attempts >= 5) {
+  // Попытки — атомарным счётчиком: параллельные запросы не получат больше 5
+  if ((await store.incrUpTo(`codetry#${purpose}#${email}`, 5, CODE_TTL)) === null) {
     await store.deleteTemp(key);
     throw new HttpError(400, 'code_expired', 'Слишком много попыток — запросите новый код');
   }
-  if (rec.hash !== codeHash(email, code.trim())) {
-    await store.putTemp(key, { ...rec, attempts: rec.attempts + 1 }, CODE_TTL);
-    throw new HttpError(400, 'code_wrong', 'Неверный код');
+  if (rec.hash !== codeHash(email, code.trim())) throw new HttpError(400, 'code_wrong', 'Неверный код');
+  if (consume) {
+    await store.deleteTemp(key);
+    await store.deleteCounter(`codetry#${purpose}#${email}`);
   }
-  if (consume) await store.deleteTemp(key);
 }
 
 const Email = z.string().trim().toLowerCase().email().max(200);
@@ -189,14 +198,11 @@ async function vkExchange(code: string, verifier: string, deviceId: string, stat
 export async function passwordLogin(store: Store, email: string, password: string): Promise<User> {
   const id = await store.getKey(`email#${email}`);
   const user = id ? await store.getUser(id) : null;
+  // Каждая попытка сначала занимает место в атомарном счётчике: параллельные запросы не обойдут лимит
   const failKey = `loginfail#${email}`;
-  const fails = (await store.getTemp<number>(failKey)) ?? 0;
-  if (fails >= 10) throw new HttpError(429, 'too_many', 'Слишком много попыток — подождите 15 минут или сбросьте пароль');
-  if (!user || !(await verifyPassword(password, user.passHash))) {
-    await store.putTemp(failKey, fails + 1, 15 * 60);
-    throw new HttpError(401, 'bad_credentials', 'Неверная почта или пароль');
-  }
-  await store.deleteTemp(failKey);
+  if ((await store.incrUpTo(failKey, 10, 15 * 60)) === null) throw new HttpError(429, 'too_many', 'Слишком много попыток — подождите 15 минут или сбросьте пароль');
+  if (!user || !(await verifyPassword(password, user.passHash))) throw new HttpError(401, 'bad_credentials', 'Неверная почта или пароль');
+  await store.deleteCounter(failKey);
   return user;
 }
 
@@ -243,8 +249,9 @@ export function registerAuth(app: FastifyInstance, store: Store) {
     const user = id ? await store.getUser(id) : null;
     if (!user) throw new HttpError(400, 'code_expired');
     user.passHash = await hashPassword(b.password);
+    user.tokensAfter = Math.floor(Date.now() / 1000);
     await store.putUser(user);
-    await store.deleteTemp(`loginfail#${b.email}`);
+    await store.deleteCounter(`loginfail#${b.email}`);
     return issue(user);
   });
 
@@ -336,7 +343,9 @@ export function registerAuth(app: FastifyInstance, store: Store) {
     const b = z.object({ old: z.string().max(200).optional(), password: Password }).parse(req.body);
     if (user.passHash && !(await verifyPassword(b.old ?? '', user.passHash))) throw new HttpError(401, 'bad_credentials', 'Неверный текущий пароль');
     user.passHash = await hashPassword(b.password);
+    // Все прежние входы (другие телефоны, украденный токен) — недействительны; этому телефону — новый токен
+    user.tokensAfter = Math.floor(Date.now() / 1000);
     await store.putUser(user);
-    return { ok: true };
+    return { ok: true, token: signToken(user.id) };
   });
 }

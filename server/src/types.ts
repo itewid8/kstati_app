@@ -39,7 +39,7 @@ export type WatchDraft = { title: string; kind: Kind | null; genres: Genre[]; or
 export type IdeaDraft = { title: string; topicId: string | null; newTopic: string | null };
 /**
  * Тема (она же заметка). body — текст темы: новый список голосом или правленый («добавь в список продуктов сыр»);
- * changes — что поменялось, только для карточки. Старое приложение эти поля не знает и создаёт пустую тему по названию.
+ * changes — что поменялось, только для карточки.
  */
 export type TopicDraft = { title: string; body?: string; changes?: string[] };
 
@@ -59,8 +59,7 @@ export type ChangeDraft = {
   chosen: string;
   /**
    * S3: какой раз повторяющегося дела назван во фразе («удали йогу в субботу») — YYYY-MM-DD.
-   * Относится к chosen. Нет — день не назван или дело не повторяется. «Только этот раз / все» решает клиент.
-   * Старое приложение поле не знает и действует на всю серию, как раньше.
+   * Относится к chosen. Нет — день не назван или дело не повторяется. «Только этот раз / все» решает приложение.
    */
   occ?: string;
   patch?: Partial<{
@@ -85,9 +84,9 @@ export type PlansScope =
   | { kind: 'category'; category: GroupCategory }
   | { kind: 'groups'; names: string[] }
   | { kind: 'people'; names: string[] }
-  /** S4: все мои группы («что я делаю…»). Только клиентам с x-kstati-api ≥ 2 — старые получают current */
+  /** Все мои группы («что я делаю…») */
   | { kind: 'me' };
-/** who (S4, только api ≥ 2) — чьи дела показывать: id людей; нет — все дела выбранных групп */
+/** who — чьи дела показывать: id людей; нет — все дела выбранных групп */
 export type PlansQuery = { scope: PlansScope; from: string; to: string; query: string; who?: string[] };
 
 export type WatchFilters = { kind: Kind[]; genre: Genre[]; origin: Origin[]; fresh: Freshness[] };
@@ -141,6 +140,4 @@ export type Context = {
   groupMembers?: string[];
   /** План (большое дело), открытый на экране: новое дело без названного плана становится его подзадачей */
   currentParentId?: string | null;
-  /** Уровень API клиента (x-kstati-api, S5): от него зависят новые виды ответа. Нет — 1 */
-  api?: number;
 };

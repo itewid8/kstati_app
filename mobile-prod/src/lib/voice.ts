@@ -75,7 +75,7 @@ let recorder: RecorderImpl | null = null;
 export const registerRecorder = (r: RecorderImpl | null) => {
   recorder = r;
 };
-const useRealMic = () => !!API_URL && !!recorder;
+const realMicOn = () => !!API_URL && !!recorder;
 
 /**
  * Чем записываем текущую команду: speech — распознаёт сам телефон (бесплатно, на сервер уходит текст),
@@ -115,7 +115,7 @@ export const recordedMs = () => (useStore.getState().voice === 'recording' ? Dat
 /* ---------- Счётчик команд за день (GET /voice/quota, поле left ответа) ---------- */
 
 /**
- * Счётчик с сервера (лимит не тратит). Нет связи или старый сервер — null, хранилище не меняется.
+ * Счётчик с сервера (лимит не тратит). Нет связи — null, хранилище не меняется.
  * День счётчика (voiceQuotaDay) хранилище ставит само в setVoiceQuota — откуда бы счётчик ни пришёл (и с экрана настроек)
  */
 export async function refreshVoiceQuota(): Promise<VoiceQuota | null> {
@@ -229,7 +229,7 @@ async function begin(mode: RecMode) {
     if (res === 'denied') return s.setCard({ source: 'voice', transcript: '', problem: 'micDenied' });
     if (res === 'error') return s.setCard({ source: 'voice', transcript: '', problem: 'server', detail: 'распознавание телефона не запустилось' });
     engine = 'speech';
-  } else if (useRealMic() && recorder) {
+  } else if (realMicOn() && recorder) {
     const mic = recorder;
     const id = run;
     starting = true;
@@ -503,7 +503,8 @@ function applyResult(transcript: string, r: ParseResult) {
       return;
     case 'queryIdeas':
       s.setCard(null);
-      (r.topicId ? toTopic(r.topicId) : toTab('ideas'));
+      if (r.topicId) toTopic(r.topicId);
+      else toTab('ideas');
       return;
     case 'unknown':
       s.setCard({ source: 'voice', transcript, problem: 'notUnderstood' });

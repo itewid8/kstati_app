@@ -178,7 +178,7 @@ Response for both:
 | `notFound` | `query` | “not found in your lists” |
 | `queryWatch` | `filters` | opens Смотреть filtered |
 | `queryWish` / `unknownPerson` | `personId` / `name` | opens that person's wishes / name not recognized |
-| `queryPlans` | `plans`: whose and which period | the app selects groups and tasks (`mobile/src/lib/plans.ts`) |
+| `queryPlans` | `plans`: whose and which period | the app selects groups and tasks (`mobile-prod/src/lib/plans.ts`) |
 | `queryIdeas` | `topicId` (`inbox`, an id, or `null`) | opens the topic |
 | `unknown` | — | “not understood — add as task / wish / movie?” |
 

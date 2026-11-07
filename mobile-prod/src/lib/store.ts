@@ -227,8 +227,6 @@ type State = {
    * Отказ с временным кодом повторяется один раз после удачной синхронизации (quarantine.ts)
    */
   quarantine: readonly Quarantined[];
-  /** Уровень API сервера (GET /health); null — ещё не проверяли */
-  serverApi: number | null;
   /** Черновик для окна дела (голос → «Изменить»); окно забирает его при открытии */
   editorSeed: EditorSeed | null;
 };
@@ -346,7 +344,6 @@ type Actions = {
   setSpeechNotice: (v: boolean) => void;
   /** Счётчик команд за сегодня; день запоминается сам (voiceQuotaDay) */
   setVoiceQuota: (q: VoiceQuota | null) => void;
-  setServerApi: (api: number | null) => void;
   setEditorSeed: (seed: EditorSeed | null) => void;
   toggleSection: (key: string) => void;
   togglePlanOpen: (id: string) => void;
@@ -445,7 +442,6 @@ const initial: State = {
   micMode: 'tap',
   voiceLang: 'ru-RU',
   speechNotice: false,
-  serverApi: null,
 };
 
 export const useStore = create<State & Actions>()(
@@ -1003,7 +999,6 @@ export const useStore = create<State & Actions>()(
     setVoiceLang: (voiceLang) => set({ voiceLang }),
     setSpeechNotice: (speechNotice) => set({ speechNotice }),
     setVoiceQuota: (voiceQuota) => set({ voiceQuota, voiceQuotaDay: voiceQuota ? toISODate(new Date()) : '' }),
-    setServerApi: (serverApi) => get().serverApi !== serverApi && set({ serverApi }),
     setEditorSeed: (editorSeed) => set({ editorSeed }),
     setBugButton: (bugButton) => set({ bugButton }),
     setBugPos: (bugPos) => set({ bugPos }),

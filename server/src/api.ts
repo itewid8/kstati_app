@@ -13,7 +13,6 @@ import { randomInt } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
-import { apiLevel } from './client.js';
 import { lookupFilm, type FilmDeps, type FilmLookup } from './films.js';
 import { giftrev, grev, irev, migrated, PERSON_COLORS, publicUser, TASK_KINDS, trev, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type WatchItem, type Wish } from './store/index.js';
 import { CATEGORIES } from './types.js';
@@ -52,11 +51,11 @@ const Spec = z.string().regex(/^(m\d{1,4}|[dM]\d{1,3}@\d{2}:\d{2})$/);
 
 const TaskIn = z.object({
   id: Id,
-  /** Группа, где создали; «@me» — личный календарь (API 3) */
+  /** Группа, где создали; «@me» — личный календарь */
   groupId: Id,
-  /** Чьё дело (API 3): для чужого — владелец; нет — моё или ищется по группе (старое приложение) */
+  /** Чьё дело: для чужого — владелец; нет — моё */
   ownerId: Id.optional(),
-  /** «Только я» и отметки по группам — меняет только владелец (API 3) */
+  /** «Только я» и отметки по группам — меняет только владелец */
   only: z.boolean().optional(),
   share: z.record(Id, z.boolean()).refine((r) => Object.keys(r).length <= 100).optional(),
   title: z.string().trim().min(1).max(200),
@@ -72,7 +71,7 @@ const TaskIn = z.object({
   endTime: Time5.optional(),
   people: z.array(Id).max(50).optional(),
   parentId: Id.nullable().optional(),
-  /** Тип дела: обычное, день рождения, важный день, путешествие. Нет поля — как было (старое приложение) */
+  /** Тип дела: обычное, день рождения, важный день, путешествие. Нет поля — как было */
   kind: z.enum(TASK_KINDS).optional(),
   /** Именинник: участник группы или имя; null — убрать; нет поля — как было */
   celebrant: z.object({ id: Id.optional(), name: z.string().trim().min(1).max(80) }).nullable().optional(),
@@ -96,7 +95,7 @@ const WishIn = z.object({
   link: z.string().max(1000),
   receivedAt: Stamp,
   /**
-   * S1: от кого подарок — владелец указывает, когда сам отмечает «получил». Нет поля — не трогать (старое приложение),
+   * От кого подарок — владелец указывает, когда сам отмечает «получил». Нет поля — не трогать,
    * null — убрать. Пока хотелка не получена, поле от владельца не принимается: он не видит чужую отметку и не должен её стереть
    */
   giftedBy: Id.nullable().optional(),
@@ -107,9 +106,9 @@ const TopicIn = z.object({
   id: Id,
   title: z.string().trim().min(1).max(80),
   groupIds: z.array(Id).max(20),
-  /** S2: в архиве с этого момента; null — вернуть из архива; нет поля — не трогать (старое приложение) */
+  /** В архиве с этого момента; null — вернуть из архива; нет поля — не трогать */
   archivedAt: Stamp.optional(),
-  /** Тема — сама заметка: её текст (строки с разметкой, как у заметки). Нет поля — не трогать (старое приложение) */
+  /** Тема — сама заметка: её текст (строки с разметкой, как у заметки). Нет поля — не трогать */
   body: z.string().max(20000).optional(),
 });
 /** Идея (заметка внутри темы): текст и тема (null — «Без темы») */
@@ -137,7 +136,7 @@ const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('group.leave'), id: Id }),
   z.object({ op: z.literal('group.admin'), id: Id, userId: Id, admin: z.boolean() }),
   z.object({ op: z.literal('group.remove'), id: Id, userId: Id }),
-  // Мой режим в группе (API 3): true — «Только выбранные», false — «Все, кроме скрытых»
+  // Мой режим в группе: true — «Только выбранные», false — «Все, кроме скрытых»
   z.object({ op: z.literal('group.mode'), id: Id, selectOnly: z.boolean() }),
   // Личные напоминания: настройки по умолчанию и напоминания для отдельных дел (null — убрать своё)
   z.object({
@@ -178,16 +177,13 @@ function taskChanges(a: Task, b: Task): string[] {
 }
 
 /**
- * Хотелка глазами viewer (S1).
+ * Хотелка глазами viewer.
  * Владелец: пока сам не отметил «получил», не видит, что её подарили и кто (сюрприз) — полей giftedBy/giftedAt нет вовсе.
- * Остальные видят всё. Старому приложению (api 1) подарок показываем через receivedAt — других полей оно не знает,
- * а чужие хотелки оно не отправляет на сервер, так что это ничего не перезапишет.
+ * Остальные видят всё.
  */
-export function wishView(w: Wish, viewerId: string, api: number): Wish {
-  const { giftedBy, giftedAt, ...rest } = w;
+export function wishView(w: Wish, viewerId: string): Wish {
+  const { giftedBy: _by, giftedAt: _at, ...rest } = w;
   if (w.ownerId === viewerId) return w.receivedAt ? w : rest;
-  if (!giftedBy && !giftedAt) return w;
-  if (api < 2 && !w.receivedAt) return { ...w, receivedAt: giftedAt ?? w.updatedAt };
   return w;
 }
 
@@ -246,12 +242,8 @@ export class Data {
     }
   }
 
-  /**
-   * Лента для человека: события в его группах и хотелки соучастников. Свои действия не показываем.
-   * api 1: подарок (wish.done от дарителя в ленте хотелок владельца, S1) отдаём от имени владельца — старое приложение
-   * считает автора wish.* владельцем хотелки («Маша отметила хотелку как подаренную» и переход к хотелкам Маши)
-   */
-  async activity(user: User, since: string, api = 1) {
+  /** Лента для человека: события в его группах и хотелки соучастников. Свои действия не показываем */
+  async activity(user: User, since: string) {
     const s = this.store;
     const groups = (await s.getGroups(await s.listMemberships(user.id))).filter((g) => g.memberIds.includes(user.id));
     const people = [...new Set(groups.flatMap((g) => g.memberIds))].filter((id) => id !== user.id);
@@ -270,15 +262,13 @@ export class Data {
       .filter((a) => a.actor !== user.id && !seen.has(a.id) && !!seen.add(a.id))
       .sort((a, b) => b.id.localeCompare(a.id))
       .slice(0, 150);
-    if (api >= 2) return { events };
-    const giftOwner = (a: Activity) => (a.kind === 'wish.done' && a.scope.startsWith('u:') && a.scope.slice(2) !== a.actor ? a.scope.slice(2) : null);
-    return { events: events.map((a) => (giftOwner(a) ? { ...a, actor: giftOwner(a)! } : a)) };
+    return { events };
   }
 
   /**
    * Есть ли у двух людей общая группа. Читаем только группы, общие по спискам членства, и по 20 за раз до первой
    * подходящей: wish.gift и wish.put зовут это на каждую операцию (до 200 в /ops), а групп у человека может быть
-   * сколько угодно — чтение всех его групп на операцию давало ×200 обращений к базе (docs/security/REVIEW-v2.md, V2-3)
+   * сколько угодно — чтение всех его групп на операцию давало ×200 обращений к базе
    */
   private async shareGroup(a: string, b: string): Promise<boolean> {
     const [ma, mb] = await Promise.all([this.store.listMemberships(a), this.store.listMemberships(b)]);
@@ -336,7 +326,7 @@ export class Data {
     await this.store.incr(grev(g.id));
   }
 
-  /* ---------- личный календарь (API 3, visibility.ts) ---------- */
+  /* ---------- личный календарь (visibility.ts) ---------- */
 
   /** Группы, где человек состоит */
   private async groupsOf(userId: string): Promise<Group[]> {
@@ -373,26 +363,10 @@ export class Data {
     }
   }
 
-  /**
-   * Дело по id. ownerId известен (API 3) — сразу в его разделе; иначе (старое приложение) — моё,
-   * а потом дела участников группы groupId
-   */
-  private async findTask(user: User, id: string, ownerId: string | undefined, groupId: string): Promise<Task | null> {
-    const get = async (uid: string) => {
-      const it = await this.store.getItem(ownerPart(uid), id);
-      return it?.type === 'task' ? it : null;
-    };
-    if (ownerId) return get(ownerId);
-    const mine = await get(user.id);
-    if (mine || groupId === PERSONAL) return mine;
-    const g = await this.store.getGroup(groupId);
-    if (!g?.memberIds.includes(user.id)) return null;
-    await this.ensureMigrated([g]);
-    for (const m of g.memberIds) {
-      if (m === user.id) continue;
-      const t = await get(m);
-      if (t) return t;
-    }
+  /** Дело по id — в разделе владельца (ownerId; нет — моё) */
+  private async findTask(user: User, id: string, ownerId: string | undefined): Promise<Task | null> {
+    const it = await this.store.getItem(ownerPart(ownerId ?? user.id), id);
+    return it?.type === 'task' ? it : null;
     return null;
   }
 
@@ -444,16 +418,11 @@ export class Data {
   }
 
   /**
-   * Дело глазами человека. API 3: groupId — где создано («@me» — личное), in — его группы, где видно;
-   * чужим — без отметок видимости (кому ещё владелец показал или скрыл — не их дело).
-   * Старое приложение: одна группа (где создано, если видно там) — оно знает только дела групп
+   * Дело глазами человека: groupId — где создано («@me» — личное), in — его группы, где видно;
+   * чужим — без отметок видимости (кому ещё владелец показал или скрыл — не их дело)
    */
-  private taskView(t: Task, inGroups: string[], viewer: string, api: number): Task | null {
+  private taskView(t: Task, inGroups: string[], viewer: string): Task {
     const { home, only, share, ext, ...rest } = t;
-    if (api < 3) {
-      const g = home && inGroups.includes(home) ? home : inGroups[0];
-      return g ? { ...rest, groupId: g } : null;
-    }
     if (t.createdBy === viewer) return { ...rest, groupId: home ?? PERSONAL, ...(only && { only }), ...(share && { share }), ...(ext && { ext }), in: inGroups } as Task;
     return { ...rest, groupId: inGroups[0] ?? PERSONAL, in: inGroups } as Task;
   }
@@ -469,14 +438,14 @@ export class Data {
     ];
   }
 
-  async apply(user: User, op: OpIn, api = 1): Promise<unknown> {
+  async apply(user: User, op: OpIn): Promise<unknown> {
     const now = new Date().toISOString();
     const s = this.store;
     switch (op.op) {
       case 'task.put': {
         const inT = op.task;
         const personal = inT.groupId === PERSONAL;
-        const old = await this.findTask(user, inT.id, inT.ownerId, inT.groupId);
+        const old = await this.findTask(user, inT.id, inT.ownerId);
         if (!old) {
           // Новое дело — всегда своё; из группы — только если я в ней
           if (inT.ownerId && inT.ownerId !== user.id) throw new HttpError(403, 'forbidden', 'Дело не найдено');
@@ -496,17 +465,15 @@ export class Data {
           return {};
         }
         const home = old ? (old.home ?? null) : personal ? null : inT.groupId;
-        // Видимость меняет только владелец; старое приложение о ней не знает — его новое дело видно только своей группе
+        // Видимость меняет только владелец
         let only = old?.only ?? false;
         let share = old?.share;
         if (role === 'owner') {
-          if (api >= 3) {
-            if (inT.only !== undefined) only = inT.only;
-            if (inT.share !== undefined) {
-              const ids = new Set(ownerGroups.map((g) => g.id));
-              share = Object.fromEntries(Object.entries(inT.share).filter(([gid]) => ids.has(gid)));
-            }
-          } else if (!old) share = Object.fromEntries(ownerGroups.map((g) => [g.id, g.id === home]));
+          if (inT.only !== undefined) only = inT.only;
+          if (inT.share !== undefined) {
+            const ids = new Set(ownerGroups.map((g) => g.id));
+            share = Object.fromEntries(Object.entries(inT.share).filter(([gid]) => ids.has(gid)));
+          }
         }
         // Создали в группе — группа его видит, даже если там режим «Только выбранные»
         if (!old && home && share?.[home] === undefined) share = { ...share, [home]: true };
@@ -593,7 +560,7 @@ export class Data {
           await this.log(user, { scope: op.groupId, groupId: op.groupId, itemId: op.id, title: watch.title, kind: 'watch.delete' });
           return {};
         }
-        const old = await this.findTask(user, op.id, op.ownerId, op.groupId);
+        const old = await this.findTask(user, op.id, op.ownerId);
         if (!old) return {};
         const role = await this.roleFor(user, old);
         if (role !== 'owner' && role !== 'admin') throw new HttpError(403, 'forbidden', 'Удалить дело могут владелец и админы группы');
@@ -607,7 +574,7 @@ export class Data {
       case 'wish.put': {
         const old = await s.getWish(user.id, op.wish.id);
         const { giftedBy: giftIn, ...fields } = op.wish;
-        // Подарок (S1). По умолчанию — как было: старое приложение полей подарка не шлёт и не должно их стирать
+        // Подарок. По умолчанию — как было: без полей подарка в операции они не стираются
         let giftedBy = old?.giftedBy ?? null;
         let giftedAt = old?.giftedAt ?? null;
         if (old?.receivedAt && !fields.receivedAt) {
@@ -871,7 +838,7 @@ export class Data {
     return { updated, left: todo.length - updated };
   }
 
-  async sync(user: User, known: { groups: Record<string, number>; owners: Record<string, number>; ideas?: Record<string, string> }, api = 1) {
+  async sync(user: User, known: { groups: Record<string, number>; owners: Record<string, number>; ideas: Record<string, string> }) {
     const s = this.store;
     const groups = await s.getGroups(await s.listMemberships(user.id));
     const mine = groups.filter((g) => g.memberIds.includes(user.id));
@@ -886,21 +853,19 @@ export class Data {
     const ideaRevs = Object.fromEntries(
       peopleIds.map((id) => [id, id === user.id ? `${counters[irev(id)] ?? 0}` : `${counters[irev(id)] ?? 0}|${[...commonWith(id)].sort().join(',')}`]),
     );
-    // Старые версии приложения идей не знают (не присылают ideas) — им и не отдаём
-    const knownIdeas = known.ideas ?? {};
-    const changedIdeaOwners = known.ideas ? peopleIds.filter((id) => knownIdeas[id] !== ideaRevs[id]) : [];
+    const knownIdeas = known.ideas;
+    const changedIdeaOwners = peopleIds.filter((id) => knownIdeas[id] !== ideaRevs[id]);
     const revs = {
-      // API 3: «@me» — ревизия моего личного календаря (дела без групп меняют только её)
-      groups: { ...Object.fromEntries(mine.map((g) => [g.id, counters[grev(g.id)] ?? 0])), ...(api >= 3 && { [PERSONAL]: counters[trev(user.id)] ?? 0 }) } as Record<string, number>,
-      // Чужим хотелкам — ещё и подарки (giftrev); своя ревизия подарков не включает: сюрприз (S1, REVIEW-v2 V2-2).
+      // «@me» — ревизия моего личного календаря (дела без групп меняют только её)
+      groups: { ...Object.fromEntries(mine.map((g) => [g.id, counters[grev(g.id)] ?? 0])), [PERSONAL]: counters[trev(user.id)] ?? 0 } as Record<string, number>,
+      // Чужим хотелкам — ещё и подарки (giftrev); своя ревизия подарков не включает: сюрприз.
       // Сумма двух растущих счётчиков тоже только растёт — телефон по-прежнему сравнивает одно число
       owners: Object.fromEntries(peopleIds.map((id) => [id, (counters[urev(id)] ?? 0) + (id === user.id ? 0 : (counters[giftrev(id)] ?? 0))])),
     };
     const changedGroups = mine.filter((g) => known.groups[g.id] !== revs.groups[g.id]);
     const changedOwners = peopleIds.filter((id) => known.owners[id] !== revs.owners[id]);
-    // Дела: API 3 — одним списком всех видимых, если поменялась хоть одна группа или личный календарь;
-    // старое приложение — по группам, каждое дело в одной группе
-    const tasksChanged = changedGroups.length > 0 || (api >= 3 && known.groups[PERSONAL] !== revs.groups[PERSONAL]);
+    // Дела — одним списком всех видимых, если поменялась хоть одна группа или личный календарь
+    const tasksChanged = changedGroups.length > 0 || known.groups[PERSONAL] !== revs.groups[PERSONAL];
     const [itemLists, visible, wishLists, prefs, noteLists] = await Promise.all([
       Promise.all(changedGroups.map((g) => s.listItems(g.id).then((xs) => xs.filter((x): x is WatchItem => x.type === 'watch')))),
       tasksChanged ? this.visibleTasks(user, mine) : Promise.resolve([]),
@@ -918,19 +883,9 @@ export class Data {
       groups: mine.map((g) => groupView(g, user.id)),
       users: users.map(publicUser),
       revs,
-      items: Object.fromEntries(
-        changedGroups.map((g, i) => [
-          g.id,
-          api >= 3
-            ? itemLists[i]
-            : [...itemLists[i], ...visible.flatMap((x) => {
-                const v = this.taskView(x.task, x.in, user.id, api);
-                return v && v.groupId === g.id ? [v] : [];
-              })],
-        ]),
-      ),
-      ...(api >= 3 && tasksChanged && { tasks: visible.flatMap((x) => this.taskView(x.task, x.in, user.id, api) ?? []) }),
-      wishes: Object.fromEntries(changedOwners.map((id, i) => [id, wishLists[i].map((w) => wishView(w, user.id, api))])),
+      items: Object.fromEntries(changedGroups.map((g, i) => [g.id, itemLists[i]])),
+      ...(tasksChanged && { tasks: visible.map((x) => this.taskView(x.task, x.in, user.id)) }),
+      wishes: Object.fromEntries(changedOwners.map((id, i) => [id, wishLists[i].map((w) => wishView(w, user.id))])),
       // Личные напоминания — всегда целиком (их немного); null — телефон ещё ни разу не присылал
       prefs,
       // Идеи: ревизии (не смогли прочитать — прежние, чтобы телефон спросил ещё раз) и содержимое изменившихся
@@ -971,9 +926,9 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
   app.post('/sync', async (req) => {
     const user = await requireUser(req, store);
     const known = z
-      .object({ groups: z.record(z.number()).default({}), owners: z.record(z.number()).default({}), ideas: z.record(z.string().max(2000)).optional() })
+      .object({ groups: z.record(z.string(), z.number()).default({}), owners: z.record(z.string(), z.number()).default({}), ideas: z.record(z.string(), z.string().max(2000)).default({}) })
       .parse(req.body ?? {});
-    return data.sync(user, known, apiLevel(req));
+    return data.sync(user, known);
   });
 
   /** Дополнить «Смотреть» группы рейтингом и описанием из ПоискКино (старые записи) */
@@ -989,7 +944,7 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
     const q = z.object({ since: z.string().max(40).optional() }).parse(req.query ?? {});
     const floor = new Date(Date.now() - 30 * 86400000).toISOString();
     const since = q.since && q.since > floor ? q.since : floor;
-    return data.activity(user, since, apiLevel(req));
+    return data.activity(user, since);
   });
 
   /** Пачка изменений. Ошибка одной операции не мешает остальным */
@@ -1008,7 +963,7 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
       try {
         // Профиль мог поменяться предыдущей операцией
         const fresh = (await store.getUser(user.id)) ?? user;
-        results.push({ ok: true, ...((await data.apply(fresh, parsed.data, apiLevel(req))) as object) });
+        results.push({ ok: true, ...((await data.apply(fresh, parsed.data)) as object) });
       } catch (e) {
         if (e instanceof HttpError) {
           req.log.warn({ op: parsed.data.op, code: e.code }, `Операция отклонена: ${e.message}`);

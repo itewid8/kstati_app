@@ -8,7 +8,7 @@ import { YearContainer } from './YearContainer';
 import { CalendarZoom } from './CalendarZoom';
 
 /**
- * Вкладка «Дела» в виде календаря: вид — s.tasksView (список рисует TasksListContainer) (INTEGRATION.md 1.1, 5.1).
+ * Вкладка «Дела» в виде календаря: вид — s.tasksView (список рисует TasksListContainer).
  * Без групп сюда не попадают — app/(tabs)/tasks/index.tsx ведёт на онбординг
  */
 export const CalendarContainer = signedInOnly(function Calendar() {

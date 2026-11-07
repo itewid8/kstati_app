@@ -34,10 +34,14 @@ jobs:
     env:
       IMAGE: cr.yandex/${{ vars.REGISTRY_ID }}/kstati-server:${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      # Действия закреплены по хешу коммита: подменённый тег не попадёт в сборку
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      # Ключ — через переменную окружения, а не подстановкой в текст команды: так он не попадёт в скрипт и журнал
       - name: Вход в Container Registry
-        run: echo '${{ secrets.YC_SA_JSON_KEY }}' | docker login --username json_key --password-stdin cr.yandex
+        env:
+          YC_KEY: ${{ secrets.YC_SA_JSON_KEY }}
+        run: printf '%s' "$YC_KEY" | docker login --username json_key --password-stdin cr.yandex
 
       - name: Сборка и загрузка образа
         run: |
@@ -50,8 +54,10 @@ jobs:
           echo "$HOME/yc/bin" >> "$GITHUB_PATH"
 
       - name: Вход в Yandex Cloud
+        env:
+          YC_KEY: ${{ secrets.YC_SA_JSON_KEY }}
         run: |
-          echo '${{ secrets.YC_SA_JSON_KEY }}' > "$RUNNER_TEMP/key.json"
+          printf '%s' "$YC_KEY" > "$RUNNER_TEMP/key.json"
           yc config set service-account-key "$RUNNER_TEMP/key.json"
           # Новые версии yc без yc init не знают адрес API — задаём явно
           yc config set endpoint api.cloud.yandex.net:443

@@ -7,9 +7,6 @@ import { API_URL } from './config';
 import { logEvent } from './diag';
 import { ApiError, exchange, NetError } from './http';
 
-/** Уровень API, который понимает приложение: сервер включает для него новые поля и виды ответа */
-export const API_LEVEL = 3;
-
 const build = String(Constants.expoConfig?.android?.versionCode ?? Constants.expoConfig?.ios?.buildNumber ?? '0');
 /** Версия клиента для журнала сервера: «ru.kstati.app/0.1.0(1)» */
 export const APP_ID = `ru.kstati.app/${Constants.expoConfig?.version ?? '0'}(${build})`;
@@ -34,7 +31,6 @@ export async function request<T = unknown>(
       fetch(`${API_URL}${path}`, {
         method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
         headers: {
-          'x-kstati-api': String(API_LEVEL),
           'x-kstati-app': APP_ID,
           ...(opts.body !== undefined && { 'Content-Type': 'application/json' }),
           // Не Authorization: его перехватывает Яндекс Облако (см. server/src/auth.ts)

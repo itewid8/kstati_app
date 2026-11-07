@@ -7,7 +7,7 @@ import { Pressable } from 'react-native';
 import { GENRE_LABEL, KIND_LABEL, ORIGIN_LABEL, type Genre, type IdeaDraft, type Kind, type Origin, type PersonColor, type TopicDraft, type WatchDraft, type WishDraft } from '@/lib/types';
 import type { ChipItem } from '../editors/components/ChipGrid';
 import { ChoiceSection } from './components/ChoiceSection';
-import { FieldBox, FieldInput, FieldLine, FieldText } from './components/FieldRows';
+import { FieldBlock, FieldBox, FieldInput, FieldLine, FieldText } from './components/FieldRows';
 import { SheetCard } from './components/SheetCard';
 
 /** Карточка записи: ярлык типа, подпись (кто и когда добавил), цвет автора, «×» — убрать из ответа */
@@ -43,12 +43,13 @@ export const WishDraftEditor = memo(function WishDraftEditor({ head, value, onCh
         input={{ value: value.title, onChangeText: (title) => set({ title }), accessibilityLabel: 'Название', autoFocus: head.autoFocus, maxLength: TITLE_MAX }}
       />
       <FieldBox>
-        <FieldLine label="ЗАМЕТКА" first>
-          <FieldInput value={value.note} onChangeText={(note) => set({ note })} accessibilityLabel="Заметка" maxLength={NOTE_MAX} />
-        </FieldLine>
-        <FieldLine label="ССЫЛКА">
-          <FieldInput value={value.link} onChangeText={(link) => set({ link })} accessibilityLabel="Ссылка" keyboardType="url" mono />
-        </FieldLine>
+        {/* Заметка и ссылка — на всю ширину и в несколько строк: длинные адреса видны целиком */}
+        <FieldBlock label="ОПИСАНИЕ" first>
+          <FieldInput value={value.note} onChangeText={(note) => set({ note })} accessibilityLabel="Описание" maxLength={NOTE_MAX} multiline />
+        </FieldBlock>
+        <FieldBlock label="ССЫЛКА">
+          <FieldInput value={value.link} onChangeText={(link) => set({ link: link.replace(/\n/g, '') })} accessibilityLabel="Ссылка" keyboardType="url" mono multiline />
+        </FieldBlock>
       </FieldBox>
     </>
   );

@@ -174,7 +174,7 @@ export type Wish = {
   receivedAt: string | null;
   createdAt: string;
   /**
-   * Кто подарил (API 2). У чужой хотелки — если её подарил кто-то; у своей — приходит только после receivedAt
+   * Кто подарил. У чужой хотелки — если её подарил кто-то; у своей — приходит только после receivedAt
    * (до этого подарок скрыт от владельца — сюрприз)
    */
   giftedBy?: ID;
@@ -191,7 +191,7 @@ export type Topic = {
   title: string;
   groupIds: ID[];
   createdAt: string;
-  /** В архиве с этого времени (API 2). null — только что вернули из архива: так поле уйдёт на сервер */
+  /** В архиве с этого времени. null — только что вернули из архива: так поле уйдёт на сервер */
   archivedAt?: string | null;
   /** Тема — сама заметка: её текст (строки с разметкой, lib/note.ts); нет — пустая */
   body?: string;
@@ -380,7 +380,7 @@ export type ChangeDraft = {
   chosen: ID;
   /** Для update: только изменяемые поля */
   patch?: ChangePatch;
-  /** Раз серии, названный во фразе (API 2, «удали йогу в субботу»). Относится к chosen */
+  /** Раз серии, названный во фразе («удали йогу в субботу»). Относится к chosen */
   occ?: string;
 };
 
@@ -391,7 +391,7 @@ export type PlansScope =
   | { kind: 'category'; category: GroupCategory } // «наши друзья» — все группы категории
   | { kind: 'groups'; names: string[] } // «в Футболе» — по названию
   | { kind: 'people'; names: string[] } // «у нас с Кариной» — самая маленькая общая группа
-  | { kind: 'me' }; // «что я делаю» — все мои группы (только при x-kstati-api: 2, вместе с who)
+  | { kind: 'me' }; // «что я делаю» — все мои группы (вместе с who)
 
 /** who — чьи дела показать (участие = peopleOf); нет — всех */
 export type PlansQuery = { scope: PlansScope; from: string; to: string; query: string; who?: ID[] };

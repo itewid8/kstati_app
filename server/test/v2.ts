@@ -1,5 +1,5 @@
 /**
- * Изменения сервера для нового приложения (docs/server-changes-v2.md) на уровне разбора, без HTTP:
+ * Голосовой разбор и подарки на уровне разбора, без HTTP:
  * S3 — какой раз повторяющегося дела назван во фразе, S4 — «что я делаю…» и гейт по уровню API,
  * подсказки промпта, вид хотелки для владельца и для других (S1). Сквозные проверки — в e2e.ts.
  *   npm test
@@ -17,13 +17,12 @@ import type { ChangeDraft, Context, ParseResult } from '../src/types.js';
 
 const TODAY = '2026-10-06'; // вторник
 const yoga = { id: 'y1', title: 'Йога', date: '2026-09-05', time: '19:00', repeat: { freq: 'week' as const, every: 1, weekdays: [6] }, skipDates: ['2026-10-10'] };
-const ctx = (api?: number): Context => ({
+const ctx = (): Context => ({
   today: TODAY,
   now: '12:00',
   me: { id: 'u1', name: 'Саша' },
   people: [{ id: 'u7', name: 'Карина' }],
   existing: { tasks: [yoga, { id: 'd1', title: 'Ужин у родителей', date: '2026-10-10', time: '19:00' }], watch: [], wishes: [] },
-  ...(api && { api }),
 });
 const change = (r: ParseResult): ChangeDraft => {
   assert.equal(r.type, 'changes', JSON.stringify(r));
@@ -44,7 +43,7 @@ assert.equal(repeatShort({ freq: 'week', every: 2, weekdays: [3] }), 'раз в 
 assert.equal(repeatShort({ freq: 'month', every: 1, monthDays: [20] }), 'каждое 20 число');
 assert.equal(repeatShort({ freq: 'day', every: 1 }), 'каждый день');
 
-// Дело-«бомба» от участника группы: давняя дата + счётчик + редкий повтор. Перебор ограничен (REVIEW-v2, V2-1)
+// Дело-«бомба» от участника группы: давняя дата + счётчик + редкий повтор. Перебор ограничен
 const bomb = { id: 'b1', title: 'Йога', date: '0100-01-01', time: null, repeat: { freq: 'year' as const, every: 99, count: 999 } };
 let tBomb = Date.now();
 assert.deepEqual(occurrences(bomb, '9998-01-01', '9999-02-01'), []);
@@ -52,14 +51,14 @@ assert.ok(Date.now() - tBomb < 300, `occurrences на «бомбе» — ${Date.
 tBomb = Date.now();
 normalize(
   Array.from({ length: 3 }, () => ({ intent: 'delete', target: ['b1'], query: '' })),
-  { ...ctx(2), today: '9998-01-01', existing: { tasks: [bomb], watch: [], wishes: [] } },
+  { ...ctx(), today: '9998-01-01', existing: { tasks: [bomb], watch: [], wishes: [] } },
   'Удали йогу в субботу',
 );
 assert.ok(Date.now() - tBomb < 500, `голосовой разбор с «бомбой» — ${Date.now() - tBomb} мс`);
 assert.deepEqual(occurrences({ date: '2000-01-01', repeat: { freq: 'week', every: 1, count: 999 } }, '2019-02-01', '2019-02-28'), ['2019-02-02', '2019-02-09', '2019-02-16'], 'давняя серия со счётчиком считается как раньше');
 
 /* ---------- S3: раз серии в голосовой правке ---------- */
-const del = (text: string, target = 'y1', api?: number) => change(normalize([{ intent: 'delete', target: [target], query: '' }], ctx(api), text));
+const del = (text: string, target = 'y1') => change(normalize([{ intent: 'delete', target: [target], query: '' }], ctx(), text));
 assert.equal(del('Удали йогу в субботу').occ, '2026-10-17', 'ближайшая суббота серии (10 октября уже удалено)');
 assert.equal(del('Удали йогу 24 октября').occ, '2026-10-24');
 assert.equal(del('Удали йогу 25 октября').occ, undefined, 'в этот день раза нет');
@@ -68,28 +67,23 @@ assert.equal(del('Удали ужин у родителей в субботу', 
 assert.equal(del('Удали йогу в субботу').patch, undefined, 'patch у delete как раньше');
 // Отметка — последний прошедший такой раз
 assert.equal(change(normalize([{ intent: 'mark', target: ['y1'], query: '' }], ctx(), 'Отметь йогу в субботу')).occ, '2026-10-03');
-// Перенос: исходный день — до «на»; patch.date для старого приложения не меняется, для нового — от названного раза
-const move = (api?: number) => change(normalize([{ intent: 'update', target: ['y1'], date: '2026-10-11', query: 'йога' }], ctx(api), 'Перенеси йогу в субботу на воскресенье'));
-assert.deepEqual([move().occ, move().patch?.date], ['2026-10-17', '2026-10-11'], 'api 1: дата как раньше (от даты серии)');
-assert.deepEqual([move(2).occ, move(2).patch?.date], ['2026-10-17', '2026-10-18'], 'api 2: воскресенье после названной субботы');
+// Перенос: исходный день — до «на», новая дата — от названного раза
+const move = () => change(normalize([{ intent: 'update', target: ['y1'], date: '2026-10-11', query: 'йога' }], ctx(), 'Перенеси йогу в субботу на воскресенье'));
+assert.deepEqual([move().occ, move().patch?.date], ['2026-10-17', '2026-10-18'], 'воскресенье после названной субботы');
 // Перенос без названного исходного дня — occ нет
-assert.equal(change(normalize([{ intent: 'update', target: ['y1'], time: '20:00', query: 'йога' }], ctx(2), 'Перенеси йогу на восемь')).occ, undefined);
+assert.equal(change(normalize([{ intent: 'update', target: ['y1'], time: '20:00', query: 'йога' }], ctx(), 'Перенеси йогу на восемь')).occ, undefined);
 // Снятие повтора — правка всей серии
-const stop = change(normalize([{ intent: 'update', target: ['y1'], query: 'йога' }], ctx(2), 'Больше не повторяй йогу в субботу'));
+const stop = change(normalize([{ intent: 'update', target: ['y1'], query: 'йога' }], ctx(), 'Больше не повторяй йогу в субботу'));
 assert.deepEqual([stop.patch?.repeat, stop.occ], [null, undefined]);
 
-/* ---------- S4: «что я делаю…», гейт по уровню API ---------- */
-const ask = (raw: Record<string, unknown>, api?: number) => plans(normalize([{ intent: 'query_plans', from: '2026-10-10', to: '2026-10-11', query: '', ...raw }], ctx(api), 'вопрос'));
-// Старый клиент: прежний вид ответа (без who, без kind 'me')
-assert.deepEqual(ask({ scope: 'me' }), { scope: { kind: 'current' }, from: '2026-10-10', to: '2026-10-11', query: '' });
-assert.deepEqual(ask({ scope: 'people', people: ['я'] }).scope, { kind: 'current' }, '«я» — не человек из групп');
+/* ---------- S4: «что я делаю…» ---------- */
+const ask = (raw: Record<string, unknown>) => plans(normalize([{ intent: 'query_plans', from: '2026-10-10', to: '2026-10-11', query: '', ...raw }], ctx(), 'вопрос'));
+assert.deepEqual(ask({ scope: 'me' }), { scope: { kind: 'me' }, from: '2026-10-10', to: '2026-10-11', query: '', who: ['u1'] });
+assert.deepEqual(ask({ scope: 'people', people: ['я'] }).scope, { kind: 'me' }, '«я» — сам говорящий, не человек из групп');
+assert.deepEqual(ask({ scope: 'people', people: ['Мне'] }).scope, { kind: 'me' });
 assert.deepEqual(ask({ scope: 'people', people: ['me', 'Карина'] }).scope, { kind: 'people', names: ['Карина'] });
-assert.equal(ask({ scope: 'current', who: ['Карина'] }).who, undefined, 'who старому клиенту не отдаём');
-// Новый клиент
-assert.deepEqual(ask({ scope: 'me' }, 2), { scope: { kind: 'me' }, from: '2026-10-10', to: '2026-10-11', query: '', who: ['u1'] });
-assert.deepEqual(ask({ scope: 'people', people: ['Мне'] }, 2).scope, { kind: 'me' });
-assert.deepEqual(ask({ scope: 'current', who: ['Карину'] }, 2).who, ['u7']);
-assert.deepEqual(ask({ scope: 'us' }, 2), { scope: { kind: 'us' }, from: '2026-10-10', to: '2026-10-11', query: '' }, 'без «я» — как раньше');
+assert.deepEqual(ask({ scope: 'current', who: ['Карину'] }).who, ['u7']);
+assert.deepEqual(ask({ scope: 'us' }), { scope: { kind: 'us' }, from: '2026-10-10', to: '2026-10-11', query: '' }, 'без «я» — как раньше');
 
 /* ---------- промпт: повтор в строках, scope «me» и примеры ---------- */
 const [sys, user] = buildMessages('удали йогу в субботу', ctx());
@@ -99,7 +93,7 @@ assert.match(sys.text, /"me" — «я», «мои»/);
 assert.match(sys.text, /«Перенеси стоматолога на пятницу на два и добавь Карину»/);
 assert.match(sys.text, /«Что я делаю на выходных\?» → .*"scope":"me"/);
 
-/* ---------- S1 через HTTP: проверка общей группы не читает все группы на каждую операцию (REVIEW-v2, V2-3) ---------- */
+/* ---------- S1 через HTTP: проверка общей группы не читает все группы на каждую операцию ---------- */
 {
   // Импорт здесь, а не в шапке: блок не зависит от остального файла
   const { buildApp } = await import('../src/app.js');
@@ -136,20 +130,18 @@ assert.match(sys.text, /«Что я делаю на выходных\?» → .*"
 /* ---------- S1: хотелка глазами владельца и других ---------- */
 const base: Wish = { id: 'w', ownerId: 'u1', title: 'Наушники', note: '', link: '', receivedAt: null, createdAt: 'c', updatedAt: 'u' };
 const gifted: Wish = { ...base, giftedBy: 'u7', giftedAt: '2026-10-06T10:00:00.000Z' };
-assert.deepEqual(wishView(gifted, 'u1', 2), base, 'владелец до «получил» не видит подарка');
-assert.deepEqual(wishView(gifted, 'u1', 1), base);
-assert.deepEqual(wishView({ ...gifted, receivedAt: 'r' }, 'u1', 2), { ...gifted, receivedAt: 'r' }, 'после «получил» — видит, от кого');
-assert.deepEqual(wishView(gifted, 'u7', 2), gifted, 'другие видят как есть');
-assert.equal(wishView(gifted, 'u7', 1).receivedAt, gifted.giftedAt, 'старое приложение — через receivedAt');
-assert.deepEqual(wishView(base, 'u7', 1), base, 'без подарка ничего не меняется');
+assert.deepEqual(wishView(gifted, 'u1'), base, 'владелец до «получил» не видит подарка');
+assert.deepEqual(wishView({ ...gifted, receivedAt: 'r' }, 'u1'), { ...gifted, receivedAt: 'r' }, 'после «получил» — видит, от кого');
+assert.deepEqual(wishView(gifted, 'u7'), gifted, 'другие видят как есть');
+assert.deepEqual(wishView(base, 'u7'), base, 'без подарка ничего не меняется');
 
-/* ---------- S1 через HTTP: подарок не выдаёт себя ревизией владельца (REVIEW-v2, V2-2) ---------- */
+/* ---------- S1 через HTTP: подарок не выдаёт себя ревизией владельца ---------- */
 {
   const store = new MemoryStore();
   const app = await buildApp({ store });
   for (const [id, name] of [['o1', 'Оля'], ['b1', 'Боря']]) await store.putUser({ id, name, createdAt: 'c' });
   const req = async (url: string, uid: string, body: unknown) => {
-    const r = await app.inject({ method: 'POST', url, payload: body as any, headers: { authorization: `Bearer ${signToken(uid)}`, 'x-kstati-api': '2' } });
+    const r = await app.inject({ method: 'POST', url, payload: body as any, headers: { authorization: `Bearer ${signToken(uid)}` } });
     assert.equal(r.statusCode, 200, r.body);
     return JSON.parse(r.body);
   };

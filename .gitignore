@@ -1,7 +1,5 @@
 node_modules/
 .expo/
-mobile/android/
-mobile/ios/
 mobile-prod/android/
 mobile-prod/ios/
 dist/

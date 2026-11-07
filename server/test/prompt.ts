@@ -22,7 +22,6 @@ const ctx: Context = {
     watch: [{ id: 'm1', title: 'Интерстеллар' }],
     wishes: [{ id: 'w1', title: 'Новые наушники' }],
   },
-  api: 2,
 };
 
 const blocks = (p: string) => [...pickBlocks(p, ctx).blocks].sort().join(',');

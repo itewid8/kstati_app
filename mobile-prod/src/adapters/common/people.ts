@@ -73,7 +73,7 @@ export const voicePerson = (s: Pick<Snapshot, 'me' | 'users'>, colors: ColorMap,
 export const editorPerson = (s: Pick<Snapshot, 'me' | 'users'>, colors: ColorMap, id: ID): EditorPersonRef | null => personRef(s, colors, id);
 
 /**
- * Чья хотелка в событии ленты wish.*. С API 2 автор подарка — даритель, а владелец — в scope «u:<id>»;
+ * Чья хотелка в событии ленты wish.*: автор подарка — даритель, а владелец — в scope «u:<id>»;
  * нет scope — ищем хотелку по id, иначе автор события
  */
 export function wishOwnerOf(e: Pick<Activity, 'scope' | 'actor' | 'itemId'>, wishes: readonly Pick<Wish, 'id' | 'ownerId'>[]): ID {

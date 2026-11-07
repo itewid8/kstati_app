@@ -9,7 +9,7 @@ import { BackHandler } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { quickView, type QuickSnapshot } from '@/adapters/quick';
 import type { IsoDate } from '@/lib/calendarLayout';
-import { DEMO, useStore } from '@/lib/store';
+import { useStore } from '@/lib/store';
 import { QuickActionsSheet, type QuickTileKey } from '@/screens/quick';
 import { NO_ME, useClock, useInsets, usePersonColors, useSignedIn, type StoreState } from '../common';
 import { UntilSheet } from '../editors/EditorSheets';
@@ -18,9 +18,6 @@ import { closeQuickActions, useQuick } from './quickStore';
 
 /** Окно даты раза серии: раньше любой даты не ограничиваем */
 const ANY_DAY = '1970-01-01';
-
-/** Подарки чужих хотелок — только с сервером API 2 (старый молча срежет giftedBy) */
-const giftsOn = (api: number | null) => DEMO || (api ?? 0) >= 2;
 
 const pickQuick = (s: StoreState): QuickSnapshot => ({
   me: s.me ?? NO_ME,
@@ -38,15 +35,14 @@ export const QuickActionsHost = () => {
   const lift = useQuick((q) => q.lift);
   const signedIn = useSignedIn();
   const s = useStore(useShallow(pickQuick));
-  const gifts = useStore((st) => giftsOn(st.serverApi));
   const { today } = useClock();
   const insets = useInsets();
   const colors = usePersonColors(s);
   const [pick, setPick] = useState<DatePick | null>(null);
 
   const view = useMemo(
-    () => (target && signedIn ? quickView(s, colors, { today, gifts }, target) : null),
-    [target, signedIn, s, colors, today, gifts],
+    () => (target && signedIn ? quickView(s, colors, { today }, target) : null),
+    [target, signedIn, s, colors, today],
   );
   const latest = useRef(view);
   latest.current = view;

@@ -1,6 +1,6 @@
 /**
  * Дело по удержанию (C-QuickTask): карточка, плитки ГОТОВО / ИЗМЕНИТЬ / В ПЛАН (у подзадачи и плана — ОТКРЫТЬ ПЛАН) /
- * КОПИЯ и ряд «ПЕРЕНЕСТИ»: ЗАВТРА, +1 ЧАС, ВЫХОДНЫЕ, ДАТА…. Раз серии переносится и отмечается отдельно (occ).
+ * СКОПИРОВАТЬ и ряд «ПЕРЕНЕСТИ»: ЗАВТРА, +1 ЧАС, ВЫХОДНЫЕ, ДАТА…. Раз серии переносится и отмечается отдельно (occ).
  */
 import { dayNo, isoOf, type IsoDate } from '@/lib/calendarLayout';
 import { instance, nextOpen, weekdayOf } from '@/lib/recur';
@@ -108,7 +108,7 @@ export const quickTaskView = (s: QuickSnapshot, colors: ColorMap, env: QuickEnv,
   const done = isDone(shown);
   const moves = movePatches(shown, env.today);
   const card = { title: task.title, tag, meta: `${periodText(shown)} · ${namesText(s, people)}`, colors: colorsOf(s, colors, people) };
-  // Чужое дело без прав админа (C-TaskView): только отметить, свои напоминания и копия себе
+  // Чужое дело без прав админа (C-TaskView): только отметить, свои напоминания и скопировать текст
   if (!canEditTask(task, s.groups, s.me.id)) {
     return {
       kind: 'task',
@@ -122,7 +122,7 @@ export const quickTaskView = (s: QuickSnapshot, colors: ColorMap, env: QuickEnv,
         tiles: [
           { key: 'done', label: done ? 'ВЕРНУТЬ' : 'ГОТОВО', primary: true },
           { key: 'remind', label: 'НАПОМНИТЬ' },
-          { key: 'copy', label: 'КОПИЯ', ...off(kids.length > 0) },
+          { key: 'copy', label: 'СКОПИРОВАТЬ' },
         ],
         deletable: false,
       },
@@ -133,8 +133,8 @@ export const quickTaskView = (s: QuickSnapshot, colors: ColorMap, env: QuickEnv,
     { key: 'edit', label: 'ИЗМЕНИТЬ' },
     // Серию планом не сделать (как «Сделать планом» в окне дела)
     planId ? { key: 'openPlan', label: 'ОТКРЫТЬ ПЛАН' } : { key: 'plan', label: 'В ПЛАН', ...off(!!task.repeat) },
-    // Копия плана без подзадач была бы просто делом — не предлагаем
-    { key: 'copy', label: 'КОПИЯ', ...off(kids.length > 0) },
+    // Текст в буфер обмена (у плана — с подзадачами)
+    { key: 'copy', label: 'СКОПИРОВАТЬ' },
   ];
 
   return {

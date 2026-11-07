@@ -1,5 +1,5 @@
 /**
- * Личный календарь (API 3): видимость дел в группах, режимы, права, перенос старых дел, вид для старого приложения.
+ * Личный календарь: видимость дел в группах, режимы, права, перенос дел из раздела группы.
  *   npm test
  */
 import assert from 'node:assert/strict';
@@ -39,10 +39,10 @@ await group('fr', P, [S, P]);
 // Старое дело Сани в группе «Семья» (до личного календаря) — лежит в разделе группы
 await store.putItem({ type: 'task', id: 'old1', groupId: 'fam', title: 'Старое', date: '2026-10-30', time: null, createdBy: 's', doneAt: null, createdAt: now, updatedAt: now });
 
-const sync = (u: User, api = 3, groups: Record<string, number> = {}) => data.sync(u, { groups, owners: {} }, api) as Promise<any>;
+const sync = (u: User, groups: Record<string, number> = {}) => data.sync(u, { groups, owners: {}, ideas: {} }) as Promise<any>;
 const ids = (r: any) => (r.tasks as Task[]).map((t) => t.id).sort();
-const put = (u: User, task: Record<string, unknown>, api = 3) =>
-  data.apply(u, { op: 'task.put', task: { date: '2026-10-31', time: null, doneAt: null, ...task } as any }, api);
+const put = (u: User, task: Record<string, unknown>) =>
+  data.apply(u, { op: 'task.put', task: { date: '2026-10-31', time: null, doneAt: null, ...task } as any });
 
 // Перенос: старое дело теперь в личном календаре Сани, видно только «Семье» (в «Друзьях» — скрыто, хотя режим «Все»)
 let rs = await sync(S);
@@ -88,9 +88,9 @@ assert.equal((await sync(S)).tasks.find((t: any) => t.id === 't5').share, undefi
 
 // Ревизии: правка дела Сани меняет ревизии его групп — Карина узнаёт без лишних запросов
 const before = (await sync(K)).revs.groups;
-assert.equal((await sync(K, 3, before)).tasks, undefined, 'ничего не менялось — дел не шлём');
+assert.equal((await sync(K, before)).tasks, undefined, 'ничего не менялось — дел не шлём');
 await put(S, { id: 't1', groupId: PERSONAL, title: 'Футбол в 18', share: { fr: true } });
-assert.ok((await sync(K, 3, before)).tasks, 'поменялось — шлём');
+assert.ok((await sync(K, before)).tasks, 'поменялось — шлём');
 
 /* ---------- права ---------- */
 // Карина (не админ «Семьи») может только отметить «сделано»
@@ -113,25 +113,6 @@ await assert.rejects(put(K, { id: 'n1', ownerId: 's', groupId: 'fam', title: 'x'
 await data.apply(P, { op: 'item.delete', groupId: 'fr', id: 't4', ownerId: 's' });
 assert.ok(!ids(await sync(S)).includes('t4'));
 
-/* ---------- старое приложение (API 1) ---------- */
-const v1 = await sync(K, 1);
-assert.equal(v1.tasks, undefined, 'общего списка нет');
-assert.equal(v1.revs.groups[PERSONAL], undefined, '«@me» ему не нужен');
-assert.deepEqual(v1.items.fam.map((t: any) => t.id).sort(), ['old1', 't1', 't5'], 'дела — в группе');
-assert.ok(v1.items.fam.every((t: any) => t.groupId === 'fam' && t.share === undefined && t.in === undefined));
-// Каждое дело — в одной группе: у Сани t1 видно обеим, а в старом приложении — один раз
-const v1s = await sync(S, 1);
-const all = Object.values(v1s.items).flat().map((t: any) => t.id);
-assert.equal(all.filter((id) => id === 't1').length, 1);
-assert.ok(!all.includes('t2'), 'личное старое приложение не видит');
-// Старое приложение создаёт дело в группе — видно только ей
-await put(S, { id: 'v1a', groupId: 'fam', title: 'Из старого' }, 1);
-assert.ok(ids(await sync(K)).includes('v1a'));
-assert.ok(!ids(await sync(P)).includes('v1a'), 'в «Друзьях» скрыто');
-// Старое приложение правит чужое дело без ownerId — находим по группе
-await put(K, { id: 'v1a', groupId: 'fam', title: 'v1a', doneAt: now }, 1);
-assert.equal((await sync(S)).tasks.find((t: any) => t.id === 'v1a').doneAt, now);
-
 /* ---------- выход из группы ---------- */
 await data.apply(S, { op: 'group.leave', id: 'fam' });
 assert.deepEqual(ids(await sync(K)), [], 'дела ушедшего пропали из группы');
@@ -141,7 +122,7 @@ assert.ok(ids(await sync(S)).includes('old1'), 'у владельца остал
 await put(S, { id: 'bd1', groupId: PERSONAL, title: 'ДР Маши', kind: 'birthday', repeat: { freq: 'year', every: 1 } });
 const bd = (await sync(S)).tasks.find((t: Task) => t.id === 'bd1');
 assert.equal(bd.kind, 'birthday');
-await put(S, { id: 'bd1', groupId: PERSONAL, title: 'ДР Маши (старое приложение)' });
+await put(S, { id: 'bd1', groupId: PERSONAL, title: 'ДР Маши (без поля типа)' });
 assert.equal((await sync(S)).tasks.find((t: Task) => t.id === 'bd1').kind, 'birthday', 'без поля тип не стирается');
 await put(S, { id: 'bd1', groupId: PERSONAL, title: 'ДР Маши', kind: 'task' });
 assert.equal((await sync(S)).tasks.find((t: Task) => t.id === 'bd1').kind, undefined, 'обычное дело — поля нет');
@@ -162,9 +143,9 @@ const ex1 = async (who: User) => (await sync(who)).tasks.find((t: Task) => t.id 
 const EXT = { cal: '7', id: '1234', h: 'abc' };
 await put(S, { id: 'ex1', groupId: PERSONAL, title: 'Стоматолог', ext: EXT });
 assert.deepEqual((await ex1(S)).ext, EXT);
-await put(S, { id: 'ex1', groupId: PERSONAL, title: 'Стоматолог (старое приложение)' });
+await put(S, { id: 'ex1', groupId: PERSONAL, title: 'Стоматолог (без поля «откуда»)' });
 assert.deepEqual((await ex1(S)).ext, EXT, 'без поля «откуда» не стирается');
 await put(S, { id: 'ex1', groupId: PERSONAL, title: 'Стоматолог', ext: null });
 assert.equal((await ex1(S)).ext, undefined, 'null — убрать');
 
-console.log('✓ личный календарь: видимость, режимы, права, перенос, старое приложение, тип дела, откуда перенесено');
+console.log('✓ личный календарь: видимость, режимы, права, перенос, тип дела, откуда перенесено');

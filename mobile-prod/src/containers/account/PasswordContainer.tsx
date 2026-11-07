@@ -38,7 +38,9 @@ export const PasswordContainer = signedInOnly(function ChangePassword() {
     setBusy(true);
     setError(null);
     try {
-      await request('/me/password', { token, body: { ...(hasOld && { old }), password } });
+      const r = await request<{ token?: unknown }>('/me/password', { token, body: { ...(hasOld && { old }), password } });
+      // Сервер отозвал все прежние входы (и этот) — дальше работаем с новым токеном из ответа
+      if (typeof r?.token === 'string') useStore.setState({ session: { token: r.token } });
       setBusy(false);
       useStore.getState().notice('Пароль изменён');
       backToProfile();

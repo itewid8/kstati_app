@@ -82,7 +82,7 @@ chmod +x scripts/deploy.sh
 
 Каждая следующая выкладка — снова `./scripts/deploy.sh`.
 
-В приложении `mobile/.env`: `EXPO_PUBLIC_API_URL=<PUBLIC_URL>` и пересборка.
+В приложении `mobile-prod/.env`: `EXPO_PUBLIC_API_URL=<PUBLIC_URL>` и пересборка.
 
 ## 6. Почта (Postbox)
 

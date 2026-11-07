@@ -42,7 +42,7 @@ npm run stats -- 7 voice   # только голос с телефона (voice 
 npm run dev
 ```
 
-В `mobile/.env` уже прописано `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` (адрес Mac из эмулятора).
+В `mobile-prod/.env` уже прописано `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` (адрес Mac из эмулятора).
 После первого запуска сервера перезапустите Metro, чтобы приложение увидело адрес:
 Ctrl+C в окне Metro → `npx expo start --dev-client` → открыть приложение.
 

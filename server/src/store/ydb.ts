@@ -42,6 +42,8 @@ export class YdbStore implements Store {
   }
 
   /** Один вызов Document API: Target — имя операции DynamoDB (PutItem, Query…) */
+  // Ответы Document API разбирает вызывающий: по умолчанию тип открытый
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async call<T = any>(target: string, body: unknown): Promise<T> {
     const payload = JSON.stringify(body);
     const headers = { 'content-type': 'application/x-amz-json-1.0', 'x-amz-target': `DynamoDB_20120810.${target}` };
@@ -306,6 +308,10 @@ export class YdbStore implements Store {
       if (e instanceof DocApiError && /ConditionalCheckFailed/.test(e.type)) return null;
       throw e;
     }
+  }
+
+  async deleteCounter(counter: string) {
+    await this.kvDelete(`cnt#${counter}`);
   }
 
   /* ---------- временные записи ---------- */

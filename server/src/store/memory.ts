@@ -166,6 +166,10 @@ export class MemoryStore implements Store {
     if (cur >= limit) return null;
     return this.incr(counter);
   }
+  async deleteCounter(counter: string) {
+    delete this.d.counters[counter];
+    this.save();
+  }
 
   async getPrefs(userId: string) {
     return clone(this.d.prefs[userId]) ?? null;

@@ -22,7 +22,6 @@ const ctx: Context = {
     watch: [{ id: 'm1', title: 'Интерстеллар' }],
     wishes: [{ id: 'w1', title: 'Новые наушники' }],
   },
-  api: 2,
 };
 
 type Exp = { type: 'task'; title: string; date: string | null; time: string | null; repeat?: string; end?: string } | { type: 'wish'; title: string };

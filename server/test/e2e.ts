@@ -16,6 +16,8 @@ import { startFakeDocApi } from './fake-docapi.js';
 import type { Context } from '../src/types.js';
 
 config.voiceDailyLimit = 3;
+// Сценарий много раз входит с одного адреса — лимит входа проверяется отдельно (test/pages.ts)
+config.authPerMinute = 10_000;
 
 // VK ID подменён: обмен кода и данные человека отвечают без сети, остальные запросы (Document API) идут как есть
 config.vkClientId = 'test-vk';
@@ -27,7 +29,7 @@ globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestIni
   return realFetch(input, init);
 }) as typeof fetch;
 
-/** Ответы «модели» для фраз v2: через настоящий normalize, чтобы проверить гейт по x-kstati-api целиком */
+/** Ответы «модели» для фраз: через настоящий normalize */
 const CANNED: Record<string, Record<string, unknown>[]> = {
   'что я делаю на выходных': [{ intent: 'query_plans', scope: 'me', from: '2026-10-10', to: '2026-10-11', query: '' }],
   'удали баню в субботу': [{ intent: 'delete', target: ['t5'], query: 'баня' }],
@@ -171,12 +173,14 @@ async function scenario(name: string, store: Store) {
   assert.deepEqual(r.map((x) => x.ok), [true, true, true, false], 'пустое название — ошибка только этой операции');
   await ops(T2, { op: 'task.put', task: { id: 't3', groupId: 'g1', title: 'Забрать посылку', date: null, time: null, doneAt: null } });
 
+  // Записи группы («Смотреть») и все видимые дела — одним списком
+  const g1 = (r: any) => [...(r.items.g1 ?? []), ...(r.tasks ?? [])];
   const s1 = await ok('POST', '/sync', {}, T2);
   assert.equal(s1.groups.length, 1);
   assert.equal(s1.groups[0].name, 'Наше');
   assert.equal(s1.groups[0].inviteCode, code, 'админ код видит');
-  assert.deepEqual(s1.items.g1.map((i: any) => i.id).sort(), ['m1', 't1', 't3']);
-  assert.equal(s1.items.g1.find((i: any) => i.id === 't1').createdBy, sasha.me.id);
+  assert.deepEqual(g1(s1).map((i: any) => i.id).sort(), ['m1', 't1', 't3']);
+  assert.equal(g1(s1).find((i: any) => i.id === 't1').createdBy, sasha.me.id);
   assert.deepEqual(s1.wishes[sasha.me.id].map((w: any) => w.title), ['Наушники'], 'хотелки Саши видны Маше');
   assert.equal(s1.users.length, 2);
   assert.equal(s1.users[0].passHash, undefined, 'хеш пароля наружу не уходит');
@@ -184,12 +188,13 @@ async function scenario(name: string, store: Store) {
   // Повторная синхронизация с теми же ревизиями — без содержимого
   const s2 = await ok('POST', '/sync', { groups: s1.revs.groups, owners: s1.revs.owners }, T2);
   assert.deepEqual(s2.items, {});
+  assert.equal(s2.tasks, undefined);
   assert.deepEqual(s2.wishes, {});
   // Изменение в группе — приходит только она
   await ops(T1, { op: 'task.put', task: { id: 't1', groupId: 'g1', title: 'Ужин у родителей', date: '2026-09-26', time: '20:00', doneAt: null } });
   const s3 = await ok('POST', '/sync', { groups: s1.revs.groups, owners: s1.revs.owners }, T2);
-  assert.equal(s3.items.g1.find((i: any) => i.id === 't1').time, '20:00');
-  assert.equal(s3.items.g1.find((i: any) => i.id === 't1').createdBy, sasha.me.id, 'автор не меняется при правке');
+  assert.equal(g1(s3).find((i: any) => i.id === 't1').time, '20:00');
+  assert.equal(g1(s3).find((i: any) => i.id === 't1').createdBy, sasha.me.id, 'автор не меняется при правке');
   assert.deepEqual(s3.wishes, {});
 
   /* ---------- повторы и общие напоминания ---------- */
@@ -198,7 +203,7 @@ async function scenario(name: string, store: Store) {
   assert.equal(tr[0].ok, true);
   assert.equal((await ops(T1, { op: 'task.put', task: { id: 't6', groupId: 'g1', title: 'x', date: null, time: null, doneAt: null, reminders: ['за час'] } }))[0].ok, false, 'кривое напоминание отклоняется');
   await ops(T1, { op: 'task.put', task: { id: 't5', groupId: 'g1', title: 'Баня', date: '2026-10-03', time: '15:00', doneAt: null, repeat: rep, doneDates: ['2026-10-03'], skipDates: ['2026-10-10'], reminders: ['d1@20:00', 'm60'] } });
-  const t5 = (await ok('POST', '/sync', {}, T2)).items.g1.find((i: any) => i.id === 't5');
+  const t5 = g1(await ok('POST', '/sync', {}, T2)).find((i: any) => i.id === 't5');
   assert.deepEqual(t5.repeat, rep);
   assert.deepEqual(t5.doneDates, ['2026-10-03']);
   assert.deepEqual(t5.skipDates, ['2026-10-10']);
@@ -212,7 +217,7 @@ async function scenario(name: string, store: Store) {
     { op: 'task.put', task: { id: 'p3', groupId: 'g1', title: 'Вложенная', date: null, time: null, doneAt: null, parentId: 'p2' } },
     { op: 'task.put', task: { id: 'p4', groupId: 'g1', title: 'Кривой конец', date: '2026-10-08', time: '10:00', endTime: '09:00', endDate: '2026-10-01', doneAt: null } },
   );
-  const items = (await ok('POST', '/sync', {}, T2)).items.g1;
+  const items = g1(await ok('POST', '/sync', {}, T2));
   const byId = (id: string) => items.find((i: any) => i.id === id);
   assert.deepEqual(byId('p1').people.sort(), [sasha.me.id, masha.me.id].sort(), 'чужие люди в «Кто» отбрасываются');
   assert.equal(byId('p1').endDate, '2026-10-09');
@@ -268,7 +273,6 @@ async function scenario(name: string, store: Store) {
   assert.deepEqual(n1.notes[sasha.me.id].ideas.map((i: any) => i.id).sort(), ['i1', 'i2', 'i3']);
   const n2 = await ok('POST', '/sync', { ideas: {} }, T2);
   assert.deepEqual(n2.notes[sasha.me.id], { topics: [], ideas: [] }, 'личные идеи Саши Маше не видны');
-  assert.deepEqual((await ok('POST', '/sync', {}, T2)).notes, {}, 'старое приложение идей не получает');
   // Саша открывает тему группе (чужую группу добавить нельзя — молча отбрасывается)
   await ops(T1, { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи для приложения', groupIds: ['g1', 'чужая'] } });
   const n3 = await ok('POST', '/sync', { ideas: n2.ideaRevs }, T2);
@@ -295,17 +299,14 @@ async function scenario(name: string, store: Store) {
   await ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'запиши идею', topicId: 'tp1' }, T1);
   assert.match(parsed[before], /ideas=2 \| topics=Идеи для приложения \| current=tp1/);
 
-  /* ================= v2: новое приложение и совместимость со старым ================= */
-  const H2 = { 'x-kstati-api': '2', 'x-kstati-app': 'ru.kstati.app/1.0.0(1)' };
+  /* ================= подарки, архив тем, голос ================= */
+  const H2 = { 'x-kstati-app': 'ru.kstati.app/1.0.0(1)' };
   ip = '127.0.0.2';
   const SA = sasha.me.id as string;
   const MA = masha.me.id as string;
   const wishOf = async (token: string, owner: string, id: string, headers?: Record<string, string>) =>
     ((await ok('POST', '/sync', {}, token, headers)).wishes[owner] as any[]).find((w) => w.id === id);
-  const OLD_WISH_KEYS = ['createdAt', 'id', 'link', 'note', 'ownerId', 'receivedAt', 'title', 'updatedAt'];
-
-  /* ---------- S5: версия сервера ---------- */
-  assert.equal((await ok('GET', '/health')).api, 3, '/health отдаёт уровень API');
+  const WISH_KEYS = ['createdAt', 'id', 'link', 'note', 'ownerId', 'receivedAt', 'title', 'updatedAt'];
 
   /* ---------- S1: подарок чужой хотелки — сюрприз для владельца ---------- */
   const w1Before = await wishOf(T1, SA, 'w1');
@@ -314,30 +315,27 @@ async function scenario(name: string, store: Store) {
   assert.equal((await ops(T1, { op: 'wish.gift', ownerId: SA, id: 'w1', gifted: true }))[0].error, 'own_wish');
   assert.equal((await ops(vk.token, { op: 'wish.gift', ownerId: SA, id: 'w1', gifted: true }))[0].error, 'forbidden', 'без общей группы нельзя');
   assert.equal((await ops(T2, { op: 'wish.gift', ownerId: SA, id: 'нет', gifted: true }))[0].error, 'not_found');
-  // Владелец не видит ни отметки, ни дарителя — ни в старом, ни в новом приложении; updatedAt не выдаёт
-  for (const h of [undefined, H2]) {
-    const own = await wishOf(T1, SA, 'w1', h);
-    assert.deepEqual(Object.keys(own).sort(), OLD_WISH_KEYS, 'у владельца — прежний вид хотелки');
-    assert.equal(own.receivedAt, null);
-    assert.equal(own.updatedAt, w1Before.updatedAt);
-  }
+  // Владелец не видит ни отметки, ни дарителя; updatedAt не выдаёт
+  const own = await wishOf(T1, SA, 'w1', H2);
+  assert.deepEqual(Object.keys(own).sort(), WISH_KEYS, 'у владельца — хотелка без подарка');
+  assert.equal(own.receivedAt, null);
+  assert.equal(own.updatedAt, w1Before.updatedAt);
   assert.ok(!(await ok('GET', '/activity', undefined, T1)).events.some((e: any) => e.kind === 'wish.done'), 'и в ленте владельца нет');
   const giftFeed = await store.listActivity(`u:${SA}`, '', 50);
   assert.ok(giftFeed.some((e) => e.kind === 'wish.done' && e.actor === MA), 'остальные увидят в ленте «отметила как подаренную»');
-  // Даритель в новом приложении видит, кто подарил; в старом — хотелка просто в «Подарено»
+  // Даритель видит, кто подарил
   const giftNew = await wishOf(T2, SA, 'w1', H2);
   assert.equal(giftNew.giftedBy, MA);
   assert.ok(giftNew.giftedAt);
-  assert.equal(giftNew.receivedAt, null, 'новому клиенту receivedAt — только отметка владельца');
-  assert.equal((await wishOf(T2, SA, 'w1')).receivedAt, giftNew.giftedAt, 'старому клиенту подарок виден через receivedAt');
+  assert.equal(giftNew.receivedAt, null, 'receivedAt — только отметка владельца');
 
-  // Совместимость: старое приложение владельца шлёт хотелку целиком без новых полей — подарок не стирается
+  // Владелец правит хотелку без поля подарка — подарок не стирается
   await ops(T1, { op: 'wish.put', wish: { id: 'w1', title: 'Наушники Sony', note: '', link: '', receivedAt: null } });
-  assert.equal((await wishOf(T2, SA, 'w1', H2)).giftedBy, MA, 'старый формат wish.put не стёр giftedBy');
-  // Новое приложение владельца шлёт giftedBy: null, пока не получил, — тоже не стирает (он отметки не видит)
+  assert.equal((await wishOf(T2, SA, 'w1', H2)).giftedBy, MA, 'wish.put без giftedBy не стёр подарок');
+  // Владелец шлёт giftedBy: null, пока не получил, — тоже не стирает (он отметки не видит)
   await ops(T1, { op: 'wish.put', wish: { id: 'w1', title: 'Наушники Sony', note: '', link: '', receivedAt: null, giftedBy: null } });
   assert.equal((await wishOf(T2, SA, 'w1', H2)).giftedBy, MA, 'скрытый подарок владелец стереть не может');
-  // Владелец отметил «получил» (старым приложением): теперь видит, от кого
+  // Владелец отметил «получил»: теперь видит, от кого
   await ops(T1, { op: 'wish.put', wish: { id: 'w1', title: 'Наушники Sony', note: '', link: '', receivedAt: '2026-10-06T10:00:00.000Z' } });
   const received = await wishOf(T1, SA, 'w1', H2);
   assert.deepEqual([received.giftedBy, received.receivedAt], [MA, '2026-10-06T10:00:00.000Z']);
@@ -376,13 +374,9 @@ async function scenario(name: string, store: Store) {
   const savedLimit = config.voiceDailyLimit;
   config.voiceDailyLimit = 50;
   const vt = (text: string, headers?: Record<string, string>) => ok('POST', '/voice/text', { groupId: 'g1', today: '2026-10-06', now: '12:00', text }, T1, headers);
-  // S4: «что я делаю» — старому приложению текущая группа (его resolveGroups не знает kind 'me'), новому — me + who
-  const plansOld = (await vt('что я делаю на выходных')).result.plans;
-  assert.deepEqual(plansOld, { scope: { kind: 'current' }, from: '2026-10-10', to: '2026-10-11', query: '' }, 'старый клиент — прежний вид ответа');
-  assert.equal(lastCtx!.api, 1);
-  const plansNew = (await vt('что я делаю на выходных', H2)).result.plans;
-  assert.deepEqual([plansNew.scope, plansNew.who], [{ kind: 'me' }, [SA]]);
-  assert.equal(lastCtx!.api, 2);
+  // S4: «что я делаю» — все мои группы и только мои дела
+  const plansMe = (await vt('что я делаю на выходных', H2)).result.plans;
+  assert.deepEqual([plansMe.scope, plansMe.who], [{ kind: 'me' }, [SA]]);
   // S3: в контексте есть повтор; названная суббота — ближайший существующий раз (10 октября удалён)
   assert.deepEqual(lastCtx!.existing.tasks.find((t) => t.id === 't5')?.repeat, rep);
   const del = (await vt('удали баню в субботу', H2)).result;
@@ -394,9 +388,9 @@ async function scenario(name: string, store: Store) {
   assert.equal((await voice()).status, 200);
   assert.equal(sttLangs.at(-1), 'ru-RU');
   assert.equal((await voice('de-DE')).status, 400);
-  // S6: счётчик голоса без списания. Потрачено 3: две «что я делаю» и «удали баню»; «хочу наушники» голосом — «не понял»
+  // S6: счётчик голоса без списания. Потрачено 2: «что я делаю» и «удали баню»; «хочу наушники» голосом — «не понял»
   const q1 = await ok('GET', '/voice/quota', undefined, T1);
-  assert.deepEqual(q1, { limit: 50, used: 3, left: 47 });
+  assert.deepEqual(q1, { limit: 50, used: 2, left: 48 });
   assert.deepEqual(await ok('GET', '/voice/quota', undefined, T1), q1, 'запрос счётчика лимит не тратит');
   assert.equal((await call('GET', '/voice/quota')).status, 401);
   // Отзыв: сохраняется на сервере, пустой и без входа — нет
@@ -451,7 +445,7 @@ async function scenario(name: string, store: Store) {
   await ops(T2, { op: 'wish.put', wish: { id: 'w2', title: 'Кофемолка', note: '', link: '', receivedAt: null } });
   assert.equal((await ops(T1, { op: 'group.remove', id: 'g1', userId: masha.me.id }))[0].ok, true);
   const s4 = await ok('POST', '/sync', {}, T1);
-  assert.deepEqual(s4.items.g1.map((i: any) => i.id).sort(), ['m1', 't1', 't5'], 'дело Маши удалено');
+  assert.deepEqual(g1(s4).map((i: any) => i.id).sort(), ['m1', 't1', 't5'], 'дело Маши удалено');
   assert.equal(s4.users.length, 1);
   assert.equal(s4.wishes[masha.me.id], undefined, 'хотелки Маши Саше больше не видны');
   const s5 = await ok('POST', '/sync', {}, T2);

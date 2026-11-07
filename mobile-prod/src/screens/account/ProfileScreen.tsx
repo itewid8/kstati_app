@@ -89,9 +89,17 @@ export const ProfileScreen = memo(function ProfileScreen(props: ProfileScreenPro
       contentContainerStyle={[styles.content, { paddingTop: insets.top + S.topBarTop, paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
     >
-      {/* «Назад» — в одной строке с иконкой и именем: отдельная строка ради одной кнопки не нужна */}
+      {/* «Назад», имя и иконка справа — одной строкой: отдельная строка ради одной кнопки не нужна */}
       <View style={styles.identity}>
         <IconButton icon="back" accessibilityLabel="Назад" onPress={onBack} iconSize={S.iconSmall} />
+        <View style={styles.names}>
+          <Text accessibilityRole="header" style={[styles.name, { color: c.text }]}>
+            {me.name}
+          </Text>
+          <Marquee style={[accountText.rowValue, { color: c.muted }]}>
+            {subline}
+          </Marquee>
+        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Цвет и символ"
@@ -103,14 +111,6 @@ export const ProfileScreen = memo(function ProfileScreen(props: ProfileScreenPro
             <EditIcon size={10} color={c.bg} />
           </View>
         </Pressable>
-        <View style={styles.names}>
-          <Text accessibilityRole="header" style={[styles.name, { color: c.text }]}>
-            {me.name}
-          </Text>
-          <Marquee style={[accountText.rowValue, { color: c.muted }]}>
-            {subline}
-          </Marquee>
-        </View>
       </View>
 
       <View style={styles.sections}>
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  names: { flex: 1, gap: 4 },
+  names: { flex: 1, minWidth: 0, gap: 4 },
   name: { fontFamily: fonts.sans700, fontSize: 32, lineHeight: 34, letterSpacing: -1.6 },
   sections: { marginTop: 14, gap: 8 },
 });

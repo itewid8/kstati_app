@@ -1,7 +1,7 @@
 /**
  * Все адреса экранов — только здесь. Корневые экраны (окна, лента, профиль, группа) открываются router.push(nav.*()),
  * адреса внутри вкладок (tab, planGrid, topic) из любого места — через go.ts (toTab / toPlanGrid / toTopic), иначе
- * в корневом стеке появится второй (tabs). Дерево маршрутов — docs/redesign/INTEGRATION.md, раздел 2.1.
+ * в корневом стеке появится второй (tabs). Дерево маршрутов.
  */
 import type { Href } from 'expo-router';
 import type { ID } from '@/lib/types';

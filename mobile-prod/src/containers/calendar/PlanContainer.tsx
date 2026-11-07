@@ -13,7 +13,7 @@ export type PlanContainerProps = { id: ID };
 const goBack = () => (router.canGoBack() ? router.back() : router.dismissTo(nav.tab('tasks')));
 const openStep = (id: ID) => openTaskEditor(id);
 
-/** C-Plan: сетка плана по дням; пока экран в фокусе, голос добавляет подзадачи в этот план (setVoiceParent) (INTEGRATION.md 1.1) */
+/** C-Plan: сетка плана по дням; пока экран в фокусе, голос добавляет подзадачи в этот план (setVoiceParent) */
 export const PlanContainer = signedInOnly(function Plan({ id }: PlanContainerProps) {
   const { onNavigate, onRec } = useChrome('tasks');
   const insets = useInsets();

@@ -52,8 +52,6 @@ const ctx: Context = {
       { id: 'w2', title: 'Кроссовки New Balance 574', done: false },
     ],
   },
-  // Как новое приложение (x-kstati-api: 2): «что я делаю» → scope me, перенос раза серии — от него
-  api: 2,
 };
 
 type Check = (r: ParseResult) => string | true; // true — ок, строка — что не так
