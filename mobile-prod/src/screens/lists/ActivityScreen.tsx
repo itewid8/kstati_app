@@ -53,7 +53,7 @@ export type ActivityScreenProps = {
 
 const NO_INSETS = { top: 0, bottom: 0 };
 /** Дни начинаются сразу под заголовком */
-const DAYS_TOP = 72;
+const DAYS_TOP = 60;
 
 /** «1 НОВОЕ», «3 НОВЫХ» */
 const newLabel = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'НОВОЕ' : 'НОВЫХ'}`;

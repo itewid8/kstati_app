@@ -31,10 +31,10 @@ export const weekColumnAt = (x: number, width: number): number => {
 
 /** Вертикаль месяца (C-Month, px от верха экрана без safe area) */
 export const MONTH_GRID = {
-  weekdaysTop: 152,
-  gridTop: 168,
+  weekdaysTop: 140,
+  gridTop: 156,
   /** Панель выбранного дня по макету; на низком экране поднимается, чтобы её не закрыла навигация */
-  panelTop: 564,
+  panelTop: 552,
   /** Зазор между сеткой и панелью дня */
   gap: 8,
   rule: 1.5,
@@ -73,8 +73,8 @@ export const monthCellAt = (x: number, y: number, weeks: number, f: ViewFrame): 
 
 /** Вертикаль года (C-Year, px от верха экрана без safe area) */
 export const YEAR_GRID = {
-  legendTop: 152,
-  gridTop: 174,
+  legendTop: 140,
+  gridTop: 162,
   /** Строка карточек по макету; на низком экране ниже, чтобы декабрь не ушёл под навигацию */
   row: 138,
   gap: 6,
