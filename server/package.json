@@ -17,7 +17,7 @@
     "inspect": "tsx scripts/inspect.ts"
   },
   "dependencies": {
-    "fastify": "^5.0.0",
+    "fastify": "^5.12.6",
     "zod": "^3.25.0"
   },
   "devDependencies": {
