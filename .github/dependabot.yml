@@ -1,0 +1,29 @@
+# Dependabot: обновления безопасности включены в настройках репозитория.
+# Плановые обновления выключены (open-pull-requests-limit: 0) — файл нужен ради ignore:
+# пакеты Expo обновляются только вместе с версией SDK (npx expo install), иначе сборка не ставится.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /mobile-prod
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: expo
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'expo-*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@expo/*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-native
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+  - package-ecosystem: npm
+    directory: /server
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
