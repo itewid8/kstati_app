@@ -35,7 +35,7 @@ jobs:
       IMAGE: cr.yandex/${{ vars.REGISTRY_ID }}/kstati-server:${{ github.sha }}
     steps:
       # Действия закреплены по хешу коммита: подменённый тег не попадёт в сборку
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Ключ — через переменную окружения, а не подстановкой в текст команды: так он не попадёт в скрипт и журнал
       - name: Вход в Container Registry
