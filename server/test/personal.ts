@@ -148,4 +148,27 @@ assert.deepEqual((await ex1(S)).ext, EXT, 'без поля «откуда» не
 await put(S, { id: 'ex1', groupId: PERSONAL, title: 'Стоматолог', ext: null });
 assert.equal((await ex1(S)).ext, undefined, 'null — убрать');
 
-console.log('✓ личный календарь: видимость, режимы, права, перенос, тип дела, откуда перенесено');
+/* ---------- только изменённые дела ---------- */
+{
+  // Все дела «давно» (иначе в запас 10 минут попадёт всё)
+  for (const u of [S, K, P]) {
+    for (const it of await store.listItems(`u:${u.id}`)) await store.putItem({ ...it, updatedAt: '2026-01-01T00:00:00.000Z' });
+  }
+  const full = await data.sync(S, { groups: {}, owners: {}, ideas: {} }) as any;
+  assert.ok(full.tasks.length > 3 && full.taskIds === undefined, 'без отметки — всё целиком');
+  const known = () => ({ groups: { [PERSONAL]: -1 }, owners: {}, ideas: {}, tasksAt: full.tasksAt, tasksSig: full.tasksSig });
+  await put(S, { id: 'bd1', groupId: PERSONAL, title: 'ДР Маши изменён' });
+  const d = await data.sync(S, known()) as any;
+  assert.deepEqual(d.tasks.map((t: Task) => t.id), ['bd1'], 'только изменённое');
+  assert.deepEqual([...d.taskIds].sort(), full.tasks.map((t: Task) => t.id).sort(), 'и id всех видимых');
+  await data.apply(S, { op: 'item.delete', groupId: PERSONAL, id: 'bd2' });
+  const d2 = await data.sync(S, known()) as any;
+  assert.ok(!d2.taskIds.includes('bd2'), 'удалённого нет в списке id — телефон уберёт');
+  // Поменялся состав групп или режим — видимость старых дел другая: снова всё
+  await data.apply(S, { op: 'group.mode', id: 'fr', selectOnly: false });
+  const d3 = await data.sync(S, known()) as any;
+  assert.equal(d3.taskIds, undefined, 'режим группы поменялся — всё целиком');
+  assert.notEqual(d3.tasksSig, full.tasksSig);
+}
+
+console.log('✓ личный календарь: видимость, режимы, права, перенос, тип дела, откуда перенесено, только изменённое');

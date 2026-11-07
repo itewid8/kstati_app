@@ -1,6 +1,6 @@
 /**
  * Снимок экрана и обработка картинки для отчёта: react-native-view-shot (снимок) и expo-image-manipulator (обрезка, сжатие).
- * Модули подключаются через require: типы здесь свои, минимальные.
+ * Модули подключаются по требованию: типы здесь свои, минимальные.
  */
 import type { RefObject } from 'react';
 import type { View } from 'react-native';
@@ -16,16 +16,15 @@ type Manipulator = {
   SaveFormat: { JPEG: string };
 };
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const shot = (): ViewShot => require('react-native-view-shot') as ViewShot;
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// Подгружается при первом снимке: в вебе вместе с ним идёт html2canvas (~200 КБ), который не нужен до отчёта об ошибке
+const shot = async (): Promise<ViewShot> => (await import('react-native-view-shot')) as unknown as ViewShot;
 const manip = (): Manipulator => require('expo-image-manipulator') as Manipulator;
 
 /** Снимок всего экрана приложения (файл JPEG) */
-export const captureScreen = () => shot().captureScreen({ format: 'jpg', quality: 0.9, result: 'tmpfile' });
+export const captureScreen = async () => (await shot()).captureScreen({ format: 'jpg', quality: 0.9, result: 'tmpfile' });
 
 /** Снимок одного вида (картинка с рамкой поверх) */
-export const captureView = (ref: RefObject<View | null>) => shot().captureRef(ref, { format: 'jpg', quality: 0.9, result: 'tmpfile' });
+export const captureView = async (ref: RefObject<View | null>) => (await shot()).captureRef(ref, { format: 'jpg', quality: 0.9, result: 'tmpfile' });
 
 /** Обрезать картинку по прямоугольнику (в пикселях картинки) */
 export async function cropImage(uri: string, r: { x: number; y: number; w: number; h: number }) {

@@ -38,7 +38,11 @@ import {
 import { PERSONAL } from './visibility';
 
 /** Какие ревизии групп и людей уже скачаны */
-export type Revs = { groups: Record<ID, number>; owners: Record<ID, number> };
+/**
+ * Ревизии для /sync. tasksAt / tasksSig — когда и при каком составе групп пришли дела: с ними сервер шлёт
+ * только изменённые дела (нет — все)
+ */
+export type Revs = { groups: Record<ID, number>; owners: Record<ID, number>; tasksAt?: string; tasksSig?: string };
 
 /* ---------- разбор значений ---------- */
 
@@ -279,8 +283,12 @@ export type SyncResponse = {
   revs: Revs;
   /** Дела и «Смотреть» групп, где ревизия поменялась */
   items: Record<ID, { tasks: Task[]; watch: WatchItem[] }>;
-  /** Все видимые мне дела одним списком (только если что-то поменялось); нет — дела не менялись */
+  /** Видимые мне дела (только если что-то поменялось); нет — дела не менялись. С taskIds — только изменённые */
   tasks?: Task[];
+  /** id всех видимых дел: прислали только изменённые — остальные берём свои, которых нет в списке — убираем */
+  taskIds?: ID[];
+  tasksAt?: string;
+  tasksSig?: string;
   wishes: Record<ID, Wish[]>;
   /** Личные напоминания; null — сервер их ещё не знает */
   prefs: { reminders: ReminderSettings | null; overrides: Record<ID, TaskReminderOverride> } | null;
@@ -317,6 +325,9 @@ export function parseSync(v: unknown): SyncResponse {
     revs: { groups: record(revs.groups, revNum), owners: record(revs.owners, revNum) },
     items,
     ...(Array.isArray(r.tasks) && { tasks: mapList(r.tasks, PERSONAL, toTask) }),
+    ...(Array.isArray(r.taskIds) && { taskIds: strs(r.taskIds) }),
+    ...(typeof r.tasksAt === 'string' && { tasksAt: r.tasksAt }),
+    ...(typeof r.tasksSig === 'string' && { tasksSig: r.tasksSig }),
     wishes,
     prefs: p && { reminders: toReminderSettings(p.reminders), overrides: record(p.overrides, (x) => (Array.isArray(x) ? strs(x) : null)) },
     ...(r.ideaRevs !== undefined && r.ideaRevs !== null && { ideaRevs: record(r.ideaRevs, strOrNull) }),
@@ -325,6 +336,24 @@ export function parseSync(v: unknown): SyncResponse {
 }
 
 /* ---------- слияние ---------- */
+
+/**
+ * Дела из ответа: без taskIds — весь список; с taskIds — изменённые поверх своих, порядок — как у сервера.
+ * missing — сервер считает видимым дело, которого у нас нет и которое не прислали: нужен полный список
+ */
+export function mergeTasks(local: readonly Task[], incoming: readonly Task[], ids: readonly ID[] | undefined): { tasks: Task[]; missing: boolean } {
+  if (!ids) return { tasks: [...incoming], missing: false };
+  const changed = new Map(incoming.map((t) => [t.id, t]));
+  const mine = new Map(local.map((t) => [t.id, t]));
+  let missing = false;
+  const tasks: Task[] = [];
+  for (const id of ids) {
+    const t = changed.get(id) ?? mine.get(id);
+    if (t) tasks.push(t);
+    else missing = true;
+  }
+  return { tasks, missing };
+}
 
 /** Группы и люди, по которым есть неотправленные правки: их записи с сервера не берём */
 export function pendingScopes(outbox: readonly Op[], meId: string | undefined) {
@@ -394,7 +423,8 @@ export function mergePull(s: LocalData, res: SyncResponse): { patch: PullPatch; 
   // Дела: сервер шлёт все видимые дела одним списком, когда что-то поменялось.
   // Есть неотправленные правки дел — свой список не трогаем, а ревизию личного календаря сбрасываем: заберём заново
   const pendingTasks = s.outbox.some((o) => o.op === 'task.put' || (o.op === 'item.delete' && !s.watch.some((w) => w.id === o.id)));
-  const tasks = res.tasks && !pendingTasks ? res.tasks : s.tasks;
+  const { tasks, missing } = res.tasks && !pendingTasks ? mergeTasks(s.tasks, res.tasks, res.taskIds) : { tasks: s.tasks, missing: false };
+  const tasksTaken = !!res.tasks && !pendingTasks;
 
   const wishFromServer = Object.entries(res.wishes).filter(([owner]) => !pending.owners.has(owner));
   const replacedOwners = new Set(wishFromServer.map(([o]) => o));
@@ -406,10 +436,18 @@ export function mergePull(s: LocalData, res: SyncResponse): { patch: PullPatch; 
   // Ревизии: для групп с неотправленными правками оставляем старые — заберём их заново
   const revs: Revs = {
     groups: Object.fromEntries(
-      Object.entries(res.revs.groups).map(([g, r]) => [g, pending.groups.has(g) || (g === PERSONAL && pendingTasks) ? (g === PERSONAL ? -1 : (s.revs.groups[g] ?? -1)) : r]),
+      Object.entries(res.revs.groups).map(([g, r]) => [
+        g,
+        pending.groups.has(g) || (g === PERSONAL && (pendingTasks || missing)) ? (g === PERSONAL ? -1 : (s.revs.groups[g] ?? -1)) : r,
+      ]),
     ),
     owners: Object.fromEntries(Object.entries(res.revs.owners).map(([o, r]) => [o, pending.owners.has(o) ? (s.revs.owners[o] ?? -1) : r])),
   };
+  // Отметка дел: взяли — новая; каких-то видимых дел у нас нет (стали видны без правки) — без отметки: в следующий раз всё целиком
+  const tasksAt = tasksTaken ? (missing ? undefined : res.tasksAt) : s.revs.tasksAt;
+  const tasksSig = tasksTaken ? (missing ? undefined : res.tasksSig) : s.revs.tasksSig;
+  if (tasksAt) revs.tasksAt = tasksAt;
+  if (tasksSig) revs.tasksSig = tasksSig;
 
   const merged: PullPatch = {
     users: reuseList(s.users, res.users),

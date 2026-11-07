@@ -25,6 +25,7 @@ import { TopicScreen } from '@/screens/sheets';
 import type { LiftTarget } from '@/ui';
 import { NEW_NOTE, NO_ME, nav, signedInOnly, useChrome, useInsets, usePersonColors, type StoreState } from '../common';
 import { holdIdea } from '../quick/quickStore';
+import { preloadNote } from './noteLoader';
 import { useNoteEditor } from './useNoteEditor';
 import { useUnsavedGuard } from './useUnsavedGuard';
 
@@ -149,6 +150,9 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
     { label: 'КОПИРОВАТЬ', n: chosen.length, onPress: () => (copyIdeasMany(chosen), setSelected(null)) },
     { label: 'УДАЛИТЬ', n: chosen.length, danger: true, onPress: deleteSelected },
   ];
+  useEffect(() => {
+    preloadNote().catch(() => {});
+  }, []);
   // «Назад» Android в режиме выбора — выйти из выбора
   useEffect(() => {
     if (!selected) return;

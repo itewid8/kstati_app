@@ -152,6 +152,24 @@ describe('mergePull — личный календарь', () => {
     assert.equal(patch.tasks, undefined);
     assert.equal(patch.revs?.groups['@me'], -1);
   });
+  test('только изменённые дела: остальные — прежние объекты, пропавшие убираются, отметка запоминается', () => {
+    const s = local({ revs: { groups: { g1: 5, g2: 2, '@me': 6 }, owners: { s: 1, k: 1 }, tasksAt: '2026-11-01T00:00:00.000Z', tasksSig: 'sig1' } });
+    const keepIds = TASKS.slice(1).map((t) => t.id);
+    const changed = { ...JSON.parse(JSON.stringify(TASKS[1])), type: 'task', title: 'Изменено' };
+    const { patch } = mergePull(s, parseSync(v3(s, { tasks: [changed], taskIds: keepIds, tasksAt: '2026-11-07T10:00:00.000Z', tasksSig: 'sig1' })));
+    assert.deepEqual(patch.tasks?.map((t) => t.id), keepIds, 'первого дела нет в списке — убрано');
+    assert.equal(patch.tasks?.[0]?.title, 'Изменено');
+    for (const t of patch.tasks!.slice(1)) assert.equal(t, s.tasks.find((x) => x.id === t.id), 'неизменённые — те же объекты');
+    assert.equal(patch.revs?.tasksAt, '2026-11-07T10:00:00.000Z');
+    assert.equal(patch.revs?.groups['@me'], 7);
+  });
+  test('сервер видит дело, которого у нас нет, — отметка сбрасывается: в следующий раз всё целиком', () => {
+    const s = local({ revs: { groups: { g1: 5, g2: 2, '@me': 6 }, owners: { s: 1, k: 1 }, tasksAt: '2026-11-01T00:00:00.000Z', tasksSig: 'sig1' } });
+    const { patch } = mergePull(s, parseSync(v3(s, { tasks: [], taskIds: [...TASKS.map((t) => t.id), 'новое'], tasksAt: '2026-11-07T10:00:00.000Z', tasksSig: 'sig1' })));
+    assert.equal(patch.revs?.tasksAt, undefined);
+    assert.equal(patch.revs?.groups['@me'], -1);
+    assert.deepEqual(patch.tasks?.map((t) => t.id) ?? s.tasks.map((t) => t.id), TASKS.map((t) => t.id), 'свои дела на месте');
+  });
   test('личный календарь как текущий вид сохраняется', () => {
     const s = local({ currentGroupId: '@me' });
     const { patch } = mergePull(s, parseSync(v3(s)));

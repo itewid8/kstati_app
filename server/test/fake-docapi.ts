@@ -8,7 +8,11 @@ type AV = { S?: string; N?: string };
 type Row = Record<string, AV>;
 type Table = { hash: string; range?: string; rows: Map<string, Row> };
 
-export function startFakeDocApi(): Promise<{ url: string; server: Server; calls: string[] }> {
+/**
+ * pageSize — сколько записей отдаёт Query за раз (по умолчанию 2 — проверить LastEvaluatedKey; YDB отдаёт до 1 МБ);
+ * latencyMs — задержка ответа, как у настоящей базы по сети (для нагрузочного теста)
+ */
+export function startFakeDocApi(opts: { pageSize?: number; latencyMs?: number } = {}): Promise<{ url: string; server: Server; calls: string[] }> {
   const tables = new Map<string, Table>();
   const ttl = new Set<string>();
   const calls: string[] = [];
@@ -82,7 +86,7 @@ export function startFakeDocApi(): Promise<{ url: string; server: Server; calls:
         .sort((x, y) => (x[t.range!]?.S ?? '').localeCompare(y[t.range!]?.S ?? ''));
       if (b.ScanIndexForward === false) all.reverse();
       // Постранично по 2 записи — чтобы проверить LastEvaluatedKey (с Limit — сколько просили)
-      const size = b.Limit ?? 2;
+      const size = b.Limit ?? opts.pageSize ?? 2;
       const start = b.ExclusiveStartKey ? all.findIndex((r) => keyOf(t, r) === keyOf(t, b.ExclusiveStartKey)) + 1 : 0;
       const page = all.slice(start, start + size);
       const more = start + size < all.length;
@@ -107,7 +111,14 @@ export function startFakeDocApi(): Promise<{ url: string; server: Server; calls:
   const server = createServer((req, res) => {
     let body = '';
     req.on('data', (c) => (body += c));
-    req.on('end', () => {
+    req.on('end', async () => {
+      // Нагрузочный тест: задержку можно поменять на ходу (данные заливаются без неё)
+      const lat = /^\/__latency\?ms=(\d+)/.exec(req.url ?? '');
+      if (lat) {
+        opts.latencyMs = Number(lat[1]);
+        return res.end('ok');
+      }
+      if (opts.latencyMs) await new Promise((r) => setTimeout(r, opts.latencyMs));
       const target = String(req.headers['x-amz-target'] ?? '').split('.').pop()!;
       calls.push(target);
       const send = (status: number, obj: unknown) => {

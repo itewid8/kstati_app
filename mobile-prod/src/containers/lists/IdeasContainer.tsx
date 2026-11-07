@@ -8,6 +8,7 @@ import { noteImportRoute } from '@/components/ShareHost';
 import { deleteTopicsAsk } from '@/lib/ideas';
 import type { SelectAction } from '@/ui';
 import { archiveTopicsMany } from './bulk';
+import { preloadNote } from './noteLoader';
 import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { IdeasScreen, type IdeasSection } from '@/screens/lists/IdeasScreen';
@@ -71,6 +72,10 @@ export const IdeasContainer = signedInOnly(function Ideas() {
     [canPick],
   );
   const cancelSelect = useCallback(() => setSelected(null), []);
+  // Редактор заметок — заранее, пока человек смотрит список
+  useEffect(() => {
+    preloadNote().catch(() => {});
+  }, []);
   // «Назад» Android в режиме выбора — выйти из выбора, а не с экрана
   useEffect(() => {
     if (!selected) return;
