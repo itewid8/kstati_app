@@ -138,25 +138,25 @@ export const size = {
   hairline: 1,
   strip: 1.5,
 
-  topBarTop: 20,
+  topBarTop: 8,
   topBarHeight: 40,
   iconButton: 40,
   /** Иконки верхней панели (в List и EditDate — 16) */
   icon: 18,
   iconSmall: 16,
 
-  titleTop: 70,
+  titleTop: 58,
   titleHeight: 42,
 
-  tabsTop: 120,
+  tabsTop: 108,
   tab: 32,
   viewSwitch: 28,
 
   /** Где начинается основной контент под вкладками */
-  contentTop: 162,
+  contentTop: 150,
   /** Экраны с названием в верхней панели (Заметки, Хочу): вкладки — на месте заголовка, контент — на 50 выше */
-  tabsTopCompact: 70,
-  contentTopCompact: 112,
+  tabsTopCompact: 58,
+  contentTopCompact: 100,
   /** Нижний край контента над навигацией */
   contentBottom: 98,
 

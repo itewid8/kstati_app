@@ -120,8 +120,8 @@ describe('geometry', () => {
     assert.equal(weekColumnAt(389, 390), 6);
   });
 
-  test('месяц по макету: панель 564, строка 77 (5 недель) и 64 (6 недель)', () => {
-    assert.deepEqual(monthLayout(5, MOCK), { gridTop: 168, rowH: 77, panelTop: 564, panelMax: 182 });
+  test('месяц по макету: панель 552, строка 77 (5 недель) и 64 (6 недель)', () => {
+    assert.deepEqual(monthLayout(5, MOCK), { gridTop: 156, rowH: 77, panelTop: 552, panelMax: 194 });
     assert.equal(monthLayout(6, MOCK).rowH, 64);
   });
 
@@ -129,18 +129,18 @@ describe('geometry', () => {
     const l = monthLayout(5, SE);
     assert.equal(l.panelTop, 667 - 98 - 87);
     assert.equal(l.panelMax, 87);
-    assert.ok(168 + 20 + 1.5 + 5 * l.rowH + 8 <= l.panelTop);
+    assert.ok(156 + 20 + 1.5 + 5 * l.rowH + 8 <= l.panelTop);
   });
 
   test('месяц: ячейка под пальцем, вне сетки по высоте — null', () => {
-    assert.deepEqual(monthCellAt(16 + 1, 170, 5, MOCK), { row: 0, col: 0 });
-    assert.deepEqual(monthCellAt(374, 169.5 + 77 * 2 + 5, 5, MOCK), { row: 2, col: 6 });
-    assert.equal(monthCellAt(200, 160, 5, MOCK), null);
+    assert.deepEqual(monthCellAt(16 + 1, 158, 5, MOCK), { row: 0, col: 0 });
+    assert.deepEqual(monthCellAt(374, 157.5 + 77 * 2 + 5, 5, MOCK), { row: 2, col: 6 });
+    assert.equal(monthCellAt(200, 148, 5, MOCK), null);
     assert.equal(monthCellAt(200, 600, 5, MOCK), null);
   });
 
   test('год по макету: строка 138, квадраты 12', () => {
-    assert.deepEqual(yearLayout(MOCK), { gridTop: 174, rowH: 138, dayH: 12, gridH: 570 });
+    assert.deepEqual(yearLayout(MOCK), { gridTop: 162, rowH: 138, dayH: 12, gridH: 570 });
   });
 
   test('год на телефоне: декабрь над навигацией', () => {

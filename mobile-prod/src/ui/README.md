@@ -8,8 +8,8 @@
   В тёмной теме hair в макетах разный (#222 / #1E1E1E / #242424), у нас один — `#222222`.
 - Цвет человека берётся из его профиля (`User.color`: blue, pink, green, yellow… или свой `#hex`) и одинаков во всех группах:
   `personColor(color, scheme)`, `personInk(color, scheme)` (текст поверх), `tint(hex, a)`. В макетах s = blue, k = pink, g/o = green, y = yellow.
-- `size` — сетка экрана: панель top 20 / h 40, кнопки 40×40, иконки 18 (16 в List/EditDate), заголовок top 70,
-  вкладки top 120 / h 32, контент от 162 до bottom 98, шапка секции 22, строка 44, «сделано» 35, навигация bottom 18 / h 72, REC 104.
+- `size` — сетка экрана: панель top 8 / h 40, кнопки 40×40, иконки 18 (16 в List/EditDate), заголовок top 58,
+  вкладки top 108 / h 32, контент от 150 до bottom 98, шапка секции 22, строка 44, «сделано» 35, навигация bottom 18 / h 72, REC 104.
 - `fonts` — имена начертаний expo-google-fonts (`Geist_700Bold`…). `fontWeight` не задаём: у каждого веса своё семейство.
   Загрузка: `useFonts(uiFonts)` из `fonts.ts`.
 - `type` — готовые стили текста; `letterSpacing` уже в px (em × размер).

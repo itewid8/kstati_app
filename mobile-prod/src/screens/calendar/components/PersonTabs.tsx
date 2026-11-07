@@ -16,7 +16,7 @@ export const PERSON_TAB = {
   /** Шаг вкладок: 84 + 4 */
   pitch: 88,
   /** Верх первой вкладки, px от верха экрана без safe area — в дне и неделе одинаково (на 10px ниже черты шапки недели) */
-  top: 212,
+  top: 200,
 } as const;
 
 type Props = PersonFilterProps & {
