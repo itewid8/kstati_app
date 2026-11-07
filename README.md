@@ -40,13 +40,13 @@ cp .env.example .env          # set YANDEX_API_KEY
 npm run dev                   # http://localhost:3000, emulator: http://10.0.2.2:3000
 
 # app (terminal 2)
-cd mobile
+cd mobile-prod
 npm install
 echo 'EXPO_PUBLIC_API_URL=http://10.0.2.2:3000' > .env
 npx expo run:android
 ```
 
-Without `EXPO_PUBLIC_API_URL` the app starts in demo mode: in-memory sample data, simulated recording and a local rule-based parser (`mobile/src/lib/mockParser.ts`).
+Without `EXPO_PUBLIC_API_URL` the app starts in demo mode: in-memory sample data, simulated recording and a local rule-based parser (`mobile-prod/src/lib/mockParser.ts`).
 
 ## Technologies used
 
@@ -63,8 +63,8 @@ Without `EXPO_PUBLIC_API_URL` the app starts in demo mode: in-memory sample data
 ## Quick installation
 
 1. Install Node 22, Android Studio (SDK, emulator, JDK) and, for voice on a local server, `ffmpeg`.
-2. `npm install` in `server/` and `mobile/`, fill `server/.env` and `mobile/.env`.
-3. `npm run dev` in `server/`, `npx expo run:android` in `mobile/`.
+2. `npm install` in `server/` and `mobile-prod/`, fill `server/.env` and `mobile-prod/.env`.
+3. `npm run dev` in `server/`, `npx expo run:android` in `mobile-prod/`.
 
 Details, environment variables and cloud deployment: [docs/installation.md](docs/installation.md).
 
@@ -75,15 +75,16 @@ The phone is the source of truth for the user's own edits and keeps working offl
 ## Project structure
 
 ```
-.github/workflows/   server deploy to Yandex Cloud on push to main
+.github/workflows/   server and web deploy to Yandex Cloud on push to main
 docs/                documentation, cloud setup, voice contract
-mobile/              Expo app
-  app/               screens (Expo Router)
-  src/components/    UI: calendar, sheets, rows, recorder, pickers
-  src/lib/           store, sync, voice, auth, dates, repeats, reminders
-  src/widget/        widget data and iOS widget view
-  modules/           local native modules (widget, VPN check)
+mobile-prod/         the app: iOS, Android and web (Expo)
+  app/               routes (Expo Router)
+  src/screens/       screens; src/containers/ — wiring; src/adapters/ — pure view logic
+  src/ui/            design system; src/components/ — shared UI
+  src/lib/           store, sync, voice, auth, dates, repeats, reminders, notes
+  modules/           local native modules (widget, VPN check, share)
   plugins/           Expo config plugins
+  public/            web: index.html, PWA manifest
 server/              Fastify API
   src/               routes, auth, voice parsing, Yandex clients, storage
   test/              unit and end-to-end tests

@@ -25,6 +25,8 @@ export type User = {
   email?: string;
   /** scrypt: соль и хеш */
   passHash?: string;
+  /** Токены, выданные раньше этого момента (unix, секунды), недействительны — после смены или сброса пароля */
+  tokensAfter?: number;
   vkId?: string;
   createdAt: string;
   /** Подписка, выданная вручную (src/subs.ts): до даты включительно (ГГГГ-ММ-ДД) или бессрочно (null) */
@@ -56,7 +58,7 @@ export type Celebrant = { id?: string; name: string };
 export type Task = {
   id: string;
   /**
-   * Раздел хранения. API 3: «u:<владелец>» — личный календарь владельца (visibility.ts).
+   * Раздел хранения: «u:<владелец>» — личный календарь владельца (visibility.ts).
    * Старые записи лежали в разделе группы — переносятся при первой синхронизации (api.ts, migrateGroup)
    */
   groupId: string;
@@ -270,6 +272,8 @@ export interface Store {
   /** +1, если значение меньше limit. null — лимит исчерпан */
   /** ttlSec — через сколько секунд счётчик удаляется сам (YDB: TTL по атрибуту exp); нет — хранится всегда */
   incrUpTo(counter: string, limit: number, ttlSec?: number): Promise<number | null>;
+  /** Удалить счётчик (сбросить в 0) */
+  deleteCounter(counter: string): Promise<void>;
 
   /** Личные настройки (напоминания) — одна запись на человека */
   getPrefs(userId: string): Promise<Prefs | null>;
@@ -292,10 +296,10 @@ export const urev = (userId: string) => `urev#${userId}`;
 export const irev = (userId: string) => `irev#${userId}`;
 /**
  * Ревизия подарков чужих хотелок человека (wish.gift, S1). Отдельно от urev: владелец её не получает, иначе
- * «моя ревизия выросла, а я ничего не менял» выдаёт подарок (docs/security/REVIEW-v2.md, V2-2)
+ * «моя ревизия выросла, а я ничего не менял» выдаёт подарок
  */
 export const giftrev = (userId: string) => `giftrev#${userId}`;
-/** Ревизия дел человека (его личный календарь, API 3): меняется при любой правке его дел */
+/** Ревизия дел человека (его личный календарь): меняется при любой правке его дел */
 export const trev = (userId: string) => `trev#${userId}`;
 /** Старые дела группы уже перенесены в разделы владельцев (1 — да) */
 export const migrated = (groupId: string) => `mig#${groupId}`;

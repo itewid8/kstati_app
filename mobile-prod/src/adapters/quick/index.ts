@@ -20,7 +20,7 @@ export const quickView = (s: QuickSnapshot, colors: ColorMap, env: QuickEnv, tar
   }
 };
 
-export { giftTaskTitle, moveChange, splitIdea, taskCopy, undatedTask } from './convert';
+export { giftTaskTitle, moveChange, splitIdea, taskClipText, undatedTask } from './convert';
 export { NO_TOPIC, topicSegments, type QuickIdeaView, type QuickWatchView, type QuickWishView } from './items';
 export { moveBy, moveToDate, movePatches, nextSaturday, type QuickTaskView } from './task';
 export { isMoveKey, type MoveKey, type QuickEnv, type QuickSnapshot, type QuickTarget } from './types';

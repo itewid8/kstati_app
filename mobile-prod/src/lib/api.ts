@@ -98,7 +98,7 @@ function spendOf(v: unknown): { spend?: VoiceSpend } {
   return typeof tokens === 'number' && typeof rub === 'number' ? { spend: { tokens, rub } } : {};
 }
 
-/** GET /voice/quota — голосовые команды за сегодня (лимит не тратит). Нет связи или старый сервер — null */
+/** GET /voice/quota — голосовые команды за сегодня (лимит не тратит). Нет связи — null */
 export async function fetchVoiceQuota(): Promise<VoiceQuota | null> {
   const token = useStore.getState().session?.token;
   if (!token) return null;
@@ -119,23 +119,13 @@ export type SpendDay = SpendPart & { day: string; sttSec: number; rules: number;
 export type SpendCommand = { ts: string; src: 'voice' | 'device' | 'text'; path?: string; calls: number; tokens: number; kop: number; sttSec: number; text: string; result: string };
 export type SpendData = { days: SpendDay[]; recent: SpendCommand[] };
 
-/** GET /stats/spend — мои расходы по дням (старые первыми) и последние команды. Нет связи или старый сервер — null */
+/** GET /stats/spend — мои расходы по дням (старые первыми) и последние команды. Нет связи — null */
 export async function fetchSpend(days: number): Promise<SpendData | null> {
   const token = useStore.getState().session?.token;
   if (!token) return null;
   try {
     const r = await request<{ days?: SpendDay[]; recent?: SpendCommand[] } | null>(`/stats/spend?days=${days}`, { token, timeoutMs: 15_000 });
     return Array.isArray(r?.days) ? { days: r.days, recent: Array.isArray(r.recent) ? r.recent : [] } : null;
-  } catch {
-    return null;
-  }
-}
-
-/** GET /health — уровень API сервера (старый сервер поля api не отдаёт — это уровень 1). Нет связи — null */
-export async function fetchHealth(): Promise<{ api: number } | null> {
-  try {
-    const h = await request<{ api?: unknown } | null>('/health', { timeoutMs: 10_000 });
-    return { api: typeof h?.api === 'number' ? h.api : 1 };
   } catch {
     return null;
   }

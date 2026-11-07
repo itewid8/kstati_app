@@ -16,7 +16,7 @@ import type { CalendarData, CalendarSnapshot } from './events';
 
 export type YearOptions = { year: number };
 
-/** Насыщенность дня по числу дел (AUDIT-2 §4.5) */
+/** Насыщенность дня по числу дел */
 export const yearLevel = (n: number) => 0.35 + 0.5 * Math.min(1, n / 4);
 
 /** «Вместе» — диагональ двух цветов: при трёх и больше людях берутся первые двое по порядку группы */

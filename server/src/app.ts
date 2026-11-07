@@ -9,7 +9,7 @@ import { HttpError, registerAuth, requireUser } from './auth.js';
 import { registerPages } from './pages.js';
 import { mskDay, registerSubs, voiceLimitOf } from './subs.js';
 import { recordSpend, registerSpend } from './spend.js';
-import { API_LEVEL, apiLevel, appVersion } from './client.js';
+import { appVersion } from './client.js';
 import { config } from './config.js';
 import { sendMail, type MailFile } from './mail.js';
 import { randomUUID } from 'node:crypto';
@@ -70,7 +70,11 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   const parse = deps.parse ?? parseText;
   const toOgg = deps.toOgg ?? toOggOpus;
 
-  const app = Fastify({ logger: { level: config.isProd ? 'info' : 'warn' }, bodyLimit: 2 * 1024 * 1024, trustProxy: true });
+  const app = Fastify({ logger: { level: config.isProd ? 'info' : 'warn' }, bodyLimit: 2 * 1024 * 1024,
+    // Адрес клиента — последний в X-Forwarded-For: его дописывает сама платформа (Serverless Containers),
+    // а всё левее мог прислать клиент. trustProxy: true брал бы первый — подставной, и лимит обходился бы
+    trustProxy: (_addr: string, hop: number) => hop === 0,
+  });
 
   /* ---------- веб-версия: запросы из браузера с разрешённых сайтов (CORS) ---------- */
   const allowedOrigin = (o: string | undefined) =>
@@ -80,22 +84,29 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     if (!allowedOrigin(origin)) return;
     reply.header('access-control-allow-origin', origin);
     reply.header('vary', 'Origin');
-    reply.header('access-control-allow-headers', 'content-type, x-kstati-token, x-kstati-api, x-kstati-app');
+    reply.header('access-control-allow-headers', 'content-type, x-kstati-token, x-kstati-app');
     reply.header('access-control-allow-methods', 'GET, POST, PUT, DELETE, OPTIONS');
     reply.header('access-control-max-age', '86400');
     if (req.method === 'OPTIONS') return reply.code(204).send();
   });
 
-  /* ---------- защита от перебора: 120 запросов в минуту с адреса ---------- */
+  /* ---------- защита от перебора: 120 запросов в минуту с адреса, вход и коды — config.authPerMinute ---------- */
   const hits = new Map<string, number[]>();
+  const SENSITIVE = /^\/(auth\/|admin\/login)/;
   app.addHook('onRequest', async (req, reply) => {
     if (req.url === '/health') return;
     const now = Date.now();
-    const list = (hits.get(req.ip) ?? []).filter((t) => now - t < 60_000);
-    if (list.length >= 120) return reply.code(429).send({ error: 'rate_limited' });
-    list.push(now);
-    hits.set(req.ip, list);
-    if (hits.size > 10_000) hits.clear();
+    const limited = (key: string, max: number) => {
+      const list = (hits.get(key) ?? []).filter((t) => now - t < 60_000);
+      if (list.length >= max) return true;
+      list.push(now);
+      // Свежие — в конец: при переполнении уходят самые давние, а не все сразу
+      hits.delete(key);
+      hits.set(key, list);
+      return false;
+    };
+    if (limited(req.ip, 120) || (SENSITIVE.test(req.url) && limited(`auth|${req.ip}`, config.authPerMinute))) return reply.code(429).send({ error: 'rate_limited' });
+    if (hits.size > 10_000) for (const k of [...hits.keys()].slice(0, 1_000)) hits.delete(k);
   });
 
   app.setErrorHandler((err, req, reply) => {
@@ -109,13 +120,11 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     return reply.code(500).send({ error: 'server' });
   });
 
-  // api — самый новый уровень API сервера (S5): новое приложение проверяет api >= 2
   // feedback — настроена ли отправка отзывов (без самих ключей): удобно проверить после выкладки
   app.get('/health', async () => ({
     ok: true,
     model: config.model,
     db: config.db,
-    api: API_LEVEL,
     feedback: { email: !!config.feedbackEmail },
     films: !!config.poiskkinoKey,
   }));
@@ -127,7 +136,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   registerData(app, store, data);
 
   /** Контекст для ИИ собирает сервер из базы: люди моих групп, дела текущей группы, мои хотелки */
-  async function buildContext(user: User, meta: z.infer<typeof VoiceMeta>, api: number): Promise<Context> {
+  async function buildContext(user: User, meta: z.infer<typeof VoiceMeta>): Promise<Context> {
     const { groups, people } = await data.circle(user);
     const group = groups.find((g) => g.id === meta.groupId);
     if (!group) throw new HttpError(403, 'not_member', 'Нет доступа к группе');
@@ -177,7 +186,6 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       currentTopicId: meta.topicId && topics.some((t) => t.id === meta.topicId) ? meta.topicId : null,
       groupMembers: group.memberIds,
       currentParentId: meta.parentId && items.some((t) => t.id === meta.parentId && t.type === 'task' && !t.parentId) ? meta.parentId : null,
-      api,
     };
   }
 
@@ -231,7 +239,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     /** Снимок экрана: JPEG в base64 (кнопка-жучок) */
     screenshot: z.string().max(1_400_000).optional(),
     /** Сведения из приложения: экран, связь, журнал событий */
-    context: z.record(z.unknown()).optional(),
+    context: z.record(z.string(), z.unknown()).optional(),
   });
   app.post('/feedback', async (req) => {
     const user = await requireUser(req, store);
@@ -241,11 +249,11 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     const ts = new Date().toISOString();
     const id = randomUUID().slice(0, 8);
     const context = body.context && JSON.stringify(body.context).length <= 40_000 ? body.context : null;
-    const entry = { id, ts, userId: user.id, name: user.name, email: user.email ?? null, kind: body.kind, text: body.text, app: appVersion(req) ?? null, api: apiLevel(req), device: body.device ?? null };
+    const entry = { id, ts, userId: user.id, name: user.name, email: user.email ?? null, kind: body.kind, text: body.text, app: appVersion(req) ?? null, device: body.device ?? null };
     await store.putTemp(`feedback#${ts}#${user.id}`, { ...entry, context, screenshot: !!body.screenshot }, FEEDBACK_KEEP_SEC);
     if (config.feedbackEmail) {
       const subject = `${body.kind === 'bug' ? 'Ошибка' : 'Предложение'} от ${user.name || user.id}`;
-      const text = [body.text, '', `Кто: ${user.name} (${user.email ?? user.id})`, `Приложение: ${entry.app ?? '—'} · API ${entry.api}`, `Устройство: ${entry.device ?? '—'}`, `Когда: ${ts}`, `Отзыв: ${id}`].join('\n');
+      const text = [body.text, '', `Кто: ${user.name} (${user.email ?? user.id})`, `Приложение: ${entry.app ?? '—'}`, `Устройство: ${entry.device ?? '—'}`, `Когда: ${ts}`, `Отзыв: ${id}`].join('\n');
       const files: MailFile[] = [
         ...(body.screenshot ? [{ name: `screen-${id}.jpg`, type: 'image/jpeg', base64: body.screenshot }] : []),
         ...(context ? [{ name: `context-${id}.json`, type: 'application/json', base64: Buffer.from(JSON.stringify(context, null, 2)).toString('base64') }] : []),
@@ -278,8 +286,8 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     const body = VoiceMeta.extend({ text: z.string().min(1).max(1000), src: z.literal('device').optional() }).parse(req.body);
     const source = body.src === 'device' ? 'device' : 'text';
     if (source === 'device') body.text = normalizeTimes(body.text);
-    const client = { api: apiLevel(req), app: appVersion(req), ...(source === 'device' && body.lang && body.lang !== 'ru-RU' && { lang: body.lang }) };
-    const context = await buildContext(user, body, client.api);
+    const client = { app: appVersion(req), ...(source === 'device' && body.lang && body.lang !== 'ru-RU' && { lang: body.lang }) };
+    const context = await buildContext(user, body);
     const before = await checkVoiceQuota(user);
     const t0 = Date.now();
     try {
@@ -300,8 +308,8 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     const user = await requireUser(req, store);
     const body = VoiceMeta.extend({ audio: z.string().min(1).max(1_500_000) }).parse(req.body);
     const lang = body.lang ?? 'ru-RU';
-    const client = { api: apiLevel(req), app: appVersion(req), ...(lang !== 'ru-RU' && { lang }) };
-    const context = await buildContext(user, body, client.api);
+    const client = { app: appVersion(req), ...(lang !== 'ru-RU' && { lang }) };
+    const context = await buildContext(user, body);
     const before = await checkVoiceQuota(user);
     const audio = Buffer.from(body.audio, 'base64');
 

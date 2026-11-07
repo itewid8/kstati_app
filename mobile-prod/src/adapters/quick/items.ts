@@ -32,8 +32,8 @@ export const quickWishView = (s: QuickSnapshot, colors: ColorMap, env: QuickEnv,
         { key: 'link', label: 'ССЫЛКА', ...off(!link) },
       ]
     : [
-        // Подарить можно, пока никто не подарил и владелец не получил; без API 2 — нельзя
-        { key: 'gift', label: 'ПОДАРЮ', primary: true, ...off(!env.gifts || !!wish.giftedBy || !!wish.receivedAt) },
+        // Подарить можно, пока никто не подарил и владелец не получил
+        { key: 'gift', label: 'ПОДАРЮ', primary: true, ...off(!!wish.giftedBy || !!wish.receivedAt) },
         { key: 'link', label: 'ССЫЛКА', ...off(!link) },
         { key: 'toTask', label: 'В ДЕЛА' },
       ];
@@ -97,7 +97,7 @@ export const topicSegments = (s: Pick<QuickSnapshot, 'me' | 'topics' | 'ideas'>,
 
 export type QuickIdeaView = { kind: 'idea'; sheet: QuickSheetData; idea: Idea; own: boolean };
 
-/** Чужая идея (из открытой мне темы) — только в дела и копией к себе */
+/** Чужая идея (из открытой мне темы) — только в дела и скопировать текст */
 export const quickIdeaView = (s: QuickSnapshot, colors: ColorMap, target: { id: ID }): QuickIdeaView | null => {
   const idea = s.ideas.find((x) => x.id === target.id);
   if (!idea) return null;
@@ -118,7 +118,7 @@ export const quickIdeaView = (s: QuickSnapshot, colors: ColorMap, target: { id: 
       tiles: [
         { key: 'edit', label: 'ИЗМЕНИТЬ', ...off(!own) },
         { key: 'toTask', label: 'В ДЕЛА', primary: true },
-        { key: 'copy', label: 'КОПИЯ' },
+        { key: 'copy', label: 'СКОПИРОВАТЬ' },
       ],
       ...(segments.length ? { section: { label: 'В ТЕМУ', segments, dropdown: { current: topic ? upper(topic.title) : 'БЕЗ ТЕМЫ' } } } : null),
       deletable: own,

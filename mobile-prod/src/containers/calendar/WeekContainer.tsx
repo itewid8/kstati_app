@@ -28,7 +28,7 @@ const openDay = (date: IsoDate) => {
   s.setTasksView('day');
 };
 
-/** C-Week: неделя с понедельника s.calendarDate (INTEGRATION.md 1.1) */
+/** C-Week: неделя с понедельника s.calendarDate */
 export const WeekContainer = () => {
   const chrome = useCalendarChrome();
   const snap = useCalendarSnapshot();

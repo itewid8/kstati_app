@@ -24,7 +24,7 @@ const goToday = () => useStore.getState().setCalendarDate(toISODate(new Date()))
 const selectDate = (date: string) => useStore.getState().setCalendarDate(date);
 const openYear = () => useStore.getState().setTasksView('year');
 
-/** C-Month: месяц s.calendarDate, панель выбранного дня (INTEGRATION.md 1.1) */
+/** C-Month: месяц s.calendarDate, панель выбранного дня */
 export const MonthContainer = () => {
   const chrome = useCalendarChrome();
   const snap = useCalendarSnapshot();

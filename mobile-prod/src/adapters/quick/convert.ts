@@ -1,27 +1,14 @@
 /**
- * Записи из быстрых действий: копия дела, дело из хотелки, «Смотреть» и идеи, правка-перенос дела.
+ * Записи из быстрых действий: текст дела для буфера, дело из хотелки, «Смотреть» и идеи, правка-перенос дела.
  * Чистые функции: id и время приходят снаружи.
  */
-import { plainLine } from '@/lib/note';
+import { notePlain, plainLine } from '@/lib/note';
 import type { IsoDate } from '@/lib/calendarLayout';
-import { peopleOf } from '@/lib/span';
-import type { ChangeDraft, ChangePatch, ID, Task, TaskDraft } from '@/lib/types';
+import type { ChangeDraft, ChangePatch, Task, TaskDraft } from '@/lib/types';
 
-/** Копия дела: те же дата, время, люди, повтор и описание; не отмечена, новый id */
-export const taskCopy = (t: Task, ctx: { id: ID; meId: ID; now: string }): Task => {
-  const { occ: _occ, ...rest } = t;
-  return {
-    ...rest,
-    id: ctx.id,
-    createdBy: ctx.meId,
-    createdAt: ctx.now,
-    // Пустые people значат «автор» — у копии другой автор, поэтому люди явно
-    people: peopleOf(t),
-    doneAt: null,
-    doneDates: [],
-    skipDates: [],
-  };
-};
+/** Текст дела для буфера обмена: название, подзадачи плана строками «— …», описание */
+export const taskClipText = (t: Pick<Task, 'title' | 'note'>, kids: readonly Pick<Task, 'title'>[] = []): string =>
+  [t.title, ...kids.map((k) => `— ${k.title}`), notePlain(t.note ?? '').trim()].filter(Boolean).join('\n');
 
 /** Правка-перенос: у серии с occ — только этот раз (store.applyChanges), иначе всё дело */
 export const moveChange = (t: Pick<Task, 'id' | 'repeat' | 'date'>, occ: IsoDate | null, patch: ChangePatch): ChangeDraft => {

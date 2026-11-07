@@ -80,7 +80,7 @@ cd ~/kstati/mobile
 npm install
 ```
 
-`mobile/.env` selects the server (restart Metro after changing it):
+`mobile-prod/.env` selects the server (restart Metro after changing it):
 
 ```bash
 EXPO_PUBLIC_API_URL=http://10.0.2.2:3000          # Android emulator → server on this Mac
@@ -129,6 +129,6 @@ Verify a deploy: the workflow's last step polls `<PUBLIC_URL>/health`; container
 |---|---|
 | `✗ Не заполнено: …` on server start | a required variable is missing in `server/.env` |
 | `expo run:android` complains about SDK or Java | check `ANDROID_HOME` and `JAVA_HOME` from step 3 |
-| App shows sample data after setting the URL | Metro was not restarted after editing `mobile/.env` |
+| App shows sample data after setting the URL | Metro was not restarted after editing `mobile-prod/.env` |
 | “Нет связи с сервером” on a phone | wrong IP or the phone is on another network; a VPN on the phone (the red triangle next to the mic) often blocks Yandex Cloud |
 | `/voice` fails locally, `/voice/text` works | `ffmpeg` is not installed |

@@ -1,0 +1,68 @@
+# Проверка кода при каждом push и pull request в main (и вручную: Actions → «Проверка кода» → Run workflow).
+# Сервер и приложение проверяются параллельно: типы, ESLint (ошибки и небезопасные паттерны), тесты,
+# уязвимые зависимости уровня critical. Красная проверка — повод посмотреть до выкладки.
+name: Проверка кода
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    name: Сервер
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      # Действия закреплены по хешу коммита: подменённый тег не попадёт в сборку
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: Зависимости
+        run: npm ci
+      - name: Типы
+        run: npm run typecheck
+      - name: ESLint
+        run: npm run lint
+      - name: Тесты
+        run: bash ../server-test.sh
+      - name: Уязвимые зависимости
+        run: npm audit --omit=dev --audit-level=critical
+
+  app:
+    name: Приложение
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile-prod
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile-prod/package-lock.json
+      - name: Зависимости
+        run: npm ci
+      - name: Типы
+        run: npm run typecheck
+      - name: ESLint
+        run: npm run lint
+      - name: Тесты
+        run: npm test
+      - name: Уязвимые зависимости
+        run: npm audit --omit=dev --audit-level=critical

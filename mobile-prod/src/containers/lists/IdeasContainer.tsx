@@ -8,13 +8,10 @@ import { noteImportRoute } from '@/components/ShareHost';
 import { deleteTopicsAsk } from '@/lib/ideas';
 import type { SelectAction } from '@/ui';
 import { archiveTopicsMany } from './bulk';
-import { DEMO, useStore } from '@/lib/store';
+import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { IdeasScreen, type IdeasSection } from '@/screens/lists/IdeasScreen';
 import { NEW_NOTE, NO_ME, nav, signedInOnly, useChrome, useClock, useInsets, usePersonColors, type StoreState } from '../common';
-
-/** Архив тем — только с сервером API 2 (старый молча срежет archivedAt) */
-const archiveOn = (api: number | null) => DEMO || (api ?? 0) >= 2;
 
 /** В архив и обратно — только свои темы; чужие и «Без темы» — без действия */
 function toggleArchive(id: ID, archived: boolean) {
@@ -55,7 +52,6 @@ export const IdeasContainer = signedInOnly(function Ideas() {
   const insets = useInsets();
   const { onOpenFeed, onOpenSettings, onNavigate, onRec } = useChrome('ideas');
   const collapsed = useStore((st) => st.collapsedSections);
-  const archive = useStore((st) => archiveOn(st.serverApi));
   const [personId, setPersonId] = useState<ID>(ALL_IDEAS);
   const colors = usePersonColors(s);
   // Выбор тем (удержание темы): только свои, «Без темы» не выбирается
@@ -98,13 +94,9 @@ export const IdeasContainer = signedInOnly(function Ideas() {
   const active = (selected ?? []).filter((id) => !archivedIds.has(id));
   const archived = (selected ?? []).filter((id) => archivedIds.has(id));
   const selectActions: SelectAction[] = [
-    ...(archive
-      ? [
-          active.length || !archived.length
-            ? { label: 'В АРХИВ', n: active.length, onPress: () => (archiveTopicsMany(active, true), setSelected(null)) }
-            : { label: 'ИЗ АРХИВА', n: archived.length, onPress: () => (archiveTopicsMany(archived, false), setSelected(null)) },
-        ]
-      : []),
+    active.length || !archived.length
+      ? { label: 'В АРХИВ', n: active.length, onPress: () => (archiveTopicsMany(active, true), setSelected(null)) }
+      : { label: 'ИЗ АРХИВА', n: archived.length, onPress: () => (archiveTopicsMany(archived, false), setSelected(null)) },
     { label: 'УДАЛИТЬ', n: selected?.length ?? 0, danger: true, onPress: deleteSelected },
   ];
 
@@ -113,7 +105,7 @@ export const IdeasContainer = signedInOnly(function Ideas() {
       {...data}
       insets={insets}
       onSelectPerson={setPersonId}
-      onToggleArchive={archive ? toggleArchive : undefined}
+      onToggleArchive={toggleArchive}
       onOpenTopic={openTopic}
       onLongPressTopic={longPress}
       selected={selected}

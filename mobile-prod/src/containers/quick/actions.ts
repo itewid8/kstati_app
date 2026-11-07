@@ -1,8 +1,9 @@
 /**
  * Действия окна быстрых действий: плитки, ряд «ПЕРЕНЕСТИ» / «В ТЕМУ», УДАЛИТЬ. Сначала окно закрывается, потом —
  * действие хранилища, переход или следующее окно (меню удаления серии, старая карточка правки).
- * Что меняет списки без своей отмены (перенос, копия, «в дела», тема), получает «ОТМЕНИТЬ» в нижнем сообщении.
+ * Что меняет списки без своей отмены (перенос, «в дела», тема), получает «ОТМЕНИТЬ» в нижнем сообщении.
  */
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { Linking } from 'react-native';
 import { shiftDay } from '@/adapters/calendar/events';
@@ -14,7 +15,7 @@ import {
   moveChange,
   moveToDate,
   splitIdea,
-  taskCopy,
+  taskClipText,
   undatedTask,
   type QuickIdeaView,
   type QuickTaskView,
@@ -24,11 +25,11 @@ import {
 } from '@/adapters/quick';
 import type { IsoDate } from '@/lib/calendarLayout';
 import { taskWhen } from '@/lib/dates';
-import { syncParent } from '@/lib/edits';
 import { uid } from '@/lib/ids';
+import { notePlain } from '@/lib/note';
 import { instance } from '@/lib/recur';
 import { useStore } from '@/lib/store';
-import type { ChangePatch, ID, Task, TaskDraft } from '@/lib/types';
+import type { ChangePatch, ID, TaskDraft } from '@/lib/types';
 import { captureList, isEmptyUndo, revertList, type ListUndo } from '@/lib/undo';
 import type { QuickTileKey } from '@/screens/quick';
 import { toPlanGrid } from '../common/go';
@@ -78,6 +79,13 @@ const addTask = (data: TaskDraft): void => {
 
 /* ---------- Дело ---------- */
 
+/** Текст — в буфер обмена */
+const toClipboard = (text: string): void => {
+  void Clipboard.setStringAsync(text)
+    .then(() => useStore.getState().notice('Скопировано'))
+    .catch(() => useStore.getState().notice('Не скопировалось'));
+};
+
 const moveTask = (v: Pick<QuickTaskView, 'task' | 'occ'>, patch: ChangePatch): void => {
   const when = taskWhen(patch.date ?? null, patch.time ?? null);
   withUndo(when ? `Перенесено · ${when}` : 'Перенесено', () => useStore.getState().applyChanges([moveChange(v.task, v.occ, patch)]));
@@ -103,13 +111,8 @@ const taskTile = (v: QuickTaskView, key: QuickTileKey): void => {
     case 'remind':
       // Чужое дело: окно дела только с моими напоминаниями
       return void router.push(nav.taskEditor({ ...(occ ? { id: task.id, occ } : { id: task.id }), field: 'remind' }));
-    case 'copy': {
-      const me = st.me;
-      if (!me) return;
-      const copy: Task = taskCopy(task, { id: uid(), meId: me.id, now: new Date().toISOString() });
-      // Копия подзадачи — в том же плане: план снова не сделан, если копия не отмечена
-      return withUndo('Копия создана', () => useStore.setState({ tasks: syncParent([...useStore.getState().tasks, copy], copy.parentId) }));
-    }
+    case 'copy':
+      return toClipboard(taskClipText(task, st.tasks.filter((k) => k.parentId === task.id)));
     default:
       return;
   }
@@ -215,10 +218,7 @@ const ideaTile = (v: QuickIdeaView, key: QuickTileKey): void => {
       return addTask(undatedTask(title, note));
     }
     case 'copy':
-      // Чужая идея копируется к себе «Без темы»
-      return withUndo('Копия создана', () =>
-        useStore.getState().saveItems([{ key: uid(), type: 'idea', data: { title: idea.text, topicId: own ? idea.topicId : null, newTopic: null } }]),
-      );
+      return toClipboard(notePlain(idea.text));
     default:
       return;
   }

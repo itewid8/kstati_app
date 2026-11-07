@@ -24,7 +24,7 @@ export const screens = {
 
 Ключ совпадает с именем макета. Тема приходит в пропсах, и ещё она выставлена как `prefers-color-scheme`, так что `useColorScheme()` / `useColors()` тоже её видят. Можно экспортировать и просто `default`-компонент.
 
-Как работает сборка (`harness/bundle.mjs`): TS/TSX транспилируются через `typescript`, модули резолвятся относительно файла, по `paths` из ближайшего `tsconfig.json` (`@/*` в `mobile/`), через `node_modules` и затем через комплект из `webkit`. `react-native` подменяется на `react-native-web`. Нативные модули (expo-router, expo-haptics, expo-audio, reanimated, gesture-handler, safe-area-context, zustand и т.п.) заменяются заглушками из `harness/stubs/`. Если модуль не найден, подставляется `_auto.js` и в консоль пишется предупреждение. Когда экрану нужно реальное поведение, добавьте файл `stubs/<пакет>.js` (для подпути: `stubs/<пакет>__<подпуть>.js`).
+Как работает сборка (`harness/bundle.mjs`): TS/TSX транспилируются через `typescript`, модули резолвятся относительно файла, по `paths` из ближайшего `tsconfig.json` (`@/*` в `mobile-prod/`), через `node_modules` и затем через комплект из `webkit`. `react-native` подменяется на `react-native-web`. Нативные модули (expo-router, expo-haptics, expo-audio, reanimated, gesture-handler, safe-area-context, zustand и т.п.) заменяются заглушками из `harness/stubs/`. Если модуль не найден, подставляется `_auto.js` и в консоль пишется предупреждение. Когда экрану нужно реальное поведение, добавьте файл `stubs/<пакет>.js` (для подпути: `stubs/<пакет>__<подпуть>.js`).
 
 Шрифты: `fontFamily: 'Geist'` или `'Geist Mono'` вместе с `fontWeight` (Geist 400–700, Mono 400–600). Имена expo-google-fonts (`Geist_600SemiBold`, `GeistMono_400Regular`) тоже работают.
 

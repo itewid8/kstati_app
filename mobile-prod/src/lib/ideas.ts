@@ -4,7 +4,7 @@
  */
 import { openConfirm, openMenu } from '@/components/ActionMenu';
 import { toTab } from '@/containers/common/go';
-import { DEMO, useStore } from './store';
+import { useStore } from './store';
 import { INBOX, type ID, type Idea, type Topic } from './types';
 
 /** Когда в теме что-то происходило: последняя идея, иначе создание темы */
@@ -51,16 +51,15 @@ export function deleteTopicsAsk(ids: readonly ID[], onDone?: () => void) {
   setTimeout(() => openConfirm({ title: `Удалить ${what}? Заметки внутри тоже удалятся: ${inside}`, action: 'Удалить всё', onConfirm: run }), 250);
 }
 
-/** Меню своей темы (название правится прямо в заголовке темы): открыть группам, выбрать заметки, в архив (сервер API 2), удалить */
+/** Меню своей темы (название правится прямо в заголовке темы): открыть группам, выбрать заметки, в архив, удалить */
 export function topicMenu(t: Topic, onShare: () => void, onSelect?: () => void) {
   const s = useStore.getState();
-  const archive = DEMO || (s.serverApi ?? 0) >= 2;
   openMenu({
     title: t.title,
     actions: [
       { label: 'Открыть группам', onPress: () => setTimeout(onShare, 250) },
       ...(onSelect ? [{ label: 'Выбрать заметки', onPress: onSelect }] : []),
-      ...(archive ? [{ label: t.archivedAt ? 'Вернуть из архива' : 'В архив', onPress: () => s.archiveTopic(t.id, !t.archivedAt) }] : []),
+      { label: t.archivedAt ? 'Вернуть из архива' : 'В архив', onPress: () => s.archiveTopic(t.id, !t.archivedAt) },
       {
         label: 'Удалить тему',
         danger: true,

@@ -1,6 +1,6 @@
 # Architecture
 
-Two deployables: an Expo app (`mobile/`) and a Fastify API (`server/`). The phone is offline-first and owns the user's own edits; the server owns permissions, shared state and everything that talks to Yandex AI.
+Two deployables: an Expo app (`mobile-prod/`) and a Fastify API (`server/`). The phone is offline-first and owns the user's own edits; the server owns permissions, shared state and everything that talks to Yandex AI.
 
 ```
 ┌──────────────────────── phone ───────────────────────┐        ┌──────────────── Yandex Cloud ────────────────┐
@@ -51,7 +51,7 @@ Demo mode (`DEMO = !API_URL`): no network, sample data from `mock.ts`, simulated
 
 ## Data model
 
-Defined in `server/src/store/types.ts` and mirrored in `mobile/src/lib/types.ts`.
+Defined in `server/src/store/types.ts` and mirrored in `mobile-prod/src/lib/types.ts`.
 
 | Entity | Key | Scope |
 |---|---|---|

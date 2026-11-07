@@ -1,4 +1,4 @@
-/** answerPlans для API 2: scope «me», who, многодневные дела в периоде */
+/** answerPlans: scope «me», who, многодневные дела в периоде */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FRIENDS, KARINA, SANYA, TASKS, US, task } from '@/adapters/common/fixture';

@@ -98,7 +98,6 @@ function makeCtx(): Ctx {
     groups,
     topics,
     existing: { tasks, watch, wishes, ideas: [] },
-    api: 3,
   };
 }
 const othersOf = (ctx: Ctx): Person[] => ctx.people.map((p) => PEOPLE.find((x) => x.nom === p.name)!).filter(Boolean);
@@ -272,7 +271,7 @@ function taskParent(): Example | null {
   if (open) ctx.currentParentId = 't90';
   const ts = pick(['в 10', 'в 12', 'в 15:00', 'в 19:00']);
   const time = spokenTime(ts);
-  const phrase = cap(open ? `${sub.toLowerCase()} ${ts}` : `${pick(['в', 'для'])} ${title.toLowerCase().replace(/^поездка/, 'поездку').replace(/^отпуск/, 'отпуск').replace(/^командировка/, 'командировку')} добавь ${sub.toLowerCase()} ${ts}`);
+  const phrase = cap(open ? `${sub.toLowerCase()} ${ts}` : `${pick(['в', 'для'])} ${title.toLowerCase().replace(/^поездка/, 'поездку').replace(/^командировка/, 'командировку')} добавь ${sub.toLowerCase()} ${ts}`);
   return { phrase, ctx, actions: [clean({ intent: 'add', type: 'task', title: sub, date: from, time, parent: 't90' })], check: taskCheck(sub, from, time, (d) => (d.parentId === 't90' ? true : `parent ${d.parentId}`)) };
 }
 

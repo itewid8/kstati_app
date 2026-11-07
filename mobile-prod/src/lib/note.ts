@@ -9,6 +9,7 @@
  *   остальное              — обычный текст
  * Старые идеи без разметки — просто текст.
  */
+import { stripInline } from './noteHtml';
 
 export type NoteKind = 'text' | 'heading' | 'check' | 'number' | 'bullet';
 
@@ -28,6 +29,7 @@ const NUMBER = /^\d{1,3}[.)] (.*)$/;
 const BULLET = /^[-*•] (.*)$/;
 const HEADING = /^#{1,3} (.*)$/;
 const BOLD = /^\*\*(.+)\*\*$/;
+const FENCE = /^```\s*$/;
 
 function boldOf(text: string): { text: string; bold?: true } {
   const m = BOLD.exec(text);
@@ -79,8 +81,8 @@ export function serializeNote(blocks: readonly NoteBlock[]): string {
 /** Пустая заметка: ни одной строки с текстом */
 export const isBlankNote = (blocks: readonly NoteBlock[]) => blocks.every((b) => !b.text.trim());
 
-/** Строка без разметки — для поиска, голоса, превью */
-export const plainLine = (line: string) => parseLine(line).text.trim();
+/** Строка без разметки — для поиска, голоса, превью: без вида строки, цитаты и разметки внутри (**, *, ++, ~~, `, ссылки) */
+export const plainLine = (line: string) => (FENCE.test(line) ? '' : stripInline(parseLine(line.replace(/^> ?/, '')).text).trim());
 
 export type NotePreview = {
   /** Первая непустая строка */
@@ -93,7 +95,7 @@ export type NotePreview = {
 
 export function notePreview(text: string): NotePreview {
   const blocks = parseNote(text);
-  const lines = blocks.map((b) => b.text.trim()).filter(Boolean);
+  const lines = text.replace(/\r\n?/g, '\n').split('\n').map(plainLine).filter(Boolean);
   const checks = blocks.filter((b) => b.kind === 'check' && b.text.trim());
   return {
     title: lines[0] ?? '',
@@ -127,7 +129,9 @@ export const joinTitle = (title: string, body: string): string => {
 
 /** Текст для буфера обмена: без разметки, пункты — «☐ / ☑», «1.», «•» */
 export function notePlain(text: string): string {
-  const blocks = parseNote(text);
+  const blocks = parseNote(text)
+    .filter((b) => !FENCE.test(b.text))
+    .map((b) => ({ ...b, text: stripInline(b.kind === 'text' ? b.text.replace(/^> ?/, '') : b.text) }));
   return blocks
     .map((b, i) => {
       switch (b.kind) {

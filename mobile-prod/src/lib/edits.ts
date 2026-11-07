@@ -258,7 +258,7 @@ export function editSeriesOcc(lists: Lists, id: ID, occ: string, scope: SeriesSc
         : t,
     );
   }
-  let tasks = syncParent([...rest, added], added.parentId);
+  const tasks = syncParent([...rest, added], added.parentId);
   const own = mine ?? lists.overrides[id];
   const overrides = own ? { ...lists.overrides, [nid]: own } : lists.overrides;
   return { lists: { ...lists, tasks, overrides }, id: nid };
@@ -271,7 +271,7 @@ export type ChangeCtx = { meId: ID | undefined; now: string };
 /** Рабочее состояние правок: списки меняются по ходу, single — дела, где правили отдельный раз серии */
 type Work = Lists & { single: Set<ID> };
 
-/** Раз серии из фразы (occ, API 2) — только у дела с повтором; «все повторы» — вызывающий убирает occ */
+/** Раз серии из фразы (occ) — только у дела с повтором; «все повторы» — вызывающий убирает occ */
 const occOf = (tasks: Task[], ch: ChangeDraft): string | null =>
   ch.type === 'task' && ch.occ && tasks.some((t) => t.id === ch.chosen && t.repeat && t.date) ? ch.occ : null;
 

@@ -38,7 +38,7 @@ export const quickTaskFixture: QuickFixture = {
       { key: 'done', label: 'ГОТОВО', primary: true },
       { key: 'edit', label: 'ИЗМЕНИТЬ' },
       { key: 'plan', label: 'В ПЛАН' },
-      { key: 'copy', label: 'КОПИЯ' },
+      { key: 'copy', label: 'СКОПИРОВАТЬ' },
     ],
     section: {
       label: 'ПЕРЕНЕСТИ',
@@ -125,7 +125,7 @@ export const quickIdeaFixture: QuickFixture = {
     tiles: [
       { key: 'edit', label: 'ИЗМЕНИТЬ' },
       { key: 'toTask', label: 'В ДЕЛА', primary: true },
-      { key: 'copy', label: 'КОПИЯ' },
+      { key: 'copy', label: 'СКОПИРОВАТЬ' },
     ],
     section: {
       label: 'В ТЕМУ',
@@ -141,7 +141,7 @@ export const quickIdeaFixture: QuickFixture = {
   },
 };
 
-/** C-TaskView: чужое дело у участника без прав админа — то же окно, только ГОТОВО / НАПОМНИТЬ / КОПИЯ и ЗАКРЫТЬ */
+/** C-TaskView: чужое дело у участника без прав админа — то же окно, только ГОТОВО / НАПОМНИТЬ / СКОПИРОВАТЬ и ЗАКРЫТЬ */
 export const quickTaskViewFixture: QuickFixture = {
   ...quickTaskFixture,
   sheet: {
@@ -149,7 +149,7 @@ export const quickTaskViewFixture: QuickFixture = {
     tiles: [
       { key: 'done', label: 'ГОТОВО', primary: true },
       { key: 'remind', label: 'НАПОМНИТЬ' },
-      { key: 'copy', label: 'КОПИЯ' },
+      { key: 'copy', label: 'СКОПИРОВАТЬ' },
     ],
     deletable: false,
   },

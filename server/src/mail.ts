@@ -50,6 +50,11 @@ export function mimeMessage(m: { from: string; to: string; subject: string; text
  */
 export async function sendMail(to: string, subject: string, text: string, files: readonly MailFile[] = []): Promise<void> {
   if (!mailConfigured()) {
+    // На рабочем сервере текст письма (там коды входа) в журнал не пишем
+    if (config.isProd) {
+      console.warn(`Почта не настроена: письмо «${subject.replace(/\d{6}/g, '······')}» не отправлено`);
+      return;
+    }
     const att = files.length ? `\n  Вложения: ${files.map((f) => f.name).join(', ')}` : '';
     console.log(`\n✉ Письмо для ${to}\n  Тема: ${subject}\n  ${text.replace(/\n/g, '\n  ')}${att}\n`);
     return;

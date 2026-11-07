@@ -7,7 +7,7 @@ import type { ID, PersonColor, ReminderSettings, Repeat } from './types';
 type TaskOp = {
   id: string;
   groupId: string;
-  /** API 3: чьё дело (для чужого — владелец) и видимость (сервер берёт её только от владельца) */
+  /** Чьё дело (для чужого — владелец) и видимость (сервер берёт её только от владельца) */
   ownerId?: string;
   only?: boolean;
   share?: Record<string, boolean>;
@@ -48,7 +48,7 @@ export type Op =
   | { op: 'item.delete'; groupId: string; id: string; ownerId?: string }
   | { op: 'wish.put'; wish: WishOp }
   | { op: 'wish.delete'; id: string }
-  /** Подарок чужой хотелки (API 2): снять может только подаривший */
+  /** Подарок чужой хотелки: снять может только подаривший */
   | { op: 'wish.gift'; ownerId: ID; id: ID; gifted: boolean }
   /** archivedAt: строка — в архив, null — из архива, нет поля — не трогать */
   | { op: 'topic.put'; topic: { id: string; title: string; groupIds: string[]; body?: string; archivedAt?: string | null } }
@@ -61,7 +61,7 @@ export type Op =
   | { op: 'group.leave'; id: string }
   | { op: 'group.admin'; id: string; userId: string; admin: boolean }
   | { op: 'group.remove'; id: string; userId: string }
-  /** Мой режим в группе (API 3): true — «Только выбранные» */
+  /** Мой режим в группе: true — «Только выбранные» */
   | { op: 'group.mode'; id: string; selectOnly: boolean }
   | { op: 'profile'; name?: string; nick?: string | null; gender?: 'm' | 'f' | null; color?: PersonColor | null; avatar?: string | null }
   /** Личные напоминания: по умолчанию и для отдельных дел (null — убрать своё) */

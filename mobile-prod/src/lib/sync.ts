@@ -16,9 +16,8 @@
  */
 import { AppState } from 'react-native';
 import { isVpnActive } from '../../modules/kstati-net';
-import { fetchHealth } from './api';
 import { failCode, failKind, opsResults } from './http';
-import { API_LEVEL, ApiError, NetError, request, type Op } from './net';
+import { ApiError, NetError, request, type Op } from './net';
 import { flushOutbox } from './outbox';
 import { isEmptyPatch, mergePull, parseSync } from './remote';
 import { flushStorage } from './storage';
@@ -75,7 +74,7 @@ const watchOp = (w: WatchItem): Op => ({
   watch: { id: w.id, groupId: w.groupId, title: w.title, kind: w.kind, genres: w.genres, origin: w.origin, year: w.year, watchedAt: w.watchedAt },
 });
 const wishOp = (w: Wish): Op => ({ op: 'wish.put', wish: { id: w.id, title: w.title, note: w.note, link: w.link, receivedAt: w.receivedAt } });
-// archivedAt уходит, только если его трогали: старый сервер без поля и чужие правки его не стирают
+// archivedAt уходит, только если его трогали: чужие правки его не стирают
 const topicOp = (t: Topic): Op => ({
   op: 'topic.put',
   topic: { id: t.id, title: t.title, groupIds: t.groupIds, body: t.body ?? '', ...(t.archivedAt !== undefined && { archivedAt: t.archivedAt }) },
@@ -259,24 +258,6 @@ export async function fetchActivity(force = false): Promise<void> {
   }
 }
 
-/* ---------- уровень API сервера ---------- */
-
-let serverChecked = false;
-
-/**
- * GET /health → serverApi. Сервер ниже API 2 молча срежет подарки и архив тем — тогда один раз говорим об этом,
- * а экраны не показывают эти действия. Нет связи — проверим при следующем возвращении в приложение
- */
-async function checkServer(): Promise<void> {
-  if (serverChecked) return;
-  const h = await fetchHealth();
-  if (!h) return;
-  serverChecked = true;
-  const s = useStore.getState();
-  s.setServerApi(h.api);
-  if (h.api < API_LEVEL) s.notice('Сервер устарел');
-}
-
 /** Запуск: из корневого экрана. Возвращает функцию остановки */
 export function startSync(): () => void {
   if (DEMO) return () => {};
@@ -297,7 +278,6 @@ export function startSync(): () => void {
     syncNow();
   };
   const onActive = () => {
-    void checkServer();
     failures = 0;
     vpn = isVpnActive();
     syncNow();

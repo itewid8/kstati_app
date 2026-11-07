@@ -15,8 +15,7 @@ export type LogEntry = {
   model: string;
   /** Кто говорил (id аккаунта) */
   userId?: string;
-  /** Версия клиента (S5): уровень API и приложение из заголовков x-kstati-api / x-kstati-app */
-  api?: number;
+  /** Версия приложения из заголовка x-kstati-app */
   app?: string;
   /** Язык распознавания, если не русский по умолчанию (S7) */
   lang?: string;

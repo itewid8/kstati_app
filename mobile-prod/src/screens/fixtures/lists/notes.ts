@@ -1,4 +1,4 @@
-/** Данные макетов C-Topic (тема заметок) и C-Note (заметка, курсор в «Аптечке») */
+/** Данные макетов C-Topic (тема заметок) и C-Note (заметка «Алтай») */
 import { parseNote } from '@/lib/note';
 import type { TopicScreenProps } from '../../sheets/TopicScreen';
 import type { NoteScreenProps } from '../../lists/NoteScreen';
@@ -40,9 +40,7 @@ export const ALTAI = [
 
 export const noteFixture = (): NoteScreenProps => ({
   caption: 'ЗАМЕТКА · ПОЕЗДКИ',
-  title: 'Алтай',
-  blocks: parseNote(ALTAI.split('\n').slice(1).join('\n')),
+  initial: ALTAI,
   editable: true,
-  active: 5,
   onMore: () => {},
 });

@@ -7,7 +7,9 @@
     "postinstall": "patch-package",
     "start": "expo start --dev-client",
     "android": "expo run:android",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "bash scripts/test.sh"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",
@@ -38,6 +40,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-enriched-html": "1.2.0",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
@@ -50,6 +53,14 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "patch-package": "^8.0.1"
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-security": "4.2.0",
+    "globals": "17.13.0",
+    "patch-package": "^8.0.1",
+    "typescript-eslint": "8.70.0"
+  },
+  "overrides": {
+    "dompurify": "3.4.17"
   }
 }

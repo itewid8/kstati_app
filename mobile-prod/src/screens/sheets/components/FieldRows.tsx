@@ -2,10 +2,15 @@
  * Таблица полей окна (как в C-Voice): рамка 1.5px, строки ≥ 34px через линию 1px, слева подпись моноширинным
  * в колонке 84px, справа значение или поле ввода.
  */
-import { memo, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { memo, useState, type ReactNode } from 'react';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Icon, Marquee, PersonTag, fonts, size as S, useInputColors, useTheme } from '@/ui';
 import type { RecognizedField } from '../../voice/VoiceCreateSheet';
+
+const WEB = Platform.OS === 'web';
+/** Многострочное поле: не ниже двух строк, выше — прокрутка внутри */
+const AREA_MIN = 44;
+const AREA_MAX = 220;
 
 export const FieldBox = memo(function FieldBox({ children, faded }: { children: ReactNode; faded?: boolean }) {
   const { c } = useTheme();
@@ -44,6 +49,17 @@ export const FieldLine = memo(function FieldLine({ label, first, onRemove, remov
   );
 });
 
+/** Строка с подписью сверху и полем на всю ширину — для длинного текста (заметка, ссылки) */
+export const FieldBlock = memo(function FieldBlock({ label, first, children }: { label: string; first?: boolean; children: ReactNode }) {
+  const { c } = useTheme();
+  return (
+    <View style={[styles.block, !first && [styles.rowSep, { borderTopColor: c.hair }]]}>
+      <Text style={[styles.label, styles.blockLabel, { color: c.muted }]}>{label}</Text>
+      {children}
+    </View>
+  );
+});
+
 type InputProps = {
   value: string;
   onChangeText: (text: string) => void;
@@ -53,15 +69,31 @@ type InputProps = {
   autoFocus?: boolean;
   /** Ссылки, годы — моноширинным */
   mono?: boolean;
+  /** Несколько строк, растёт с текстом (FieldBlock) */
+  multiline?: boolean;
+  placeholder?: string;
 };
 
 /** Поле ввода в строке таблицы: без своей рамки, во всю ячейку */
-export const FieldInput = memo(function FieldInput({ value, onChangeText, accessibilityLabel, keyboardType = 'default', maxLength, autoFocus, mono }: InputProps) {
+export const FieldInput = memo(function FieldInput({
+  value,
+  onChangeText,
+  accessibilityLabel,
+  keyboardType = 'default',
+  maxLength,
+  autoFocus,
+  mono,
+  multiline,
+  placeholder,
+}: InputProps) {
   const { c } = useTheme();
   const ic = useInputColors();
   const plain = keyboardType !== 'default';
+  // В браузере многострочное поле само не растёт — высота по тексту (на телефоне растёт само)
+  const [height, setHeight] = useState<number | null>(null);
   return (
     <TextInput
+      onContentSizeChange={multiline && WEB ? (e) => setHeight(Math.min(AREA_MAX, Math.ceil(e.nativeEvent.contentSize.height))) : undefined}
       value={value}
       onChangeText={onChangeText}
       accessibilityLabel={accessibilityLabel}
@@ -72,7 +104,17 @@ export const FieldInput = memo(function FieldInput({ value, onChangeText, access
       autoCorrect={!plain}
       selectionColor={ic.selectionColor}
       cursorColor={ic.cursorColor}
-      style={[styles.input, mono ? styles.inputMono : styles.inputSans, { color: c.text }]}
+      multiline={multiline}
+      placeholder={placeholder}
+      placeholderTextColor={c.faint}
+      textAlignVertical={multiline ? 'top' : undefined}
+      style={[
+        styles.input,
+        mono ? styles.inputMono : styles.inputSans,
+        multiline && [styles.inputArea, mono ? styles.areaMono : styles.areaSans],
+        multiline && height !== null && { height: Math.max(AREA_MIN, height) },
+        { color: c.text },
+      ]}
     />
   );
 });
@@ -156,4 +198,10 @@ const styles = StyleSheet.create({
   input: { flex: 1, minWidth: 0, minHeight: 34, paddingVertical: 6, paddingHorizontal: 0 },
   inputSans: { fontFamily: fonts.sans400, fontSize: 13 },
   inputMono: { fontFamily: fonts.mono500, fontSize: 11 },
+  block: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4 },
+  blockLabel: { marginBottom: 2 },
+  /** Длинные ссылки переносятся по любому символу, а не уезжают за край */
+  inputArea: { flex: 0, flexGrow: 0, flexShrink: 0, flexBasis: 'auto', minHeight: AREA_MIN, maxHeight: AREA_MAX, paddingVertical: 4, wordBreak: 'break-all' } as never,
+  areaSans: { fontSize: 15, lineHeight: 20, wordBreak: 'normal' } as never,
+  areaMono: { fontSize: 12, lineHeight: 17 },
 });

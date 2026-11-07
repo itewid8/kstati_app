@@ -1,7 +1,7 @@
 /**
  * Голосовые правки одной записи: C-AskDelete (удаление, у серии — «только этот раз / все повторы»)
  * и C-AskMove (перенос, правка, отметка: «было → стало» и занятость людей в новое время).
- * Из candidates берётся chosen; occ (API 2) относится к chosen и только к делу с повтором.
+ * Из candidates берётся chosen; occ относится к chosen и только к делу с повтором.
  */
 import { instance, nextOpen, repeatLabel } from '@/lib/recur';
 import { daysBetween, hhmm, isMulti, normalizeEnd, peopleOf, shiftIso, toMin } from '@/lib/span';

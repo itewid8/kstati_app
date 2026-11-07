@@ -39,3 +39,50 @@ await app.close();
   console.log('✓ CORS: веб-версии можно, чужим сайтам нельзя');
   await app2.close();
 }
+
+/* ---------- лимит входа: адрес из X-Forwarded-For не подделать ---------- */
+{
+  const app3 = await buildApp({ store: new MemoryStore() });
+  const codes: number[] = [];
+  for (let i = 0; i < 25; i++) {
+    // Клиент подставляет новый адрес в начало заголовка — платформа дописывает настоящий в конец
+    const r = await app3.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email: 'x@example.com', password: 'wrong-pass' },
+      remoteAddress: '10.0.0.1',
+      headers: { 'x-forwarded-for': `1.2.3.${i}, 5.6.7.8` },
+    });
+    codes.push(r.statusCode);
+  }
+  assert.ok(codes.includes(429), 'подставные адреса лимит не обходят');
+  assert.equal(codes.indexOf(429), 10, 'после 10 неудачных попыток почта блокируется');
+  console.log('✓ лимит входа: X-Forwarded-For не подделать, попытки считаются атомарно');
+  await app3.close();
+}
+
+/* ---------- смена пароля: прежние входы больше не действуют ---------- */
+{
+  const app4 = await buildApp({ store: new MemoryStore() });
+  const email = 'pw@example.com';
+  const code = (await app4.inject({ method: 'POST', url: '/auth/email/code', payload: { email, purpose: 'register' } })).json().devCode;
+  const { token: phone } = (await app4.inject({ method: 'POST', url: '/auth/register', payload: { email, code, name: 'Тест', password: 'secret-123' } })).json();
+  const me = (t: string) => app4.inject({ method: 'GET', url: '/me', headers: { 'x-kstati-token': t } });
+  assert.equal((await me(phone)).statusCode, 200);
+  // Токен, выданный раньше смены пароля (секундой раньше)
+  const stolen = (await import('../src/auth.js')).signToken((await me(phone)).json().id);
+  await new Promise((r) => setTimeout(r, 1100));
+  const ch = await app4.inject({ method: 'POST', url: '/me/password', headers: { 'x-kstati-token': phone }, payload: { old: 'secret-123', password: 'secret-456' } });
+  assert.equal(ch.statusCode, 200, ch.body);
+  assert.equal((await me(stolen)).statusCode, 401, 'старый токен не действует');
+  assert.equal((await me(phone)).statusCode, 401);
+  assert.equal((await me(ch.json().token)).statusCode, 200, 'новый токен из ответа — действует');
+  // Коды: больше 5 попыток не дают даже параллельно
+  await app4.inject({ method: 'POST', url: '/auth/email/code', payload: { email, purpose: 'reset' } });
+  const tries = await Promise.all(
+    Array.from({ length: 8 }, () => app4.inject({ method: 'POST', url: '/auth/reset', payload: { email, code: '000000', password: 'secret-789' } })),
+  );
+  assert.equal(tries.filter((r) => r.json().error === 'code_wrong').length <= 5, true, 'не больше 5 проверок кода');
+  console.log('✓ смена пароля отзывает прежние входы; попытки кода ограничены');
+  await app4.close();
+}
