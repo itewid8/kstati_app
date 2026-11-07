@@ -164,6 +164,17 @@ function flush(token: string): Promise<void> {
   });
 }
 
+/* ---------- частота фоновой синхронизации ---------- */
+
+/** Сколько синхронизаций подряд ничего не принесли */
+let quiet = 0;
+
+/**
+ * Пауза до следующей фоновой синхронизации: пока что-то меняется — 15 с; минуту тишины — 30 с; дольше — 60 с.
+ * Своя правка, возвращение в приложение и любое новое с сервера возвращают 15 с
+ */
+export const pollDelay = (quietRuns: number): number => (quietRuns < 4 ? 15_000 : quietRuns < 8 ? 30_000 : 60_000);
+
 async function pull(token: string) {
   const s0 = useStore.getState();
   const raw = await request<unknown>('/sync', { token, body: { ...s0.revs, ideas: s0.ideaRevs } });
@@ -171,7 +182,10 @@ async function pull(token: string) {
   if (s.session?.token !== token) return; // пока ждали — вышли из аккаунта
   const { patch, uploadPrefs } = mergePull(s, parseSync(raw));
   // Ничего не поменялось — не трогаем хранилище: ни перерисовок, ни записи на диск
-  if (!isEmptyPatch(patch)) applyRemote(() => useStore.setState(patch));
+  if (!isEmptyPatch(patch)) {
+    quiet = 0;
+    applyRemote(() => useStore.setState(patch));
+  } else quiet++;
   if (uploadPrefs) {
     const cur = useStore.getState();
     cur.queue([{ op: 'prefs', reminders: cur.reminders, overrides: Object.fromEntries(Object.entries(cur.overrides)) }]);
@@ -263,10 +277,23 @@ export function startSync(): () => void {
   if (DEMO) return () => {};
   let kickTimer: ReturnType<typeof setTimeout> | null = null;
   syncHooks.kick = () => {
+    quiet = 0;
     if (kickTimer) clearTimeout(kickTimer);
     kickTimer = setTimeout(syncNow, 400);
+    // Своя правка — снова частая синхронизация: ответы других придут быстрее
+    if (active) schedule();
   };
-  let interval: ReturnType<typeof setInterval> | null = null;
+  let poll: ReturnType<typeof setTimeout> | null = null;
+  const schedule = () => {
+    if (poll) clearTimeout(poll);
+    poll = setTimeout(() => {
+      poll = null;
+      void syncNow().finally(() => {
+        if (active) schedule();
+      });
+    }, pollDelay(quiet));
+  };
+  let active = false;
   // VPN включили или выключили — связь с сервером могла появиться: очередь отправляем сразу, без паузы
   let vpn = isVpnActive();
   let vpnTimer: ReturnType<typeof setInterval> | null = null;
@@ -279,14 +306,17 @@ export function startSync(): () => void {
   };
   const onActive = () => {
     failures = 0;
+    quiet = 0;
+    active = true;
     vpn = isVpnActive();
     syncNow();
-    if (!interval) interval = setInterval(syncNow, 15_000);
+    schedule();
     if (!vpnTimer) vpnTimer = setInterval(checkVpn, 5_000);
   };
   const onBackground = () => {
-    if (interval) clearInterval(interval);
-    interval = null;
+    active = false;
+    if (poll) clearTimeout(poll);
+    poll = null;
     if (vpnTimer) clearInterval(vpnTimer);
     vpnTimer = null;
   };

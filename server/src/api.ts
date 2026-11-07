@@ -9,7 +9,8 @@
  *   поэтому повтор той же операции безопасен.
  * Все права проверяются здесь: телефону доверять нельзя.
  */
-import { randomInt } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { createHash, randomInt } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
@@ -17,6 +18,21 @@ import { lookupFilm, type FilmDeps, type FilmLookup } from './films.js';
 import { giftrev, grev, irev, migrated, PERSON_COLORS, publicUser, TASK_KINDS, trev, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type WatchItem, type Wish } from './store/index.js';
 import { CATEGORIES } from './types.js';
 import { ownerPart, PERSONAL, visibleIn } from './visibility.js';
+
+/**
+ * Группы людей на время одного /ops: пачка из 20 правок не читает каждый раз членство и группы заново.
+ * Операции с группами (group.*) кэш сбрасывают — дальше в пачке состав уже другой
+ */
+const batchGroups = new AsyncLocalStorage<Map<string, Promise<Group[]>>>();
+
+const DELTA_MARGIN_MS = 10 * 60_000;
+
+/** Отпечаток состава моих групп: участники и режимы — от них зависит, какие чужие дела мне видны */
+const groupsSig = (mine: Group[]) =>
+  createHash('sha1')
+    .update(JSON.stringify([...mine].sort((a, b) => a.id.localeCompare(b.id)).map((g) => [g.id, [...g.memberIds].sort(), [...(g.selectOnly ?? [])].sort()])))
+    .digest('base64url')
+    .slice(0, 16);
 
 const NICK_RULE = /^[A-Za-zА-Яа-яЁё0-9_.]{3,20}$/;
 const nickKey = (n: string) => `nick#${n.toLowerCase().replace(/ё/g, 'е')}`;
@@ -329,8 +345,18 @@ export class Data {
   /* ---------- личный календарь (visibility.ts) ---------- */
 
   /** Группы, где человек состоит */
-  private async groupsOf(userId: string): Promise<Group[]> {
-    return (await this.store.getGroups(await this.store.listMemberships(userId))).filter((g) => g.memberIds.includes(userId));
+  private groupsOf(userId: string): Promise<Group[]> {
+    const load = async () => (await this.store.getGroups(await this.store.listMemberships(userId))).filter((g) => g.memberIds.includes(userId));
+    const cache = batchGroups.getStore();
+    if (!cache) return load();
+    let groups = cache.get(userId);
+    if (!groups) {
+      groups = load();
+      // Ошибку чтения не кэшируем: следующая операция попробует снова
+      groups.catch(() => cache.delete(userId));
+      cache.set(userId, groups);
+    }
+    return groups;
   }
 
   /** Дела человека (его раздел) */
@@ -415,6 +441,27 @@ export class Data {
       }
     });
     return out;
+  }
+
+  /** Дела в ответ /sync: все или только изменённые с known.tasksAt (см. sync) */
+  private tasksPayload(
+    user: User,
+    visible: { task: Task; in: string[] }[],
+    mine: Group[],
+    known: { tasksAt?: string; tasksSig?: string },
+    now: string,
+  ) {
+    const sig = groupsSig(mine);
+    const view = (x: { task: Task; in: string[] }) => this.taskView(x.task, x.in, user.id);
+    const head = { tasksAt: now, tasksSig: sig };
+    if (!known.tasksAt || known.tasksSig !== sig) return { ...head, tasks: visible.map(view) };
+    // Запас 10 минут: часы разных экземпляров сервера и правки, которые писались во время прошлого чтения
+    const since = new Date(Date.parse(known.tasksAt) - DELTA_MARGIN_MS).toISOString();
+    return {
+      ...head,
+      tasks: visible.filter((x) => (x.task.updatedAt ?? '') >= since).map(view),
+      taskIds: visible.map((x) => x.task.id),
+    };
   }
 
   /**
@@ -838,7 +885,15 @@ export class Data {
     return { updated, left: todo.length - updated };
   }
 
-  async sync(user: User, known: { groups: Record<string, number>; owners: Record<string, number>; ideas: Record<string, string> }) {
+  /**
+   * known.tasksAt / tasksSig — когда телефон последний раз получил дела и при каком составе групп.
+   * Если состав тот же — шлём только дела, изменённые с тех пор (с запасом), и id всех видимых: телефон уберёт
+   * пропавшие. Состав групп поменялся (вступили, вышли, режим «Только выбранные») — видимость старых дел другая, шлём всё
+   */
+  async sync(
+    user: User,
+    known: { groups: Record<string, number>; owners: Record<string, number>; ideas: Record<string, string>; tasksAt?: string; tasksSig?: string },
+  ) {
     const s = this.store;
     const groups = await s.getGroups(await s.listMemberships(user.id));
     const mine = groups.filter((g) => g.memberIds.includes(user.id));
@@ -866,6 +921,8 @@ export class Data {
     const changedOwners = peopleIds.filter((id) => known.owners[id] !== revs.owners[id]);
     // Дела — одним списком всех видимых, если поменялась хоть одна группа или личный календарь
     const tasksChanged = changedGroups.length > 0 || known.groups[PERSONAL] !== revs.groups[PERSONAL];
+    // Отметка времени для следующего запроса — до чтения дел: правка, записанная во время чтения, попадёт в следующий раз
+    const now = new Date().toISOString();
     const [itemLists, visible, wishLists, prefs, noteLists] = await Promise.all([
       Promise.all(changedGroups.map((g) => s.listItems(g.id).then((xs) => xs.filter((x): x is WatchItem => x.type === 'watch')))),
       tasksChanged ? this.visibleTasks(user, mine) : Promise.resolve([]),
@@ -884,7 +941,7 @@ export class Data {
       users: users.map(publicUser),
       revs,
       items: Object.fromEntries(changedGroups.map((g, i) => [g.id, itemLists[i]])),
-      ...(tasksChanged && { tasks: visible.map((x) => this.taskView(x.task, x.in, user.id)) }),
+      ...(tasksChanged && this.tasksPayload(user, visible, mine, known, now)),
       wishes: Object.fromEntries(changedOwners.map((id, i) => [id, wishLists[i].map((w) => wishView(w, user.id))])),
       // Личные напоминания — всегда целиком (их немного); null — телефон ещё ни разу не присылал
       prefs,
@@ -926,7 +983,13 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
   app.post('/sync', async (req) => {
     const user = await requireUser(req, store);
     const known = z
-      .object({ groups: z.record(z.string(), z.number()).default({}), owners: z.record(z.string(), z.number()).default({}), ideas: z.record(z.string(), z.string().max(2000)).default({}) })
+      .object({
+        groups: z.record(z.string(), z.number()).default({}),
+        owners: z.record(z.string(), z.number()).default({}),
+        ideas: z.record(z.string(), z.string().max(2000)).default({}),
+        tasksAt: z.string().datetime().optional(),
+        tasksSig: z.string().max(40).optional(),
+      })
       .parse(req.body ?? {});
     return data.sync(user, known);
   });
@@ -952,26 +1015,33 @@ export function registerData(app: FastifyInstance, store: Store, data: Data) {
     const user = await requireUser(req, store);
     const { ops } = z.object({ ops: z.array(z.unknown()).max(200) }).parse(req.body);
     const results: unknown[] = [];
-    for (const raw of ops) {
-      const parsed = Op.safeParse(raw);
-      if (!parsed.success) {
-        // Отклонённые операции пишем в журнал: телефон их больше не повторит, и без записи потерю не найти
-        req.log.warn({ op: (raw as { op?: unknown })?.op, issue: parsed.error.issues[0] }, 'Операция отклонена: неверный формат');
-        results.push({ ok: false, error: 'bad_request', message: parsed.error.issues[0]?.message });
-        continue;
-      }
-      try {
-        // Профиль мог поменяться предыдущей операцией
-        const fresh = (await store.getUser(user.id)) ?? user;
-        results.push({ ok: true, ...((await data.apply(fresh, parsed.data)) as object) });
-      } catch (e) {
-        if (e instanceof HttpError) {
-          req.log.warn({ op: parsed.data.op, code: e.code }, `Операция отклонена: ${e.message}`);
-          results.push({ ok: false, error: e.code, message: e.message });
+    // Профиль перечитываем только после операций, которые его меняют
+    let fresh = user;
+    await batchGroups.run(new Map(), async () => {
+      for (const raw of ops) {
+        const parsed = Op.safeParse(raw);
+        if (!parsed.success) {
+          // Отклонённые операции пишем в журнал: телефон их больше не повторит, и без записи потерю не найти
+          req.log.warn({ op: (raw as { op?: unknown })?.op, issue: parsed.error.issues[0] }, 'Операция отклонена: неверный формат');
+          results.push({ ok: false, error: 'bad_request', message: parsed.error.issues[0]?.message });
+          continue;
         }
-        else throw e;
+        // Операция с группами видит их состав из базы, а не из кэша пачки
+        if (parsed.data.op.startsWith('group.')) batchGroups.getStore()?.clear();
+        try {
+          results.push({ ok: true, ...((await data.apply(fresh, parsed.data)) as object) });
+        } catch (e) {
+          if (e instanceof HttpError) {
+            req.log.warn({ op: parsed.data.op, code: e.code }, `Операция отклонена: ${e.message}`);
+            results.push({ ok: false, error: e.code, message: e.message });
+          }
+          else throw e;
+        } finally {
+          if (parsed.data.op.startsWith('group.')) batchGroups.getStore()?.clear();
+          if (parsed.data.op === 'profile' || parsed.data.op.startsWith('group.')) fresh = (await store.getUser(user.id)) ?? user;
+        }
       }
-    }
+    });
     return { results };
   });
 

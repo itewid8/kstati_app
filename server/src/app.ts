@@ -13,12 +13,16 @@ import { appVersion } from './client.js';
 import { config } from './config.js';
 import { sendMail, type MailFile } from './mail.js';
 import { randomUUID } from 'node:crypto';
+import { promisify } from 'node:util';
+import { gzip } from 'node:zlib';
 import { costOf, writeLog } from './log.js';
 import { parseText } from './parse.js';
 import { normalizeTimes } from './spoken.js';
 import type { Store, User } from './store/index.js';
 import type { Context, ParseResult } from './types.js';
 import { recognize, STT_LANGS, YandexError, type SttLang, type Usage } from './yandex.js';
+
+const gzipAsync = promisify(gzip);
 
 /** Текст ошибки для журнала — с причиной из cause (код сети и т. п.), иначе видно только «fetch failed» */
 const errText = (e: unknown) => {
@@ -90,7 +94,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     if (req.method === 'OPTIONS') return reply.code(204).send();
   });
 
-  /* ---------- защита от перебора: 120 запросов в минуту с адреса, вход и коды — config.authPerMinute ---------- */
+  /* ---------- защита от перебора: запросов в минуту с адреса (config.ratePerMinute, 120), вход и коды — config.authPerMinute (20) ---------- */
   const hits = new Map<string, number[]>();
   const SENSITIVE = /^\/(auth\/|admin\/login)/;
   app.addHook('onRequest', async (req, reply) => {
@@ -105,8 +109,21 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       hits.set(key, list);
       return false;
     };
-    if (limited(req.ip, 120) || (SENSITIVE.test(req.url) && limited(`auth|${req.ip}`, config.authPerMinute))) return reply.code(429).send({ error: 'rate_limited' });
+    if (limited(req.ip, config.ratePerMinute) || (SENSITIVE.test(req.url) && limited(`auth|${req.ip}`, config.authPerMinute))) return reply.code(429).send({ error: 'rate_limited' });
     if (hits.size > 10_000) for (const k of [...hits.keys()].slice(0, 1_000)) hits.delete(k);
+  });
+
+  /* ---------- сжатие: JSON и страницы от 4 КБ — gzip, если клиент его принимает; меньшие почти не сжимаются, а процессор тратят ---------- */
+  app.addHook('onSend', async (req, reply, payload) => {
+    if (typeof payload !== 'string' || payload.length < 4096 || reply.getHeader('content-encoding')) return payload;
+    if (!/\bgzip\b/.test(String(req.headers['accept-encoding'] ?? ''))) return payload;
+    if (!/json|html|text/.test(String(reply.getHeader('content-type') ?? ''))) return payload;
+    const body = await gzipAsync(payload, { level: 6 });
+    reply.header('content-encoding', 'gzip');
+    const vary = reply.getHeader('vary');
+    reply.header('vary', vary ? `${vary}, Accept-Encoding` : 'Accept-Encoding');
+    reply.removeHeader('content-length');
+    return body;
   });
 
   app.setErrorHandler((err, req, reply) => {

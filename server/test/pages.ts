@@ -86,3 +86,19 @@ await app.close();
   console.log('✓ смена пароля отзывает прежние входы; попытки кода ограничены');
   await app4.close();
 }
+
+/* ---------- сжатие ответов ---------- */
+{
+  const { gunzipSync } = await import('node:zlib');
+  const app5 = await buildApp({ store: new MemoryStore() });
+  const plain = await app5.inject({ method: 'GET', url: '/privacy' });
+  const zipped = await app5.inject({ method: 'GET', url: '/privacy', headers: { 'accept-encoding': 'gzip, br' } });
+  assert.equal(zipped.headers['content-encoding'], 'gzip');
+  assert.equal(gunzipSync(zipped.rawPayload).toString(), plain.body, 'после распаковки — то же самое');
+  assert.ok(zipped.rawPayload.length < plain.rawPayload.length / 3, 'сжато заметно');
+  assert.equal(plain.headers['content-encoding'], undefined, 'без accept-encoding — как есть');
+  const small = await app5.inject({ method: 'GET', url: '/health', headers: { 'accept-encoding': 'gzip' } });
+  assert.equal(small.headers['content-encoding'], undefined, 'маленькие ответы не сжимаем');
+  console.log('✓ сжатие ответов: gzip для крупных, маленькие и без accept-encoding — как есть');
+  await app5.close();
+}
