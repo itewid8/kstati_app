@@ -7,9 +7,9 @@
 # Можно запустить и вручную: GitHub → Actions → «Выкладка сервера» → Run workflow.
 #
 # Настройки (GitHub → Settings → Secrets and variables → Actions):
-#   Secrets:   YC_SA_JSON_KEY — ключ сервисного аккаунта kstati-deployer (JSON целиком)
+#   Secrets:   YC_SA_JSON_KEY — ключ сервисного аккаунта kstati-deployer (JSON целиком); ADMIN_EMAILS, FEEDBACK_EMAIL — почты (секреты, чтобы не светились в журнале)
 #   Variables: FOLDER_ID, REGISTRY_ID, SA_ID, LOCKBOX_ID, CONTAINER_NAME, PUBLIC_URL,
-#              YDB_DOCAPI_ENDPOINT, YANDEX_MODEL, APP_SCHEME, VK_CLIENT_ID, MAIL_FROM, FEEDBACK_EMAIL, VOICE_DAILY_LIMIT, PAID_DAILY_LIMIT, ADMIN_EMAILS
+#              YDB_DOCAPI_ENDPOINT, YANDEX_MODEL, APP_SCHEME, VK_CLIENT_ID, MAIL_FROM, VOICE_DAILY_LIMIT, PAID_DAILY_LIMIT
 # Секреты самого сервера (JWT, ключи Яндекса, POISKKINO_API_KEY) лежат в Lockbox — в GitHub их нет.
 name: Выкладка сервера
 
@@ -65,6 +65,10 @@ jobs:
           rm "$RUNNER_TEMP/key.json"
 
       - name: Новая ревизия контейнера
+        # Почты — из секретов: в журнале выкладки (он открыт всем) они видны как ***. Пока секретов нет — из переменных
+        env:
+          ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS || vars.ADMIN_EMAILS }}
+          FEEDBACK_EMAIL: ${{ secrets.FEEDBACK_EMAIL || vars.FEEDBACK_EMAIL }}
         run: |
           yc serverless container revision deploy \
             --container-name "${{ vars.CONTAINER_NAME }}" \
@@ -75,7 +79,7 @@ jobs:
             --core-fraction 100 \
             --concurrency 8 \
             --execution-timeout 60s \
-            --environment "NODE_ENV=production,LOG_DIR=stdout,YANDEX_FOLDER_ID=${{ vars.FOLDER_ID }},YANDEX_MODEL=${{ vars.YANDEX_MODEL }},PUBLIC_URL=${{ vars.PUBLIC_URL }},APP_SCHEME=${{ vars.APP_SCHEME }},YDB_DOCAPI_ENDPOINT=${{ vars.YDB_DOCAPI_ENDPOINT }},VK_CLIENT_ID=${{ vars.VK_CLIENT_ID }},MAIL_FROM=${{ vars.MAIL_FROM }},FEEDBACK_EMAIL=${{ vars.FEEDBACK_EMAIL }},VOICE_DAILY_LIMIT=${{ vars.VOICE_DAILY_LIMIT }},PAID_DAILY_LIMIT=${{ vars.PAID_DAILY_LIMIT }},ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}" \
+            --environment "NODE_ENV=production,LOG_DIR=stdout,YANDEX_FOLDER_ID=${{ vars.FOLDER_ID }},YANDEX_MODEL=${{ vars.YANDEX_MODEL }},PUBLIC_URL=${{ vars.PUBLIC_URL }},APP_SCHEME=${{ vars.APP_SCHEME }},YDB_DOCAPI_ENDPOINT=${{ vars.YDB_DOCAPI_ENDPOINT }},VK_CLIENT_ID=${{ vars.VK_CLIENT_ID }},MAIL_FROM=${{ vars.MAIL_FROM }},FEEDBACK_EMAIL=$FEEDBACK_EMAIL,VOICE_DAILY_LIMIT=${{ vars.VOICE_DAILY_LIMIT }},PAID_DAILY_LIMIT=${{ vars.PAID_DAILY_LIMIT }},ADMIN_EMAILS=$ADMIN_EMAILS" \
             --secret "environment-variable=JWT_SECRET,id=${{ vars.LOCKBOX_ID }},key=JWT_SECRET" \
             --secret "environment-variable=YANDEX_API_KEY,id=${{ vars.LOCKBOX_ID }},key=YANDEX_API_KEY" \
             --secret "environment-variable=AWS_ACCESS_KEY_ID,id=${{ vars.LOCKBOX_ID }},key=AWS_ACCESS_KEY_ID" \

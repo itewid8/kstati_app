@@ -207,16 +207,40 @@ const DOW_FORMS: [string, number][] = [
 
 export type Period = { from: string; to: string };
 
+/** Прошедшее время во фразе: вопрос о том, что было, а не о том, что будет */
+const PAST = new RegExp(
+  `${W}(?:делал[аи]?|был[аио]?|ходил[аи]?|ездил[аи]?|успел[аи]?|отдыхал[аи]?|занимал(?:ся|ась|ись)|встречал(?:ся|ась|ись)|прошл\\S*|позапрошл\\S*|назад)${E}`,
+);
+/** Тот же день n месяцев спустя (назад — n < 0); 31-е в коротком месяце — его последний день */
+const shiftMonth = (isoDate: string, n: number) => {
+  const d = utc(isoDate);
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + n);
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, last));
+  return iso(d);
+};
+/** Календарный месяц, в котором дата */
+const monthOf = (isoDate: string): Period => {
+  const d = utc(isoDate);
+  return { from: iso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))), to: iso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))) };
+};
+
 /**
  * Дата или период из фразы: «завтра», «в следующую субботу», «на выходных», «на следующей неделе»,
  * «через две недели», «3 октября». Считаем кодом: облегчённая модель путается в календаре.
  * Неделя — с понедельника. «В субботу» — ближайшая будущая (не сегодня), «в следующую субботу» — суббота следующей недели.
+ * Прошлое: «вчера», «неделю назад» (та неделя целиком), «на прошлых выходных», «в прошлую субботу», «в прошлом месяце»;
+ * в прошедшем времени («что я делал в субботу») день недели, выходные и число — прошедшие, а не будущие.
  */
 export function spokenPeriod(text: string, today: string): Period | null {
   const t = norm(text);
   const day = (d: string): Period => ({ from: d, to: d });
   const next = new RegExp(`${W}следующ\\S*\\s+`);
   const thisW = new RegExp(`${W}(эт[уоа]т?|эти[хм]?|ближайш\\S*)\\s+`);
+  const past = PAST.test(t);
+  const back = (m?: string) => (m?.startsWith('позапрошл') ? 14 : m?.startsWith('прошл') ? 7 : 0);
 
   // Число и месяц: «3 октября», «на 15 ноября»
   const dm = t.match(new RegExp(`${W}(\\d{1,2})(?:-?го)?\\s+(${MONTHS.join('|')})`));
@@ -226,7 +250,9 @@ export function spokenPeriod(text: string, today: string): Period | null {
     if (month >= 0 && dd >= 1 && dd <= 31) {
       let y = Number(today.slice(0, 4));
       let d = `${y}-${String(month + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
-      if (d < today) d = `${++y}${d.slice(4)}`;
+      // «Что было 3 октября» — прошедшее в этом году; «3 октября» без прошлого — ближайшее будущее
+      if (past && d > today) d = `${--y}${d.slice(4)}`;
+      else if (!past && d < today) d = `${++y}${d.slice(4)}`;
       return day(d);
     }
   }
@@ -234,6 +260,20 @@ export function spokenPeriod(text: string, today: string): Period | null {
   if (new RegExp(`${W}послезавтра${E}`).test(t)) return day(addDays(today, 2));
   if (new RegExp(`${W}завтра${E}`).test(t)) return day(addDays(today, 1));
   if (new RegExp(`${W}сегодня${E}`).test(t)) return day(today);
+  if (new RegExp(`${W}позавчера${E}`).test(t)) return day(addDays(today, -2));
+  if (new RegExp(`${W}вчера${E}`).test(t)) return day(addDays(today, -1));
+
+  // «неделю назад», «две недели назад» — та неделя целиком; «3 дня назад» — тот день; «месяц назад» — тот месяц
+  const ago = t.match(new RegExp(`${W}(?:(\\d+|${Object.keys(COUNT).join('|')})\\s+)?(дн\\S*|день|недел\\S*|месяц\\S*)\\s+назад`));
+  if (ago) {
+    const n = ago[1] ? (COUNT[ago[1]] ?? Number(ago[1])) : 1;
+    if (ago[2].startsWith('недел')) {
+      const mon = monday(addDays(today, -7 * n));
+      return { from: mon, to: addDays(mon, 6) };
+    }
+    if (ago[2].startsWith('месяц')) return monthOf(shiftMonth(today, -n));
+    return day(addDays(today, -n));
+  }
 
   // «через неделю», «через две недели», «через 3 дня», «через месяц»
   const th = t.match(new RegExp(`${W}через\\s+(?:(\\d+|${Object.keys(COUNT).join('|')})\\s+)?(дн\\S*|день|недел\\S*|месяц\\S*)`));
@@ -249,9 +289,19 @@ export function spokenPeriod(text: string, today: string): Period | null {
   }
 
   // Выходные: суббота и воскресенье
-  const we = t.match(new RegExp(`${W}(?:(следующ\\S*|эт\\S*|ближайш\\S*)\\s+)?выходн`));
+  const we = t.match(new RegExp(`${W}(?:(позапрошл\\S*|прошл\\S*|следующ\\S*|эт\\S*|ближайш\\S*)\\s+)?выходн`));
   if (we) {
     let sat = addDays(monday(today), 5);
+    // «Прошлые выходные» — те, что были на прошлой неделе (в воскресенье — не сегодняшние, а неделей раньше)
+    if (back(we[1])) {
+      sat = addDays(sat, -back(we[1]));
+      return { from: sat, to: addDays(sat, 1) };
+    }
+    // «Что я делал на выходных» в будни — прошедшие; в субботу и воскресенье — эти, по сегодня
+    if (past && !we[1]) {
+      if (today < sat) sat = addDays(sat, -7);
+      return { from: sat, to: today < addDays(sat, 1) ? today : addDays(sat, 1) };
+    }
     if (we[1]?.startsWith('следующ')) sat = addDays(sat, 7);
     else if (today > addDays(sat, 1)) sat = addDays(sat, 7);
     return { from: sat < today ? today : sat, to: addDays(sat, 1) };
@@ -262,13 +312,31 @@ export function spokenPeriod(text: string, today: string): Period | null {
     const mon = addDays(monday(today), 7);
     return { from: mon, to: addDays(mon, 6) };
   }
-  if (new RegExp(`${W}эт\\S*\\s+недел`).test(t)) return { from: today, to: addDays(monday(today), 6) };
+  const pw = t.match(new RegExp(`${W}(позапрошл\\S*|прошл\\S*)\\s+недел`));
+  if (pw) {
+    const mon = addDays(monday(today), -back(pw[1]));
+    return { from: mon, to: addDays(mon, 6) };
+  }
+  if (new RegExp(`${W}эт\\S*\\s+недел`).test(t)) return past ? { from: monday(today), to: today } : { from: today, to: addDays(monday(today), 6) };
+
+  // Месяц: «в прошлом месяце», «в этом месяце», «в следующем месяце»
+  const mo = t.match(new RegExp(`${W}(позапрошл\\S*|прошл\\S*|эт\\S*|следующ\\S*)\\s+месяц`));
+  if (mo) {
+    if (mo[1].startsWith('следующ')) return monthOf(shiftMonth(today, 1));
+    if (back(mo[1])) return monthOf(shiftMonth(today, mo[1].startsWith('позапрошл') ? -2 : -1));
+    const m = monthOf(today);
+    return past ? { from: m.from, to: today } : { from: today, to: m.to };
+  }
 
   // День недели
   for (const [form, dow] of DOW_FORMS) {
-    const m = t.match(new RegExp(`${W}((?:следующ\\S*|эт\\S*|ближайш\\S*)\\s+)?${form}`));
+    const m = t.match(new RegExp(`${W}((?:позапрошл\\S*|прошл\\S*|следующ\\S*|эт\\S*|ближайш\\S*)\\s+)?${form}`));
     if (!m) continue;
     const thisWeek = addDays(monday(today), (dow + 6) % 7);
+    // «В прошлую субботу» — суббота прошлой недели
+    if (back(m[1]?.trim())) return day(addDays(thisWeek, -back(m[1]?.trim())));
+    // «Что я делал в субботу» — последняя прошедшая суббота, не сегодня
+    if (past && !m[1]) return day(addDays(today, -((utc(today).getUTCDay() - dow + 7) % 7 || 7)));
     if (m[1] && next.test(` ${m[1]}`)) return day(addDays(thisWeek, 7));
     if (m[1] && thisW.test(` ${m[1]}`) && thisWeek >= today) return day(thisWeek);
     // Ближайший будущий такой день, не сегодня
