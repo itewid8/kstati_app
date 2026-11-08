@@ -9,6 +9,7 @@ import { buildCompactMessages, buildMessages, buildTunedMessages, pickBlocks } f
 import { occurrences } from './recur.js';
 import { changesRepeat, firstDate, spokenRepeat, stopsRepeat, stripRepeat } from './repeat.js';
 import {
+  asksWhatToWatch,
   changeTarget,
   hasChangeVerb,
   isUnmark,
@@ -308,6 +309,9 @@ function groupInText(text: string, ctx: Context): string | null {
 
 export function normalize(input: RawAction[], ctx: Context, transcript: string): ParseResult {
   let actions = input;
+  // «Что бы сегодня посмотреть?» модель принимала за вопрос о планах на сегодня (баг 08.11) — это выбор фильма
+  if (!actions.some((a) => a.intent === 'query_watch') && asksWhatToWatch(transcript))
+    actions = actions.map((a) => (a.intent === 'query_plans' ? ({ intent: 'query_watch' } as RawAction) : a));
   // 1. Вопросы — сразу переход на экран
   const qw = actions.find((a) => a.intent === 'query_watch');
   if (qw) {

@@ -91,6 +91,21 @@ assert.ok(compact < full * 0.6, `компактный ${compact} против п
   const r = normalize([{ intent: 'query_watch', origin: ['ru'], fresh: ['old'] }] as never, ctx, 'Какой-нибудь наш старый фильм');
   assert.deepEqual(r.type === 'queryWatch' ? r.filters : null, { kind: ['movie'], genre: [], origin: ['ru'], fresh: ['old'] });
 }
+// «Что бы сегодня посмотреть?» — выбор фильма, а не планы на сегодня (баг 08.11)
+{
+  assert.equal(blocks('Что бы сегодня посмотреть?'), 'qwatch');
+  assert.equal(blocks('Что глянем в субботу вечером?'), 'qwatch');
+  assert.equal(blocks('Что посмотреть с Кариной завтра?'), 'qwatch');
+  assert.match(blocks('Что у нас сегодня?'), /plans/);
+  assert.match(blocks('Посмотри, какие у нас планы на выходные'), /plans/);
+  assert.match(blocks('Что я делаю в субботу? Хочу посмотреть кино'), /plans/);
+  const r = normalize([{ intent: 'query_plans', scope: 'us', from: '2026-11-07', to: '2026-11-08', query: '' }] as never, ctx, 'Что бы сегодня посмотреть?');
+  assert.equal(r.type, 'queryWatch', 'модель ответила планами — поправили на «Смотреть»');
+  const r2 = normalize([{ intent: 'query_plans', scope: 'us', from: '2026-11-07', to: '2026-11-08', query: '' }] as never, ctx, 'Что у нас на выходных?');
+  assert.equal(r2.type, 'queryPlans', 'настоящий вопрос о планах не трогаем');
+  const r3 = normalize([{ intent: 'query_watch', genre: ['comedy'] }] as never, ctx, 'Что бы сегодня посмотреть смешное?');
+  assert.deepEqual(r3.type === 'queryWatch' ? r3.filters.genre : null, ['comedy'], 'фильтры модели сохраняются');
+}
 // Повтор полным промптом — только для настоящих фраз
 assert.equal(worthFullRetry('э', { attempts: 1, raw: '' }), false);
 assert.equal(worthFullRetry('так это', { attempts: 1, raw: '' }), false);

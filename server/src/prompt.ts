@@ -1,7 +1,7 @@
 import { bodyHint } from './lists.js';
 import { repeatShort } from './recur.js';
 import { changesRepeat } from './repeat.js';
-import { hasChangeVerb, isUnmark } from './spoken.js';
+import { asksWhatToWatch, hasChangeVerb, isUnmark } from './spoken.js';
 import type { Context } from './types.js';
 import type { Msg } from './yandex.js';
 
@@ -221,9 +221,10 @@ export function pickBlocks(text: string, ctx: Context): { blocks: Set<Block>; ca
   const ideaish = /(иде[яиюейя]|заметк|мысл|(^|\s)тем[аеуы]?(\s|$)|списк|список|блокнот|пункт|запиши в|набросок|поздравлен)/.test(t) || !!ctx.currentTopicId || topicHit;
 
   if (question) {
-    if (watchish || /(посмотрим|глянуть)/.test(t)) b.add('qwatch');
+    if (watchish || asksWhatToWatch(t) || /(посмотрим|глянуть)/.test(t)) b.add('qwatch');
     if (/(подар|хоч|хотел)/.test(t)) b.add('qwish');
-    if (plansish || /(сегодня|завтра|суббот|воскресен|понедельник|вторник|сред|четверг|пятниц)/.test(t)) b.add('plans');
+    // «Что бы сегодня посмотреть» — день во фразе не делает её вопросом о планах: без правил планов модель не перепутает
+    if (!asksWhatToWatch(t) && (plansish || /(сегодня|завтра|суббот|воскресен|понедельник|вторник|сред|четверг|пятниц)/.test(t))) b.add('plans');
     if (ideaish) b.add('ideas');
     if (!b.size) ['qwatch', 'qwish', 'plans'].forEach((x) => b.add(x as Block));
   } else {
