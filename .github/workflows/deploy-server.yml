@@ -89,3 +89,14 @@ jobs:
             sleep 5
           done
           echo "✗ /health не отвечает" && exit 1
+
+      # Каждая выкладка добавляет образ, а хранение в Container Registry платное: оставляем 5 последних в каждом
+      # репозитории (текущий — самый свежий). Нет прав на удаление — выкладка не падает, в журнале будет ошибка
+      - name: Чистка старых образов
+        continue-on-error: true
+        run: |
+          yc container image list --registry-id "${{ vars.REGISTRY_ID }}" --limit 1000 --format json \
+            | jq -r 'group_by(.name) | map(sort_by(.created_at) | reverse | .[5:]) | flatten | .[].id' \
+            | while read -r id; do
+                yc container image delete "$id" && echo "удалён $id"
+              done
