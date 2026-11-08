@@ -48,6 +48,8 @@ export type PlanScreenProps = {
 
   onBack?: () => void;
   onAddStep?: () => void;
+  /** «＋» в нижней навигации — новое дело (как в календаре) */
+  onAdd?: () => void;
   onMore?: () => void;
   /** Переключатель СЕТКА / СПИСОК: список рисует другой экран */
   onChangeMode?: (mode: PlanMode) => void;
@@ -138,6 +140,7 @@ export const PlanScreen = memo(function PlanScreen(props: PlanScreenProps) {
     insets = NO_INSETS,
     onBack,
     onAddStep,
+    onAdd,
     onMore,
     onChangeMode,
     onOpenStep,
@@ -269,7 +272,7 @@ export const PlanScreen = memo(function PlanScreen(props: PlanScreenProps) {
         </View>
       </View>
 
-      <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} style={[styles.side, { bottom: insets.bottom + S.navBottom }]} />
+      <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} onAdd={onAdd} addLabel="Добавить" style={[styles.side, { bottom: insets.bottom + S.navBottom }]} />
     </View>
   );
 });

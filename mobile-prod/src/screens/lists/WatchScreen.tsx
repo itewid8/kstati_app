@@ -24,6 +24,7 @@ import {
   type LiftTarget,
   type NavTab,
   type TopBarAction,
+  useDesktop,
 } from '@/ui';
 import { selectAction, type SelectionProps } from './selection';
 import { FilterTabs, type FilterTab } from './components/FilterTabs';
@@ -154,9 +155,11 @@ export const WatchScreen = memo(function WatchScreen(props: WatchScreenProps) {
   } = props;
   const { c, person, personInk } = useTheme();
 
+  // «＋» на телефоне — в нижней навигации справа от REC; на компьютере нижней навигации нет, он остаётся в шапке
+  const desktop = useDesktop();
   const actions = useMemo<TopBarAction[]>(
     () => [
-      { key: 'add', icon: 'plus', accessibilityLabel: 'Добавить', onPress: onAdd },
+      ...(desktop ? ([{ key: 'add', icon: 'plus', accessibilityLabel: 'Добавить', onPress: onAdd }] satisfies TopBarAction[]) : []),
       { key: 'feed', icon: 'bell', accessibilityLabel: 'Лента', onPress: onOpenFeed, badge: hasNews },
       {
         key: 'me',
@@ -167,7 +170,7 @@ export const WatchScreen = memo(function WatchScreen(props: WatchScreenProps) {
         onPress: onOpenSettings,
       },
     ],
-    [onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
+    [desktop, onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
   );
 
   const selecting = !!props.selected;
@@ -256,7 +259,7 @@ export const WatchScreen = memo(function WatchScreen(props: WatchScreenProps) {
           style={[styles.abs, { bottom: insets.bottom + S.navBottom }]}
         />
       ) : (
-        <BottomNav active="watch" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+        <BottomNav active="watch" onSelect={onNavigate} onRec={onRec} onAdd={onAdd} addLabel="Добавить" style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
       )}
     </View>
   );

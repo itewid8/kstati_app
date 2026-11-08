@@ -4,6 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { cancelDrag } from '@/adapters/voice/recording';
+import { Icon } from './Icon';
 import { size as S, space, type as T } from './tokens';
 import { useTheme } from './useTheme';
 import { useDesktop } from './desktop';
@@ -39,6 +40,10 @@ type Props = {
   active: NavTab;
   onSelect?: (tab: NavTab) => void;
   onRec?: () => void;
+  /** «＋» справа от REC — создать вручную (дело, хотелку, фильм, тему…); без обработчика кнопка неактивна */
+  onAdd?: () => void;
+  /** Подпись «＋» для экранного диктора */
+  addLabel?: string;
   /** REC нажатым, как при удержании (превью окна записи) */
   recHeld?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -123,13 +128,13 @@ const RecHold = memo(function RecHold({ hold }: { hold: RecButtonHandlers }) {
   );
 });
 
-/** Нижняя навигация: сетка 2×2 разделов и кнопка записи 104px */
+/** Нижняя навигация: сетка 2×2 разделов, кнопка записи 104px и «＋» 64px */
 export const BottomNav = memo(function BottomNav(props: Props) {
   // На компьютере разделы и запись — в боковой панели (components/DesktopShell)
   return useDesktop() ? null : <BottomNavView {...props} />;
 });
 
-const BottomNavView = memo(function BottomNavView({ active, onSelect, onRec, recHeld, style }: Props) {
+const BottomNavView = memo(function BottomNavView({ active, onSelect, onRec, onAdd, addLabel = 'Добавить', recHeld, style }: Props) {
   const { c } = useTheme();
   const hold = useContext(RecButtonContext);
   return (
@@ -167,6 +172,16 @@ const BottomNavView = memo(function BottomNavView({ active, onSelect, onRec, rec
           <RecFace on={!!recHeld} />
         </Pressable>
       )}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={addLabel}
+        accessibilityState={{ disabled: !onAdd }}
+        disabled={!onAdd}
+        onPress={onAdd}
+        style={({ pressed }) => [styles.add, { borderColor: c.border, backgroundColor: pressed ? c.hair : c.panel }]}
+      >
+        <Icon name="plus" size={S.icon} color={onAdd ? c.text : c.muted} />
+      </Pressable>
     </View>
   );
 });
@@ -183,5 +198,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
+  add: { width: S.addWidth, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },
   dot: { width: S.recDot, height: S.recDot, borderRadius: S.recDot / 2 },
 });

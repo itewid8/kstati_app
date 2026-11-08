@@ -26,6 +26,7 @@ import {
   type NavTab,
   type TabItem,
   type TopBarAction,
+  useDesktop,
 } from '@/ui';
 import { selectAction, type SelectionProps } from './lists/selection';
 
@@ -165,9 +166,11 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
   } = props;
   const { c, person, personInk } = useTheme();
 
+  // «＋» на телефоне — в нижней навигации справа от REC; на компьютере нижней навигации нет, он остаётся в шапке
+  const desktop = useDesktop();
   const actions = useMemo<TopBarAction[]>(
     () => [
-      { key: 'add', icon: 'plus', accessibilityLabel: 'Добавить', onPress: onAdd },
+      ...(desktop ? ([{ key: 'add', icon: 'plus', accessibilityLabel: 'Добавить', onPress: onAdd }] satisfies TopBarAction[]) : []),
       { key: 'feed', icon: 'bell', accessibilityLabel: 'Лента', onPress: onOpenFeed, badge: hasNews },
       {
         key: 'me',
@@ -178,7 +181,7 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
         onPress: onOpenSettings,
       },
     ],
-    [onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
+    [desktop, onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
   );
 
   const tabs = useMemo<TabItem<ID>[]>(
@@ -266,7 +269,7 @@ export const WishesScreen = memo(function WishesScreen(props: WishesScreenProps)
           style={[styles.nav, { bottom: insets.bottom + S.navBottom }]}
         />
       ) : (
-        <BottomNav active="wishes" onSelect={onNavigate} onRec={onRec} style={[styles.nav, { bottom: insets.bottom + S.navBottom }]} />
+        <BottomNav active="wishes" onSelect={onNavigate} onRec={onRec} onAdd={onAdd} addLabel="Добавить" style={[styles.nav, { bottom: insets.bottom + S.navBottom }]} />
       )}
     </View>
   );

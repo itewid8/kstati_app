@@ -32,6 +32,7 @@ import {
   type LiftTarget,
   type NavTab,
   type TopBarAction,
+  useDesktop,
 } from '@/ui';
 import { NOTE_TOOL, NoteLines, NoteTools, useKeyboardOverlap, type NoteHandlers } from '../lists/components/NoteLines';
 import { TitleField } from '../lists/components/TitleField';
@@ -188,6 +189,8 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
 
   const selecting = !!props.selected;
   const picked = useMemo(() => new Set(props.selected ?? []), [props.selected]);
+  // «＋» на телефоне — в нижней навигации справа от REC; на компьютере нижней навигации нет, он остаётся в шапке
+  const desktop = useDesktop();
   const actions = useMemo<TopBarAction[]>(() => {
     const out: TopBarAction[] = [];
     if (selecting) return out;
@@ -201,10 +204,10 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
       });
     }
     if (props.onCopy) out.push({ key: 'copy', icon: 'copy', accessibilityLabel: 'Скопировать', onPress: props.onCopy });
-    if (onAdd) out.push({ key: 'add', icon: 'plus', accessibilityLabel: 'Новая заметка', onPress: onAdd });
+    if (onAdd && desktop) out.push({ key: 'add', icon: 'plus', accessibilityLabel: 'Новая заметка', onPress: onAdd });
     if (onMore) out.push({ key: 'more', icon: 'dots', accessibilityLabel: 'Ещё', onPress: onMore });
     return out;
-  }, [shared, onShare, onAdd, onMore, props.onCopy, c.text, c.bg, selecting, picked, props.onDeleteSelected]);
+  }, [desktop, shared, onShare, onAdd, onMore, props.onCopy, c.text, c.bg, selecting, picked, props.onDeleteSelected]);
 
   // Пустой текст темы при заметках внутри не занимает места: писать — «Далее» в названии
   const hideBody = !!body && ideas.length > 0 && body.active === null && body.blocks.every((b) => !b.text.trim());
@@ -295,7 +298,7 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
           style={[styles.abs, { bottom: insets.bottom + S.navBottom }]}
         />
       ) : (
-        <BottomNav active="ideas" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+        <BottomNav active="ideas" onSelect={onNavigate} onRec={onRec} onAdd={onAdd} addLabel="Новая заметка" style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
       )}
     </View>
   );

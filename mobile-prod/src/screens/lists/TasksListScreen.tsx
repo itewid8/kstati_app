@@ -21,6 +21,7 @@ import {
   type NavTab,
   type Scheme,
   type TopBarAction,
+  useDesktop,
 } from '@/ui';
 import { selectAction, type SelectionProps } from './selection';
 import { CAL } from '@/screens/calendar/components/CalendarScaffold';
@@ -239,13 +240,15 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
   const { c, person, personInk } = useTheme();
   const lead = useMemo(() => ({ kind: 'group' as const, label: groupLabel, onPress: onPickGroup }), [groupLabel, onPickGroup]);
   // Та же панель, что в календаре (CalendarScaffold): группа, «список / календарь», «+», лента, профиль
+  // «＋» на телефоне — в нижней навигации справа от REC; на компьютере нижней навигации нет, он остаётся в шапке
+  const desktop = useDesktop();
   const actions = useMemo<TopBarAction[]>(
     () => [
-      { key: 'add', icon: 'plus', accessibilityLabel: 'Добавить', onPress: onAdd },
+      ...(desktop ? ([{ key: 'add', icon: 'plus', accessibilityLabel: 'Добавить', onPress: onAdd }] satisfies TopBarAction[]) : []),
       { key: 'feed', icon: 'bell', accessibilityLabel: 'Лента', onPress: onOpenFeed, badge: hasNews },
       { key: 'me', letter: me.letter, fill: person(me.color), ink: personInk(me.color), accessibilityLabel: 'Настройки', onPress: onOpenSettings },
     ],
-    [onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
+    [desktop, onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
   );
   const expandedSet = useMemo(() => new Set(props.expandedPlans ?? []), [props.expandedPlans]);
   const selecting = !!props.selected;
@@ -321,7 +324,7 @@ export const TasksListScreen = memo(function TasksListScreen(props: TasksListScr
           style={[styles.abs, { bottom: insets.bottom + S.navBottom }]}
         />
       ) : (
-        <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+        <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} onAdd={onAdd} addLabel="Добавить" style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
       )}
     </View>
   );

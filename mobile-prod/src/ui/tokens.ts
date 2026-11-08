@@ -171,6 +171,8 @@ export const size = {
   navBottom: 18,
   navHeight: 72,
   recWidth: 104,
+  /** «＋» (создать вручную) справа от REC в нижней навигации */
+  addWidth: 64,
   recDot: 26,
 
   grabberWidth: 36,

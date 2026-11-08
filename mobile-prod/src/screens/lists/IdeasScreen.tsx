@@ -22,6 +22,7 @@ import {
   type NavTab,
   type TabItem,
   type TopBarAction,
+  useDesktop,
 } from '@/ui';
 import { AccessoryListRow } from './components/AccessoryListRow';
 
@@ -175,9 +176,11 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
   const picked = useMemo(() => new Set(props.selected ?? []), [props.selected]);
   const { onDeleteSelected } = props;
 
+  // «＋» на телефоне — в нижней навигации справа от REC; на компьютере нижней навигации нет, он остаётся в шапке
+  const desktop = useDesktop();
   const actions = useMemo<TopBarAction[]>(
     () => selecting ? [] : [
-      { key: 'add', icon: 'plus', accessibilityLabel: 'Новая тема', onPress: onAddTopic },
+      ...(desktop ? ([{ key: 'add', icon: 'plus', accessibilityLabel: 'Новая тема', onPress: onAddTopic }] satisfies TopBarAction[]) : []),
       { key: 'feed', icon: 'bell', accessibilityLabel: 'Лента', onPress: onOpenFeed, badge: hasNews },
       {
         key: 'me',
@@ -188,7 +191,7 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
         onPress: onOpenSettings,
       },
     ],
-    [onAddTopic, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk, selecting, picked, onDeleteSelected],
+    [desktop, onAddTopic, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk, selecting, picked, onDeleteSelected],
   );
 
   const tabs = useMemo<TabItem<ID>[]>(
@@ -274,7 +277,7 @@ export const IdeasScreen = memo(function IdeasScreen(props: IdeasScreenProps) {
           style={[styles.abs, { bottom: insets.bottom + S.navBottom }]}
         />
       ) : (
-        <BottomNav active="ideas" onSelect={onNavigate} onRec={onRec} style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
+        <BottomNav active="ideas" onSelect={onNavigate} onRec={onRec} onAdd={onAddTopic} addLabel="Новая тема" style={[styles.abs, { bottom: insets.bottom + S.navBottom }]} />
       )}
     </View>
   );

@@ -37,6 +37,7 @@ export const PlanContainer = signedInOnly(function Plan({ id }: PlanContainerPro
 
   const startDate = data?.startDate;
   const onAddStep = useCallback(() => router.push(nav.taskEditor({ parentId: id, date: startDate })), [id, startDate]);
+  const onAdd = useCallback(() => router.push(nav.taskEditor({ date: startDate })), [startDate]);
   const onMore = useCallback(() => router.push(nav.planEditor(id)), [id]);
   // СПИСОК подзадач — это окно плана (C-EditPlan) поверх сетки: «назад» из него — снова сетка.
   // replace из стека вкладки заменил бы в корне все вкладки (QA-1 М1)
@@ -54,6 +55,7 @@ export const PlanContainer = signedInOnly(function Plan({ id }: PlanContainerPro
       insets={insets}
       onBack={goBack}
       onAddStep={onAddStep}
+      onAdd={onAdd}
       onMore={onMore}
       onChangeMode={onChangeMode}
       onOpenStep={openStep}

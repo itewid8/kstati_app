@@ -9,7 +9,7 @@
 import { createContext, memo, useCallback, useContext, useMemo, useState, type ComponentType, type ReactNode } from 'react';
 import { StyleSheet, View, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { GRID, type ViewFrame } from '@/lib/calendarLayout';
-import { BottomNav, TopBar, size as S, space, useTheme, type TopBarAction } from '@/ui';
+import { BottomNav, TopBar, size as S, space, useDesktop, useTheme, type TopBarAction } from '@/ui';
 import type { CalendarChromeProps, CalendarView } from '../types';
 import { ViewSwitch, type TasksSwitchValue } from './ViewSwitch';
 
@@ -86,9 +86,11 @@ export const CalendarScaffold = memo(function CalendarScaffold(props: Props) {
   const { c, person, personInk } = useTheme();
   const Wrap = useContext(CalendarContentWrap);
 
+  // «＋» на телефоне — в нижней навигации справа от REC; на компьютере нижней навигации нет, он остаётся в шапке
+  const desktop = useDesktop();
   const actions = useMemo<TopBarAction[]>(
     () => [
-      { key: 'add', icon: 'plus', accessibilityLabel: 'Добавить', onPress: onAdd },
+      ...(desktop ? ([{ key: 'add', icon: 'plus', accessibilityLabel: 'Добавить', onPress: onAdd }] satisfies TopBarAction[]) : []),
       { key: 'feed', icon: 'bell', accessibilityLabel: 'Лента', onPress: onOpenFeed, badge: hasNews },
       {
         key: 'me',
@@ -99,7 +101,7 @@ export const CalendarScaffold = memo(function CalendarScaffold(props: Props) {
         onPress: onOpenSettings,
       },
     ],
-    [onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
+    [desktop, onAdd, onOpenFeed, onOpenSettings, hasNews, me.letter, me.color, person, personInk],
   );
   const lead = useMemo(() => ({ kind: 'group' as const, label: groupLabel, onPress: onOpenGroup }), [groupLabel, onOpenGroup]);
   const changeView = useCallback(
@@ -120,7 +122,7 @@ export const CalendarScaffold = memo(function CalendarScaffold(props: Props) {
         style={[styles.side, { top: insets.top + CAL.viewTop }]}
       />
       <View style={[styles.side, styles.period, { top: insets.top + CAL.periodTop }]}>{period}</View>
-      <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} style={[styles.side, { bottom: insets.bottom + S.navBottom }]} />
+      <BottomNav active="tasks" onSelect={onNavigate} onRec={onRec} onAdd={onAdd} addLabel="Добавить" style={[styles.side, { bottom: insets.bottom + S.navBottom }]} />
     </View>
   );
 });
