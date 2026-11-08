@@ -77,3 +77,9 @@
 
 **Decision:** push to `main` (paths `server/**`) builds and deploys the container; non-secret IDs are GitHub Variables, server secrets stay in Lockbox, GitHub holds only the deployer key.
 **Why:** no Docker needed on the Mac, and secrets never pass through the repository or CI logs.
+
+## Alice AI LLM Flash for voice commands
+
+**Decision:** production runs `aliceai-llm-flash/latest` with the compact prompt (`YANDEX_MODEL` in GitHub variables); models outside the YandexGPT family are called through the OpenAI-compatible Chat Completions API, which reports cached input tokens.
+**Why:** on the eval set (Nov 2026) Flash matched YandexGPT Lite in accuracy at less than half the cost per phrase; the price of cached input is an eighth of regular input. The full prompt caches better but still costs more than the compact one.
+**Trade-off:** median response is about 0.7 s slower than Lite. Switching back is one variable.

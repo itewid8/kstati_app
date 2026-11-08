@@ -78,12 +78,19 @@ export const config = {
 };
 
 /**
- * Цена 1000 токенов в рублях с НДС, синхронный режим — для оценки расхода в журнале.
- * Точные цены — в прайсе AI Studio; можно переопределить через LLM_PRICE_PER_1K в .env.
+ * Цена 1000 токенов в рублях с НДС, синхронный режим (прайс AI Studio, ноябрь 2026) — для учёта расходов.
+ * cached — вход, взятый из кэша. Можно переопределить одной ценой через LLM_PRICE_PER_1K.
  */
-export function pricePer1k(model: string): number {
-  if (process.env.LLM_PRICE_PER_1K) return Number(process.env.LLM_PRICE_PER_1K);
-  return /lite/.test(model) ? 0.2 : 1.2;
+export type Price = { input: number; cached: number; output: number };
+export function priceOf(model: string): Price {
+  if (process.env.LLM_PRICE_PER_1K) {
+    const p = Number(process.env.LLM_PRICE_PER_1K);
+    return { input: p, cached: p, output: p };
+  }
+  if (/aliceai-llm-flash/.test(model)) return { input: 0.1, cached: 0.025, output: 0.2 };
+  if (/aliceai-llm/.test(model)) return { input: 0.5, cached: 0.5, output: 1.2 };
+  if (/lite/.test(model)) return { input: 0.2, cached: 0.2, output: 0.2 };
+  return { input: 1.2, cached: 1.2, output: 1.2 };
 }
 
 export function assertConfig() {

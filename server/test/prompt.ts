@@ -111,4 +111,29 @@ assert.equal(worthFullRetry('э', { attempts: 1, raw: '' }), false);
 assert.equal(worthFullRetry('так это', { attempts: 1, raw: '' }), false);
 assert.equal(worthFullRetry('позвонить в банк про кредит', { attempts: 1, raw: '' }), true);
 assert.equal(worthFullRetry('позвонить в банк про кредит', { attempts: 2, raw: '' }), false, 'модель дважды не дала JSON');
+// Расход: токены из кэша считаются по своей цене; Alice AI LLM Flash — через OpenAI-совместимый API
+{
+  const { costOf } = await import('../src/log.js');
+  assert.equal(costOf({ input: 1000, output: 0, total: 1000 }, 'yandexgpt-lite/latest'), 0.2);
+  assert.equal(costOf({ input: 1000, output: 100, total: 1100, cached: 800 }, 'aliceai-llm-flash/latest'), 0.06, '200×0.1 + 800×0.025 + 100×0.2');
+  const { complete } = await import('../src/yandex.js');
+  const real = globalThis.fetch;
+  let url = '';
+  let body: { model?: string; response_format?: unknown; messages?: { role: string; content: string }[] } = {};
+  globalThis.fetch = (async (u: string, init: { body: string }) => {
+    url = String(u);
+    body = JSON.parse(init.body);
+    return new Response(JSON.stringify({ choices: [{ message: { content: '{"actions":[]}' } }], usage: { prompt_tokens: 900, completion_tokens: 12, total_tokens: 912, prompt_tokens_details: { cached_tokens: 768 } } }));
+  }) as typeof fetch;
+  try {
+    const r = await complete([{ role: 'system', text: 'правила' }, { role: 'user', text: 'фраза' }], 'aliceai-llm-flash/latest');
+    assert.match(url, /\/v1\/chat\/completions$/);
+    assert.match(body.model ?? '', /^gpt:\/\/.*\/aliceai-llm-flash\/latest$/);
+    assert.deepEqual(body.response_format, { type: 'json_object' });
+    assert.deepEqual(body.messages?.[0], { role: 'system', content: 'правила' });
+    assert.deepEqual(r, { text: '{"actions":[]}', usage: { input: 900, output: 12, total: 912, cached: 768 } });
+  } finally {
+    globalThis.fetch = real;
+  }
+}
 console.log(`✓ компактный промпт: ${Math.round((100 * compact) / full)}% от полного на 6 фразах`);

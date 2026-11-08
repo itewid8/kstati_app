@@ -288,4 +288,10 @@ times.sort((a, b) => a - b);
 const median = times[Math.floor(times.length / 2)] ?? 0;
 console.log(`\nИтог: ${ok}/${cases.length - skipped} верно${skipped ? ` (${skipped} нет в журнале)` : ''}${replay ? '' : ` · медиана ${median} мс`}`);
 if (!replay)
-console.log(`Токены: ${spent.input} вход + ${spent.output} выход = ${spent.total} · ≈ ${costOf(spent, config.model).toFixed(2)} ₽ · в среднем ${Math.round(spent.total / Math.max(1, cases.length))} на фразу`);
+{
+  const rub = costOf(spent, config.model);
+  const n = Math.max(1, cases.length - skipped);
+  console.log(
+    `Модель ${config.model}, промпт ${config.promptMode} · токены: ${spent.input} вход (из кэша ${spent.cached ?? 0}) + ${spent.output} выход · ≈ ${rub.toFixed(2)} ₽ · ${(rub / n).toFixed(3)} ₽ на фразу`,
+  );
+}

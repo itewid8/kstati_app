@@ -61,22 +61,35 @@ export async function recognize(ogg: Buffer, lang: SttLang = 'ru-RU'): Promise<s
 
 export type Msg = { role: 'system' | 'user' | 'assistant'; text: string };
 
-/** Сколько токенов ушло на вызов (Яндекс присылает числа строками) */
-export type Usage = { input: number; output: number; total: number };
-export const addUsage = (a: Usage, b: Usage): Usage => ({ input: a.input + b.input, output: a.output + b.output, total: a.total + b.total });
+/** Сколько токенов ушло на вызов (Яндекс присылает числа строками). cached — часть input, взятая из кэша (дешевле) */
+export type Usage = { input: number; output: number; total: number; cached?: number };
+export const addUsage = (a: Usage, b: Usage): Usage => ({
+  input: a.input + b.input,
+  output: a.output + b.output,
+  total: a.total + b.total,
+  ...((a.cached || b.cached) && { cached: (a.cached ?? 0) + (b.cached ?? 0) }),
+});
 export const NO_USAGE: Usage = { input: 0, output: 0, total: 0 };
+
+/**
+ * Новые модели AI Studio (Alice AI LLM, открытые модели) — через OpenAI-совместимый API: он отдаёт число токенов
+ * из кэша. YandexGPT и дообученные (ds://) — через свой Foundation Models API
+ */
+const openAiStyle = (model: string) => !/^ds:\/\//.test(model) && !/yandexgpt/.test(model);
+const modelUri = (model: string) => (/^(ds|gpt):\/\//.test(model) ? model : `gpt://${config.folderId}/${model}`);
 
 /** Foundation Models API: сообщения → текст ответа модели (просим JSON) и расход токенов */
 let jsonModeSupported = true;
 
 export async function complete(messages: Msg[], model = config.model): Promise<{ text: string; usage: Usage }> {
+  if (openAiStyle(model)) return completeChat(messages, model);
   const call = (jsonMode: boolean) =>
     retryNet('llm', () => fetch('https://llm.api.cloud.yandex.net/foundationModels/v1/completion', {
       method: 'POST',
       headers: { ...headers(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         // Дообученная модель приходит готовым адресом (ds://…), базовая — именем в каталоге
-        modelUri: /^(ds|gpt):\/\//.test(model) ? model : `gpt://${config.folderId}/${model}`,
+        modelUri: modelUri(model),
         // Ответ — короткий JSON; 600 токенов с запасом хватает и на несколько записей
         completionOptions: { stream: false, temperature: 0, maxTokens: 600 },
         // Режим «только JSON»; если модель его не поддерживает — повторяем без него
@@ -99,5 +112,41 @@ export async function complete(messages: Msg[], model = config.model): Promise<{
   return {
     text: r.alternatives?.[0]?.message?.text ?? '',
     usage: { input: Number(u.inputTextTokens ?? 0), output: Number(u.completionTokens ?? 0), total: Number(u.totalTokens ?? 0) },
+  };
+}
+
+/** OpenAI-совместимый Chat Completions AI Studio: те же сообщения, JSON-режим, расход с токенами из кэша */
+let chatJsonSupported = true;
+
+async function completeChat(messages: Msg[], model: string): Promise<{ text: string; usage: Usage }> {
+  const call = (jsonMode: boolean) =>
+    retryNet('llm', () => fetch('https://llm.api.cloud.yandex.net/v1/chat/completions', {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelUri(model),
+        temperature: 0,
+        max_tokens: 600,
+        ...(jsonMode && { response_format: { type: 'json_object' } }),
+        // Правила — всегда первыми и одинаковыми: так их начало берётся из кэша
+        messages: messages.map((m) => ({ role: m.role, content: m.text })),
+      }),
+      signal: AbortSignal.timeout(30_000),
+    }));
+
+  let res = await call(chatJsonSupported);
+  let text = await res.text();
+  if (res.status === 400 && chatJsonSupported && /json|response_format/i.test(text)) {
+    chatJsonSupported = false;
+    res = await call(false);
+    text = await res.text();
+  }
+  if (!res.ok) throw new YandexError('llm', res.status, text);
+  const r = JSON.parse(text);
+  const u = r.usage ?? {};
+  const cached = Number(u.prompt_tokens_details?.cached_tokens ?? 0);
+  return {
+    text: r.choices?.[0]?.message?.content ?? '',
+    usage: { input: Number(u.prompt_tokens ?? 0), output: Number(u.completion_tokens ?? 0), total: Number(u.total_tokens ?? 0), ...(cached && { cached }) },
   };
 }

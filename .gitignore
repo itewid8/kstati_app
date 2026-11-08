@@ -33,5 +33,8 @@ Claude outputs/
 mobile-prod/modules/*/android/build/
 mobile-prod/modules/*/android/.gradle/
 
+# Внутренние документы: тарифы, расчёты, планы — только локально
+private/
+
 # Локальные ключи (токен GitHub для разбора отзывов) — никогда не в git
 .secrets/

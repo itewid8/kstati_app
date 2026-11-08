@@ -26,7 +26,7 @@ jobs:
       # Архивы, .env, выгрузки из базы и сборка не должны попадать в git (утечка ключа 22.10.2026 — через архив в «Claude outputs»)
       - name: Нет архивов, ключей и сборки
         run: |
-          bad=$(git ls-files | grep -iE '\.(tgz|tar|gz|zip|7z|apk|aab|ipa|jks|keystore|p8|p12|pem)$|(^|/)\.env($|\.)|(^|/)deploy\.env$|(^|/)build/|inspect\.txt$|^_to_delete/|^Claude outputs/' | grep -v '\.env\.example$' || true)
+          bad=$(git ls-files | grep -iE '\.(tgz|tar|gz|zip|7z|apk|aab|ipa|jks|keystore|p8|p12|pem)$|(^|/)\.env($|\.)|(^|/)deploy\.env$|(^|/)build/|inspect\.txt$|^_to_delete/|^Claude outputs/|^private/' | grep -v '\.env\.example$' || true)
           if [ -n "$bad" ]; then echo "В репозитории лишние файлы:"; echo "$bad"; exit 1; fi
 
   server:

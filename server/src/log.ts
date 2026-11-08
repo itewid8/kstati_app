@@ -5,7 +5,7 @@
  */
 import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { config, pricePer1k } from './config.js';
+import { config, priceOf } from './config.js';
 import type { ParseResult } from './types.js';
 import type { Usage } from './yandex.js';
 
@@ -41,7 +41,12 @@ export type LogEntry = {
   pass?: boolean;
 };
 
-export const costOf = (tokens: Usage, model: string) => Math.round((tokens.total / 1000) * pricePer1k(model) * 10000) / 10000;
+export const costOf = (tokens: Usage, model: string) => {
+  const p = priceOf(model);
+  const cached = Math.min(tokens.cached ?? 0, tokens.input);
+  const rub = ((tokens.input - cached) * p.input + cached * p.cached + tokens.output * p.output) / 1000;
+  return Math.round(rub * 10000) / 10000;
+};
 
 let ready: Promise<unknown> | null = null;
 
