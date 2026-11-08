@@ -6,6 +6,7 @@
 import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import { Dimensions, Platform } from 'react-native';
+import { reportCrash, reportProblem } from './analytics';
 
 export type DiagEvent = { at: string; type: 'route' | 'error' | 'net' | 'action'; text: string };
 
@@ -19,10 +20,16 @@ export function logEvent(type: DiagEvent['type'], text: string) {
   if (events.length > MAX) events.splice(0, events.length - MAX);
 }
 
+/** Последние события одной строкой — к отчёту о падении в AppMetrica */
+const trail = () => events.slice(-12).map((x) => `${x.type}:${x.text}`).join(' | ');
+
+/** Ошибку — в журнал и в AppMetrica: fatal — падение (ловушка ниже, экран «Что-то сломалось»), иначе — ошибка */
 export function logError(e: unknown, fatal = false) {
   const err = e instanceof Error ? e : new Error(String(e));
   lastError = { at: new Date().toISOString(), message: err.message.slice(0, 500), stack: err.stack?.slice(0, 4000), fatal };
   logEvent('error', err.message);
+  if (fatal) reportCrash(err, trail());
+  else reportProblem(err, trail());
   return lastError;
 }
 

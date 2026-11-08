@@ -104,16 +104,18 @@ export const RecordingSheet = memo(function RecordingSheet({
   );
 });
 
-/** Правый край сетки разделов: поле экрана + REC + зазор */
-const GRID_RIGHT = space.side + S.recWidth + GAP;
+/** Правый край REC: справа от него «＋» (BottomNav) и поле экрана */
+const REC_RIGHT = space.side + S.addWidth + S.navBarGap;
+/** Правый край сетки разделов: REC + зазор */
+const GRID_RIGHT = REC_RIGHT + S.recWidth + S.navBarGap;
 
 const styles = StyleSheet.create({
   above: { position: 'absolute', left: 0, right: 0, top: 0 },
   below: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   /** Слева от REC: сетка разделов и поле экрана */
-  beside: { position: 'absolute', left: 0, right: space.side + S.recWidth, height: S.navHeight },
-  /** Справа от REC: поле экрана */
-  edge: { position: 'absolute', right: 0, width: space.side, height: S.navHeight },
+  beside: { position: 'absolute', left: 0, right: REC_RIGHT + S.recWidth, height: S.navHeight },
+  /** Справа от REC: «＋» и поле экрана */
+  edge: { position: 'absolute', right: 0, width: REC_RIGHT, height: S.navHeight },
   track: {
     position: 'absolute',
     left: space.side,

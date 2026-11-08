@@ -5,6 +5,7 @@
 import { usePathname } from 'expo-router';
 import { useEffect } from 'react';
 import { openMenu } from '@/components/ActionMenu';
+import { setAnalyticsUser } from '@/lib/analytics';
 import { useBug } from '@/lib/bugReport';
 import { installCrashHandler, logEvent, takeCrash } from '@/lib/diag';
 import { useStore } from '@/lib/store';
@@ -16,7 +17,9 @@ installCrashHandler();
 export function BugHost() {
   const route = usePathname();
   const signedIn = useStore((s) => !!s.session);
+  const meId = useStore((s) => s.me?.id ?? null);
   useEffect(() => logEvent('route', route), [route]);
+  useEffect(() => setAnalyticsUser(meId), [meId]);
   // Падение прошлого запуска — спросить, когда приложение уже открылось и человек вошёл
   useEffect(() => {
     if (!signedIn) return;

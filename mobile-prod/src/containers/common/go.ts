@@ -4,7 +4,7 @@
  * Корневой стек: (tabs) и экраны поверх него — окна дела и плана, лента, профиль, группа. push / navigate на адрес
  * внутри (tabs) из такого экрана кладёт в корень ВТОРОЙ (tabs) (expo-router v4+). Поэтому всё, что ведёт во вкладки,
  * идёт через dismissTo: корневой стек сворачивается до уже открытых вкладок, внутри них — переход на нужный экран
- * (такой же экран наверху стека вкладки не повторяется). Из самих вкладок dismissTo ведёт себя как navigate.
+ * (такой же экран наверху стека вкладки не повторяется). С самой вкладки dismissTo на соседнюю не переключает — см. toTabRoute.
  */
 import { router, type Href } from 'expo-router';
 import { useStore } from '@/lib/store';
@@ -14,8 +14,15 @@ import type { NavTab } from '@/ui';
 import { openQuickActions } from '../quick/quickStore';
 import { nav } from './nav';
 
-/** Адрес внутри (tabs) — из любого места */
-export const toTabRoute = (href: Href) => router.dismissTo(href);
+/**
+ * Адрес внутри (tabs) — из любого места. dismissTo сворачивает экраны поверх вкладок, но с самой вкладки на соседнюю
+ * не переключает (голосовой вопрос с вкладки «Дела» оставался на ней) — следом navigate: он переключает вкладку,
+ * а когда dismissTo уже привёл куда нужно, ничего не делает
+ */
+export function toTabRoute(href: Href) {
+  router.dismissTo(href);
+  router.navigate(href);
+}
 export const toTab = (tab: NavTab) => toTabRoute(nav.tab(tab));
 /** Сетка плана (C-Plan) во вкладке «Дела» */
 export const toPlanGrid = (id: ID) => toTabRoute(nav.planGrid(id));

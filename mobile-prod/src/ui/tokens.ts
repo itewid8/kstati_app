@@ -173,6 +173,8 @@ export const size = {
   recWidth: 104,
   /** «＋» (создать вручную) справа от REC в нижней навигации */
   addWidth: 64,
+  /** Зазор между сеткой разделов, REC и «＋» */
+  navBarGap: 8,
   recDot: 26,
 
   grabberWidth: 36,

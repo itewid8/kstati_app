@@ -187,7 +187,7 @@ const BottomNavView = memo(function BottomNavView({ active, onSelect, onRec, onA
 });
 
 const styles = StyleSheet.create({
-  bar: { height: S.navHeight, flexDirection: 'row', gap: 8 },
+  bar: { height: S.navHeight, flexDirection: 'row', gap: S.navBarGap },
   grid: { flex: 1, gap: space.navGap },
   line: { flex: 1, flexDirection: 'row', gap: space.navGap },
   tab: { flex: 1, borderWidth: S.border, alignItems: 'center', justifyContent: 'center' },

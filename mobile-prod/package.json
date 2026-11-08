@@ -12,6 +12,7 @@
     "test": "bash scripts/test.sh"
   },
   "dependencies": {
+    "@appmetrica/react-native-analytics": "4.2.0",
     "@expo-google-fonts/geist": "^0.4.2",
     "@expo-google-fonts/geist-mono": "^0.4.3",
     "@types/react": "~19.2.4",
