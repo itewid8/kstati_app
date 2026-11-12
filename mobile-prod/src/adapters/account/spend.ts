@@ -6,7 +6,8 @@ import type { SpendCommand, SpendDay, SpendPart } from '@/lib/api';
 
 export type SpendBar = { day: string; label: string; kop: number; share: number; today: boolean };
 export type SpendSourceRow = { key: string; label: string; value: string; meta: string };
-export type SpendCommandRow = { key: string; text: string; meta: string; value: string; warn: boolean };
+/** id — оценить можно (команда запомнена сервером); rating — уже оценена */
+export type SpendCommandRow = { key: string; text: string; meta: string; value: string; warn: boolean; id?: string; rating?: 'up' | 'down' };
 export type SpendView = {
   total: string;
   totals: ReadonlyArray<{ value: string; label: string }>;
@@ -34,6 +35,8 @@ export function commandRow(c: SpendCommand, i: number): SpendCommandRow {
     meta: `${when} · ${SRC[c.src] ?? c.src} · ${how}${tokens}`,
     value: rub(c.kop),
     warn: c.path === 'fallback' || c.calls > 1,
+    ...(c.id && { id: c.id }),
+    ...(c.rating && { rating: c.rating }),
   };
 }
 

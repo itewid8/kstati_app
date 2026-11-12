@@ -5,7 +5,7 @@
 import { memo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { SpendView } from '@/adapters/account/spend';
-import { SectionBox, fonts, size as S, space, useTheme } from '@/ui';
+import { Icon, SectionBox, fonts, size as S, space, useTheme } from '@/ui';
 import { AccountHeader } from './components/AccountHeader';
 
 export type SpendPeriod = { key: number; label: string; on: boolean };
@@ -17,12 +17,14 @@ export type SpendScreenProps = {
   insets?: { top: number; bottom: number };
   onBack?: () => void;
   onPeriod?: (days: number) => void;
+  /** Оценка разбора команды: 👍 — good, 👎 — нет (контейнер спросит, что хотели) */
+  onRate?: (id: string, good: boolean) => void;
 };
 
 const NO_INSETS = { top: 0, bottom: 0 };
 const BARS_H = 96;
 
-export const SpendScreen = memo(function SpendScreen({ periods, view, insets = NO_INSETS, onBack, onPeriod }: SpendScreenProps) {
+export const SpendScreen = memo(function SpendScreen({ periods, view, insets = NO_INSETS, onBack, onPeriod, onRate }: SpendScreenProps) {
   const { c } = useTheme();
   const v = view && view !== 'error' ? view : null;
   return (
@@ -111,6 +113,26 @@ export const SpendScreen = memo(function SpendScreen({ periods, view, insets = N
                       <Text style={[styles.meta, { color: r.warn ? c.red : c.muted }]}>{r.meta.toUpperCase()}</Text>
                     </View>
                     <Text style={[styles.value, { color: r.warn ? c.red : c.text }]}>{r.value}</Text>
+                    {r.id && onRate ? (
+                      <View style={styles.rate}>
+                        {([true, false] as const).map((good) => {
+                          const on = r.rating === (good ? 'up' : 'down');
+                          return (
+                            <Pressable
+                              key={String(good)}
+                              accessibilityRole="button"
+                              accessibilityLabel={good ? 'Разобрано верно' : 'Разобрано неверно'}
+                              accessibilityState={{ selected: on }}
+                              hitSlop={6}
+                              onPress={() => onRate(r.id!, good)}
+                              style={styles.rateBtn}
+                            >
+                              <Icon name={good ? 'thumbUp' : 'thumbDown'} size={15} color={!r.rating ? c.muted : on ? c.text : c.border} />
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : null}
                   </View>
                 ))}
               </SectionBox>
@@ -145,4 +167,6 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.sans500, fontSize: 14 },
   meta: { fontFamily: fonts.mono400, fontSize: 9, letterSpacing: 0.4 },
   value: { fontFamily: fonts.mono500, fontSize: 12, fontVariant: ['tabular-nums'] },
+  rate: { flexDirection: 'row', gap: 2 },
+  rateBtn: { width: 28, height: 32, alignItems: 'center', justifyContent: 'center' },
 });

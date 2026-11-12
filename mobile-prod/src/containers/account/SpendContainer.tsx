@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { spendView } from '@/adapters/account/spend';
-import { fetchSpend, type SpendData } from '@/lib/api';
+import { fetchSpend, rateCommand, type SpendData } from '@/lib/api';
+import { InputSheet } from '@/ui/InputSheet';
 import { SpendScreen } from '@/screens/account/SpendScreen';
 import { useClock, useInsets } from '../common';
 
@@ -32,5 +33,45 @@ export function SpendContainer() {
   const periods = useMemo(() => PERIODS.map((p) => ({ ...p, on: p.key === days })), [days]);
   const onPeriod = useCallback((d: number) => setDays(d), []);
 
-  return <SpendScreen periods={periods} view={view} insets={insets} onBack={back} onPeriod={onPeriod} />;
+  // Оценка команды из списка: 👍 сразу, 👎 — после поля «что хотели»
+  const [asking, setAsking] = useState<string | null>(null);
+  const mark = useCallback((id: string, rating: 'up' | 'down') => {
+    setData((d) => (d && d !== 'error' ? { ...d, recent: d.recent.map((c) => (c.id === id ? { ...c, rating } : c)) } : d));
+  }, []);
+  const onRate = useCallback(
+    (id: string, good: boolean) => {
+      if (!good) return setAsking(id);
+      mark(id, 'up');
+      void rateCommand(id, true);
+    },
+    [mark],
+  );
+  const onWish = useCallback(
+    (wish: string) => {
+      const id = asking;
+      setAsking(null);
+      if (!id) return;
+      mark(id, 'down');
+      void rateCommand(id, false, wish);
+    },
+    [asking, mark],
+  );
+  const closeWish = useCallback(() => setAsking(null), []);
+
+  return (
+    <>
+      <SpendScreen periods={periods} view={view} insets={insets} onBack={back} onPeriod={onPeriod} onRate={onRate} />
+      <InputSheet
+        visible={!!asking}
+        value=""
+        multiline
+        maxLength={500}
+        title="ЧТО ДОЛЖНО БЫЛО ПОЛУЧИТЬСЯ"
+        submitLabel="ОТПРАВИТЬ"
+        bottomInset={insets.bottom}
+        onSubmit={onWish}
+        onClose={closeWish}
+      />
+    </>
+  );
 }

@@ -14,7 +14,7 @@ import { QUOTA_DETAIL, quotaText } from '@/adapters/voice/problem';
 import { MIN_HOLD_MS, recStep, type RecEvent, type RecMode, type RecState } from '@/adapters/voice/recording';
 import { nav } from '@/containers/common/nav';
 import { toTab, toTopic } from '@/containers/common/go';
-import { deleteRecording, fetchVoiceQuota, parseOnServer, uploadVoice, type VoiceProblem, type VoiceSpend } from './api';
+import { deleteRecording, fetchVoiceQuota, parseOnServer, rateCommand, uploadVoice, type VoiceProblem, type VoiceSpend } from './api';
 import { spendNote } from '@/adapters/voice/header';
 import { abortDeviceSpeech, deviceSpeechAvailable, startDeviceSpeech, stopDeviceSpeech } from './deviceSpeech';
 import { track } from './analytics';
@@ -50,6 +50,34 @@ let starting = false;
 /** Расход последней команды для шапки окна ответа: «1 840 ТОК · 0,37 ₽»; null — неизвестен */
 export const useVoiceSpend = create<{ note: string | null }>(() => ({ note: null }));
 const noteSpend = (spend: VoiceSpend | undefined) => useVoiceSpend.setState({ note: spend ? spendNote(spend) : null });
+
+/**
+ * Оценка разбора последней команды (тест): id — номер команды на сервере (нет — оценить нельзя);
+ * rating — уже поставленная; asking — открыто поле «что хотели» после 👎
+ */
+export const useVoiceRate = create<{ id: string | null; rating: 'up' | 'down' | null; asking: boolean }>(() => ({ id: null, rating: null, asking: false }));
+const noteCmd = (id: string | undefined) => useVoiceRate.setState({ id: id ?? null, rating: null, asking: false });
+
+/** 👍 — команда разобрана верно; повторное нажатие ничего не меняет */
+export function rateUp() {
+  const { id, rating } = useVoiceRate.getState();
+  if (!id || rating === 'up') return;
+  useVoiceRate.setState({ rating: 'up', asking: false });
+  void rateCommand(id, true);
+}
+/** 👎 — открыть поле «что хотели» */
+export function rateDown() {
+  if (useVoiceRate.getState().id) useVoiceRate.setState({ asking: true });
+}
+/** Отправить 👎 с пояснением (можно пустым) */
+export function sendRateDown(wish: string) {
+  const { id } = useVoiceRate.getState();
+  useVoiceRate.setState({ asking: false });
+  if (!id) return;
+  useVoiceRate.setState({ rating: 'down' });
+  void rateCommand(id, false, wish);
+}
+export const closeRateDown = () => useVoiceRate.setState({ asking: false });
 
 /** Уровень звука 0…1 для волны в окне записи (отдельно от основного хранилища — меняется 10 раз в секунду) */
 export const useVoiceLevel = create<{ level: number | null }>(() => ({ level: null }));
@@ -210,6 +238,7 @@ async function begin(mode: RecMode) {
   if (s.voice !== 'idle' || starting) return;
   s.setCard(null);
   noteSpend(undefined);
+  noteCmd(undefined);
   const spent = quotaSpent();
   if (spent) return showLimit('', spent);
   if (speechNoticeDue()) return;
@@ -362,6 +391,7 @@ async function finish() {
     if (!res.ok) return showFail(out.text, res);
     noteLeft(res.left);
     noteSpend(res.spend);
+    noteCmd(res.cmdId);
     return applyResult(out.text, res.result);
   }
 
@@ -389,6 +419,7 @@ async function finish() {
     if (!res.ok) return showFail('', res);
     noteLeft(res.left);
     noteSpend(res.spend);
+    noteCmd(res.cmdId);
     if (!res.transcript) return silence();
     return applyResult(res.transcript, res.result);
   }
@@ -449,12 +480,14 @@ export async function handleTranscript(transcript: string) {
   s.setVoice('processing');
   s.setCard(null);
   noteSpend(undefined);
+  noteCmd(undefined);
   const res = await parseOnServer(transcript);
   if (id !== run) return;
   useStore.getState().setVoice('idle');
   if (!res.ok) return showFail(transcript, res);
   noteLeft(res.left);
   noteSpend(res.spend);
+  noteCmd(res.cmdId);
   applyResult(transcript, res.result);
 }
 

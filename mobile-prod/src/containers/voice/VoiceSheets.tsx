@@ -14,7 +14,7 @@ import { problemSheet, type ProblemCard } from '@/adapters/voice/problem';
 import { recButtons, type RecButton, type RecMode } from '@/adapters/voice/recording';
 import type { PlansAnswer } from '@/lib/plans';
 import type { ChangeDraft, DraftItem } from '@/lib/types';
-import { beginRecording, cancelVoice, disarmRecording, finishRecording, useVoiceSpend } from '@/lib/voice';
+import { beginRecording, cancelVoice, disarmRecording, finishRecording, rateDown, rateUp, useVoiceRate, useVoiceSpend } from '@/lib/voice';
 import { recDrag } from '@/ui/BottomNav';
 import {
   AskAgendaSheet,
@@ -25,6 +25,7 @@ import {
   VoiceSheet,
   type DeleteScope,
   type SheetAction,
+  type VoiceRate,
 } from '@/screens/voice';
 import type { Insets } from '../common/useInsets';
 import {
@@ -42,10 +43,18 @@ import {
 } from './actions';
 import { ProblemSheet } from './ProblemSheet';
 
-/** Шапка окна ответа: вместо ярлыка — расход команды («1 840 ТОК · 0,37 ₽»), если сервер его прислал */
+/** 👍 / 👎 разбора последней команды; нет номера команды (старый сервер, заглушка) — без оценки */
+function useRate(): VoiceRate | undefined {
+  const id = useVoiceRate((x) => x.id);
+  const value = useVoiceRate((x) => x.rating);
+  return useMemo(() => (id ? { value, onUp: rateUp, onDown: rateDown } : undefined), [id, value]);
+}
+
+/** Шапка окна ответа: вместо ярлыка — расход команды («1 840 ТОК · 0,37 ₽»), если сервер его прислал; оценка разбора */
 function useAnswerHeader(levels: readonly number[], ms: number, badge?: string) {
   const note = useVoiceSpend((x) => x.note);
-  return useMemo(() => ({ ...sheetHeader(levels, ms, badge), ...(note && { note }) }), [levels, ms, badge, note]);
+  const rate = useRate();
+  return useMemo(() => ({ ...sheetHeader(levels, ms, badge), ...(note && { note }), ...(rate && { rate }) }), [levels, ms, badge, note, rate]);
 }
 
 /** Общее для окон: волна и длительность последней записи, отступ снизу */
@@ -107,10 +116,12 @@ export const CreateSheet = memo(function CreateSheet({ item, transcript, s, leve
   const onSave = useCallback(() => saveVoiceItem(item, transcript), [item, transcript]);
   const onEdit = useCallback(() => editVoiceItem(item, transcript), [item, transcript]);
   const note = useVoiceSpend((x) => x.note);
+  const rate = useRate();
   return (
     <VoiceCreateSheet
       duration={sheetHeader(levels, ms).duration}
       note={note ?? undefined}
+      rate={rate}
       levels={levels}
       recording={false}
       phrase={transcript}

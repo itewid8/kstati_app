@@ -26,7 +26,11 @@ export type VoiceSheetHeader = {
   badge?: string;
   /** Расход команды вместо ярлыка: «1 840 ТОК · 0,37 ₽» */
   note?: string;
+  /** Оценка разбора (👍 / 👎) — у ответа на команду, которую сервер запомнил */
+  rate?: VoiceRate;
 };
+
+export type VoiceRate = { value: 'up' | 'down' | null; onUp: () => void; onDown: () => void };
 
 /** Как идёт запись: hold — пока палец на REC, tap — от нажатия до ГОТОВО */
 export type RecordingMode = 'hold' | 'tap';

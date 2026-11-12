@@ -3,9 +3,9 @@
  * волна громкости, ярлык распознанного действия.
  */
 import { memo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { fonts, type as T, useTheme } from '@/ui';
-import type { VoiceSheetHeader } from '../types';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { fonts, Icon, type as T, useTheme } from '@/ui';
+import type { VoiceRate, VoiceSheetHeader } from '../types';
 import { Waveform } from './Waveform';
 
 /** Столбиков в волне */
@@ -37,6 +37,23 @@ export const VoiceHeader = memo(function VoiceHeader({ header }: { header: Voice
           <Text style={[T.section, { color: c.bg }]}>{header.badge}</Text>
         </View>
       ) : null}
+      {header.rate ? <RateButtons rate={header.rate} /> : null}
+    </View>
+  );
+});
+
+/** 👍 / 👎 разбора команды: выбранная — залита, вторая — приглушена */
+const RateButtons = memo(function RateButtons({ rate }: { rate: VoiceRate }) {
+  const { c } = useTheme();
+  const tone = (on: boolean) => (rate.value === null ? c.muted : on ? c.text : c.border);
+  return (
+    <View style={styles.rate}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Разобрано верно" accessibilityState={{ selected: rate.value === 'up' }} hitSlop={8} onPress={rate.onUp} style={styles.rateBtn}>
+        <Icon name="thumbUp" size={16} color={tone(rate.value === 'up')} />
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Разобрано неверно" accessibilityState={{ selected: rate.value === 'down' }} hitSlop={8} onPress={rate.onDown} style={styles.rateBtn}>
+        <Icon name="thumbDown" size={16} color={tone(rate.value === 'down')} />
+      </Pressable>
     </View>
   );
 });
@@ -48,4 +65,6 @@ const styles = StyleSheet.create({
   time: { fontFamily: fonts.mono600, fontSize: 10, letterSpacing: 1 },
   badge: { height: 22, paddingHorizontal: 7, justifyContent: 'center' },
   note: { fontFamily: fonts.mono600, fontSize: 9.5, letterSpacing: 0.6 },
+  rate: { flexDirection: 'row', gap: 4, marginLeft: 2 },
+  rateBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
 });

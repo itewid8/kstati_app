@@ -284,6 +284,14 @@ export interface Store {
   addActivity(a: Activity): Promise<void>;
   listActivity(scope: string, since: string, limit: number): Promise<Activity[]>;
 
+  /**
+   * Журнал с упорядоченными записями (оценки голосовых команд): scope — журнал, id — порядок (начинается со времени).
+   * Та же запись (scope + id) перезаписывается. ttl — секунды. listLog — по возрастанию id после after
+   */
+  putLog(scope: string, id: string, value: unknown, ttlSec: number): Promise<void>;
+  listLog<T>(scope: string, after: string, limit: number): Promise<{ id: string; value: T }[]>;
+  deleteLog(scope: string, id: string): Promise<void>;
+
   /** Временные записи: коды из писем, состояния входа VK. ttl — секунды */
   putTemp(key: string, value: unknown, ttlSec: number): Promise<void>;
   getTemp<T>(key: string): Promise<T | null>;

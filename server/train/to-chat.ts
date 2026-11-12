@@ -59,7 +59,8 @@ const isHeld = (r: Row) => hash(phraseOf(r)) % 10 === 0;
 const valid = all.filter(isHeld);
 const held = new Set(valid.map(phraseOf));
 // Живые фразы, разобранные моделью-учителем (train/distill.ts), — только в обучение, дважды: их мало, а они важнее
-const live = read(join(process.cwd(), '..', 'private', 'distill.jsonl'));
+// и команды, которые пользователи оценили как верные (train/from-ratings.ts)
+const live = [...read(join(process.cwd(), '..', 'private', 'distill.jsonl')), ...read(join(process.cwd(), '..', 'private', 'ratings-train.jsonl'))];
 const train = all.filter((r) => !isHeld(r)).concat(live, live);
 
 writeFileSync(join(out, 'train.jsonl'), train.map(chat).join('\n') + '\n');

@@ -6,7 +6,7 @@ import { memo, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { PersonTag, fonts, size as S, useTheme } from '@/ui';
 import { VoiceSheet } from './components/VoiceSheet';
-import type { SheetAction, VoicePerson } from './types';
+import type { SheetAction, VoicePerson, VoiceRate } from './types';
 
 /**
  * Распознанное поле: подпись слева («КОГДА») и значение.
@@ -25,6 +25,8 @@ export type VoiceCreateSheetProps = {
   recording: boolean;
   /** Расход команды в шапке: «1 840 ТОК · 0,37 ₽» */
   note?: string;
+  /** Оценка разбора в шапке */
+  rate?: VoiceRate;
   /** Распознанная фраза (без кавычек) */
   phrase: string;
   fields: readonly RecognizedField[];
@@ -55,6 +57,7 @@ export const VoiceCreateSheet = memo(function VoiceCreateSheet({
   levels,
   recording,
   note,
+  rate,
   phrase,
   fields,
   visible,
@@ -65,7 +68,7 @@ export const VoiceCreateSheet = memo(function VoiceCreateSheet({
   onClose,
 }: VoiceCreateSheetProps) {
   const { c } = useTheme();
-  const header = useMemo(() => ({ duration, levels, live: recording, ...(note && { note }) }), [duration, levels, recording, note]);
+  const header = useMemo(() => ({ duration, levels, live: recording, ...(note && { note }), ...(rate && { rate }) }), [duration, levels, recording, note, rate]);
   const actions = useMemo<SheetAction[]>(
     () => [
       { key: 'cancel', label: 'ОТМЕНА', onPress: onCancel },

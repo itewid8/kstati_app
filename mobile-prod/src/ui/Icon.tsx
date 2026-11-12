@@ -47,6 +47,9 @@ const ICONS = {
   chevronRight: { d: 'm9 18 6-6-6-6', strokeWidth: 2.2 },
   close: { d: 'M18 6 6 18M6 6l12 12', strokeWidth: 2 },
   check: { d: 'M5 12l5 5L20 7', strokeWidth: 3.5 },
+  // Оценка разбора голосовой команды (Lucide thumbs-up / thumbs-down, ISC)
+  thumbUp: { d: 'M7 10v12M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z', strokeWidth: 2 },
+  thumbDown: { d: 'M17 14V2M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z', strokeWidth: 2 },
   link: { d: 'M7 17 17 7M8 7h9v9', strokeWidth: 2.2 },
   /** Стрелка «было → станет» (C-ShareAsk) */
   arrow: { d: 'M5 12h14M13 6l6 6-6 6', strokeWidth: 2 },

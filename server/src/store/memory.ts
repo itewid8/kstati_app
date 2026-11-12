@@ -16,6 +16,7 @@ type Dump = {
   counters: Record<string, number>;
   temp: Record<string, { v: unknown; exp: number }>;
   activity: Record<string, Activity[]>;
+  log?: Record<string, Record<string, { v: unknown; exp: number }>>;
   prefs: Record<string, Prefs>;
   notes: Record<string, Record<string, Note>>;
 };
@@ -196,6 +197,23 @@ export class MemoryStore implements Store {
       .sort((a, b) => b.id.localeCompare(a.id))
       .slice(0, limit)
       .map(clone);
+  }
+
+  async putLog(scope: string, id: string, value: unknown, ttlSec: number) {
+    ((this.d.log ??= {})[scope] ??= {})[id] = { v: clone(value), exp: Date.now() + ttlSec * 1000 };
+    this.save();
+  }
+  async listLog<T>(scope: string, after: string, limit: number) {
+    const now = Date.now();
+    return Object.entries(this.d.log?.[scope] ?? {})
+      .filter(([id, x]) => id > after && x.exp > now)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(0, limit)
+      .map(([id, x]) => ({ id, value: clone(x.v) as T }));
+  }
+  async deleteLog(scope: string, id: string) {
+    delete this.d.log?.[scope]?.[id];
+    this.save();
   }
 
   async putTemp(key: string, value: unknown, ttlSec: number) {

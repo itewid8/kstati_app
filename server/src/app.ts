@@ -9,6 +9,7 @@ import { HttpError, registerAuth, requireUser } from './auth.js';
 import { registerPages } from './pages.js';
 import { mskDay, registerSubs, voiceLimitOf } from './subs.js';
 import { recordSpend, registerSpend } from './spend.js';
+import { registerRatings, rememberCommand } from './ratings.js';
 import { appVersion } from './client.js';
 import { config } from './config.js';
 import { sendMail, type MailFile } from './mail.js';
@@ -152,6 +153,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   registerPages(app);
   registerSubs(app, store);
   registerSpend(app, store);
+  registerRatings(app, store);
   registerData(app, store, data);
 
   /** Контекст для ИИ собирает сервер из базы: люди моих групп, дела текущей группы, мои хотелки */
@@ -314,8 +316,9 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       await writeLog({ source, userId: user.id, ...client, path, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
       const left = await spendVoiceQuota(user, result, before);
       const spend = spendOf(usage, false);
-      await recordSpend(store, user.id, source, spend, 0, { path, calls: attempts, text: body.text, result: result.type });
-      return { transcript: body.text, result, left, spend };
+      const cmdId = await rememberCommand(store, { userId: user.id, source, transcript: body.text, context, raw, ...(path && { path }), result });
+      await recordSpend(store, user.id, source, spend, 0, { path, calls: attempts, text: body.text, result: result.type, id: cmdId });
+      return { transcript: body.text, result, left, spend, ...(cmdId && { cmdId }) };
     } catch (e) {
       await writeLog({ source, userId: user.id, ...client, transcript: body.text, ctx: ctxSize(context), llmMs: Date.now() - t0, error: errText(e) });
       throw e;
@@ -355,8 +358,9 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       });
       const left = await spendVoiceQuota(user, result, before);
       const spend = spendOf(usage, audioSec);
-      await recordSpend(store, user.id, 'voice', spend, audioSec ?? 0, { path, calls: attempts, text: transcript, result: result.type });
-      return { transcript, result, left, spend };
+      const cmdId = await rememberCommand(store, { userId: user.id, source: 'voice', transcript, context, raw, ...(path && { path }), result });
+      await recordSpend(store, user.id, 'voice', spend, audioSec ?? 0, { path, calls: attempts, text: transcript, result: result.type, id: cmdId });
+      return { transcript, result, left, spend, ...(cmdId && { cmdId }) };
     } catch (e) {
       await writeLog({ source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, ctx: ctxSize(context), error: errText(e) });
       throw e;

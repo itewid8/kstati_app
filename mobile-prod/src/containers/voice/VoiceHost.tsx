@@ -10,7 +10,8 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useShallow } from 'zustand/react/shallow';
 import { voiceView } from '@/adapters/voice/view';
 import { useStore } from '@/lib/store';
-import { useVoiceUi } from '@/lib/voice';
+import { closeRateDown, sendRateDown, useVoiceRate, useVoiceUi } from '@/lib/voice';
+import { InputSheet } from '@/ui/InputSheet';
 import { useSignedIn } from '../common/signedIn';
 import { useClock } from '../common/useClock';
 import { useInsets } from '../common/useInsets';
@@ -35,6 +36,7 @@ export function VoiceHost() {
   const ms = useRecordedMs(live);
 
   const view = useMemo(() => (card && signedIn ? voiceView(card, s, clock) : null), [card, signedIn, s, clock]);
+  const asking = useVoiceRate((x) => x.asking);
 
   const busy = phase === 'recording' || (phase === 'processing' && !cancelling);
   const visible = busy || !!view || (armed && phase === 'idle');
@@ -73,6 +75,17 @@ export function VoiceHost() {
   return (
     <Animated.View entering={FadeIn.duration(140)} exiting={FadeOut.duration(120)} style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {sheet}
+      <InputSheet
+        visible={asking}
+        value=""
+        multiline
+        maxLength={500}
+        title="ЧТО ДОЛЖНО БЫЛО ПОЛУЧИТЬСЯ"
+        submitLabel="ОТПРАВИТЬ"
+        bottomInset={insets.bottom}
+        onSubmit={sendRateDown}
+        onClose={closeRateDown}
+      />
     </Animated.View>
   );
 }

@@ -29,7 +29,7 @@ const isAdmin = (u: User) => !!u.email && config.adminEmails.includes(u.email.to
  * Только токен страницы подписок (POST /admin/login): его выдают по паролю на час. Токен приложения сюда не подходит —
  * украденный с телефона токен, вход через VK или ошибка в веб-версии не дают выдавать подписки
  */
-async function requireAdmin(req: Parameters<typeof requireUser>[0], store: Store): Promise<User> {
+export async function requireAdmin(req: Parameters<typeof requireUser>[0], store: Store): Promise<User> {
   const user = await requireUser(req, store, 'admin');
   if (!isAdmin(user)) throw new HttpError(403, 'forbidden', 'Нет доступа');
   return user;

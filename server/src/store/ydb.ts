@@ -271,6 +271,31 @@ export class YdbStore implements Store {
     return (r.Items ?? []).map((row) => JSON.parse(row.v.S!) as Activity);
   }
 
+  /* ---------- журнал (таблица активности, scope — «log#…», чтобы не смешиваться с лентами) ---------- */
+
+  async putLog(scope: string, id: string, value: unknown, ttlSec: number) {
+    await this.call('PutItem', {
+      TableName: this.t.activity,
+      Item: { scope: S(`log#${scope}`), id: S(id), v: S(JSON.stringify(value)), exp: { N: String(Math.floor(Date.now() / 1000) + ttlSec) } },
+    });
+  }
+  async listLog<T>(scope: string, after: string, limit: number) {
+    const r = await this.call<{ Items?: Row[] }>('Query', {
+      TableName: this.t.activity,
+      KeyConditionExpression: '#p = :p AND #r > :s',
+      ExpressionAttributeNames: { '#p': 'scope', '#r': 'id' },
+      ExpressionAttributeValues: { ':p': S(`log#${scope}`), ':s': S(after) },
+      ScanIndexForward: true,
+      Limit: limit,
+    });
+    const now = Math.floor(Date.now() / 1000);
+    // TTL удаляет не сразу — просроченные не отдаём
+    return (r.Items ?? []).filter((row) => !row.exp?.N || Number(row.exp.N) > now).map((row) => ({ id: row.id!.S!, value: JSON.parse(row.v!.S!) as T }));
+  }
+  async deleteLog(scope: string, id: string) {
+    await this.call('DeleteItem', { TableName: this.t.activity, Key: { scope: S(`log#${scope}`), id: S(id) } });
+  }
+
   /* ---------- счётчики ---------- */
 
   async incr(counter: string) {

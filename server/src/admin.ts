@@ -81,6 +81,12 @@ ul.subs li:first-child { border-top:0 }
     <ul class="subs" id="people"></ul>
   </div>
 
+  <div id="rates" class="box" hidden>
+    <div class="cap">Оценки голосовых команд</div>
+    <button type="button" id="ratesGet">Скачать</button>
+    <div class="err" id="ratesErr"></div>
+  </div>
+
   <div id="list" class="box" hidden>
     <div class="cap" id="count">Выдано</div>
     <ul class="subs" id="subs"></ul>
@@ -104,7 +110,7 @@ ul.subs li:first-child { border-top:0 }
       });
     }, function () { throw new Error('Нет связи с сервером'); });
   }
-  function signOut() { token = null; try { sessionStorage.removeItem('kstati-admin'); } catch (e) {} $('login').hidden = false; $('grant').hidden = true; $('list').hidden = true; $('stats').hidden = true; }
+  function signOut() { token = null; try { sessionStorage.removeItem('kstati-admin'); } catch (e) {} $('login').hidden = false; $('grant').hidden = true; $('list').hidden = true; $('stats').hidden = true; $('rates').hidden = true; }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function ru(isoDay) { var p = isoDay.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; }
@@ -168,7 +174,7 @@ ul.subs li:first-child { border-top:0 }
   function load() {
     call('GET', '/admin/stats?days=30').then(stats, function () {});
     return call('GET', '/admin/subs').then(function (j) {
-      $('login').hidden = true; $('grant').hidden = false; $('list').hidden = false; render(j.subs || []);
+      $('login').hidden = true; $('grant').hidden = false; $('list').hidden = false; $('rates').hidden = false; render(j.subs || []);
     });
   }
   $('login').addEventListener('submit', function (e) {
@@ -188,6 +194,24 @@ ul.subs li:first-child { border-top:0 }
       .then(function (j) { err.className = 'err ok'; err.textContent = 'Выдано: ' + (j.sub.name || j.sub.email); $('gEmail').value = ''; $('gNote').value = ''; return load(); })
       .catch(function (x) { err.className = 'err'; err.textContent = x.message; })
       .then(function () { b.disabled = false; });
+  });
+  // Оценки команд — одним файлом ratings-ГГГГ-ММ-ДД.json (для train/from-ratings.ts)
+  $('ratesGet').addEventListener('click', function () {
+    var b = this; var err = $('ratesErr'); var all = [];
+    b.disabled = true; err.className = 'err'; err.textContent = '';
+    function page(after) {
+      return call('GET', '/admin/ratings?after=' + encodeURIComponent(after)).then(function (j) {
+        all = all.concat(j.items || []);
+        return j.next ? page(j.next) : all;
+      });
+    }
+    page('').then(function (items) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(items, null, 1)], { type: 'application/json' }));
+      a.download = 'ratings-' + iso(new Date()) + '.json'; document.body.appendChild(a); a.click(); a.remove();
+      var bad = items.filter(function (x) { return !x.good; }).length;
+      err.className = 'err ok'; err.textContent = 'Оценок: ' + items.length + ', из них неверно: ' + bad;
+    }).catch(function (x) { err.textContent = x.message; }).then(function () { b.disabled = false; });
   });
   $('logout').addEventListener('click', signOut);
   if (token) load().catch(signOut);

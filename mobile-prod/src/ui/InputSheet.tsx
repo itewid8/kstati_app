@@ -12,6 +12,10 @@ type Props = {
   /** Описание — несколько строк, можно сохранить пустым; одна строка (название) — только непустой */
   multiline?: boolean;
   maxLength?: number;
+  /** Заголовок над полем */
+  title?: string;
+  /** Подпись кнопки вместо «СОХРАНИТЬ» */
+  submitLabel?: string;
   /** Нижний отступ safe area (когда клавиатура закрыта) */
   bottomInset?: number;
   /** Текст без пробелов по краям */
@@ -23,7 +27,7 @@ type Props = {
  * Окно ввода текста поверх экрана: поле Geist 15 в рамке 1.5px и кнопки ОТМЕНА / СОХРАНИТЬ.
  * Для названия дела, описания, переименования группы. Отдельное окно (Modal) — клавиатура поднимает его целиком
  */
-export const InputSheet = memo(function InputSheet({ visible, value, multiline = false, maxLength, bottomInset = 0, onSubmit, onClose }: Props) {
+export const InputSheet = memo(function InputSheet({ visible, value, multiline = false, maxLength, title, submitLabel = 'СОХРАНИТЬ', bottomInset = 0, onSubmit, onClose }: Props) {
   const { c } = useTheme();
   const ic = useInputColors();
   const [text, setText] = useState(value);
@@ -42,6 +46,7 @@ export const InputSheet = memo(function InputSheet({ visible, value, multiline =
     <Modal transparent visible={visible} statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <BottomSheet visible onClose={onClose} bottomInset={bottomInset}>
+          {title ? <Text style={[T.section, { color: c.muted }]}>{title}</Text> : null}
           <TextInput
             value={text}
             onChangeText={setText}
@@ -68,13 +73,13 @@ export const InputSheet = memo(function InputSheet({ visible, value, multiline =
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Сохранить"
+              accessibilityLabel={submitLabel}
               accessibilityState={{ disabled: !canSave }}
               disabled={!canSave}
               onPress={save}
               style={[styles.button, styles.primary, { borderColor: c.border, backgroundColor: c.text, opacity: canSave ? 1 : 0.4 }]}
             >
-              <Text style={[T.action, { color: c.bg }]}>СОХРАНИТЬ</Text>
+              <Text style={[T.action, { color: c.bg }]}>{submitLabel}</Text>
             </Pressable>
           </View>
         </BottomSheet>

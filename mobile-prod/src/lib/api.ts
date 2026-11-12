@@ -26,14 +26,14 @@ function fail(e: unknown): VoiceFail {
 }
 
 /** POST /voice/text → ParseResult («Разобрать заново», текст без микрофона). left — сколько команд осталось на сегодня */
-export async function parseOnServer(text: string, src?: 'device'): Promise<{ ok: true; result: ParseResult; left?: number; spend?: VoiceSpend } | VoiceFail> {
+export async function parseOnServer(text: string, src?: 'device'): Promise<{ ok: true; result: ParseResult; left?: number; spend?: VoiceSpend; cmdId?: string } | VoiceFail> {
   try {
-    const json = await request<{ result: ParseResult; left?: number; spend?: unknown }>('/voice/text', {
+    const json = await request<{ result: ParseResult; left?: number; spend?: unknown; cmdId?: unknown }>('/voice/text', {
       token: useStore.getState().session?.token,
       body: { ...meta(), text, ...(src && { src, lang: useStore.getState().voiceLang }) },
       timeoutMs: 60_000,
     });
-    return { ok: true, result: json.result, ...(typeof json.left === 'number' && { left: json.left }), ...spendOf(json.spend) };
+    return { ok: true, result: json.result, ...(typeof json.left === 'number' && { left: json.left }), ...spendOf(json.spend), ...cmdOf(json.cmdId) };
   } catch (e) {
     return fail(e);
   }
@@ -68,7 +68,7 @@ export function deleteRecording(uri: string | null | undefined) {
  * POST /voice: запись → { transcript, result }.
  * Файл читаем сами и шлём JSON с base64 — без FormData, с которым у fetch в Expo проблемы на Android.
  */
-export async function uploadVoice(uri: string): Promise<{ ok: true; transcript: string; result: ParseResult; left?: number; spend?: VoiceSpend } | VoiceFail> {
+export async function uploadVoice(uri: string): Promise<{ ok: true; transcript: string; result: ParseResult; left?: number; spend?: VoiceSpend; cmdId?: string } | VoiceFail> {
   let audio: string;
   try {
     audio = toBase64(await readBytes(uri));
@@ -77,14 +77,27 @@ export async function uploadVoice(uri: string): Promise<{ ok: true; transcript: 
   }
   try {
     const s = useStore.getState();
-    const json = await request<{ transcript: string; result: ParseResult; left?: number; spend?: unknown }>('/voice', {
+    const json = await request<{ transcript: string; result: ParseResult; left?: number; spend?: unknown; cmdId?: unknown }>('/voice', {
       token: s.session?.token,
       body: { ...meta(), audio, lang: s.voiceLang },
       timeoutMs: 60_000,
     });
-    return { ok: true, transcript: json.transcript, result: json.result, ...(typeof json.left === 'number' && { left: json.left }), ...spendOf(json.spend) };
+    return { ok: true, transcript: json.transcript, result: json.result, ...(typeof json.left === 'number' && { left: json.left }), ...spendOf(json.spend), ...cmdOf(json.cmdId) };
   } catch (e) {
     return fail(e);
+  }
+}
+
+/** Номер разобранной команды на сервере — для оценки (POST /voice/rate) */
+const cmdOf = (v: unknown): { cmdId?: string } => (typeof v === 'string' && v ? { cmdId: v } : {});
+
+/** Оценка разбора команды (тест): good — верно; иначе wish — что человек хотел. Нет связи или команда устарела — false */
+export async function rateCommand(id: string, good: boolean, wish?: string): Promise<boolean> {
+  try {
+    await request('/voice/rate', { token: useStore.getState().session?.token, body: { id, good, ...(wish && { wish }) }, timeoutMs: 15_000 });
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -116,7 +129,20 @@ export type SpendPart = { n: number; tokens: number; kop: number };
 export type SpendDay = SpendPart & { day: string; sttSec: number; rules: number; src: Partial<Record<'voice' | 'device' | 'text', SpendPart>> };
 
 /** Одна команда (сервер, последние 30): путь разбора — rules | compact | fallback | full; нет — речь не распознана */
-export type SpendCommand = { ts: string; src: 'voice' | 'device' | 'text'; path?: string; calls: number; tokens: number; kop: number; sttSec: number; text: string; result: string };
+export type SpendCommand = {
+  ts: string;
+  src: 'voice' | 'device' | 'text';
+  path?: string;
+  calls: number;
+  tokens: number;
+  kop: number;
+  sttSec: number;
+  text: string;
+  result: string;
+  /** Для оценки; нет — команда старше оценок */
+  id?: string;
+  rating?: 'up' | 'down';
+};
 export type SpendData = { days: SpendDay[]; recent: SpendCommand[] };
 
 /** GET /stats/spend — мои расходы по дням (старые первыми) и последние команды. Нет связи — null */

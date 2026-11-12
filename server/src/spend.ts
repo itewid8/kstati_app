@@ -36,11 +36,15 @@ export type SpendCommand = {
   sttSec: number;
   text: string;
   result: string;
+  /** Для оценки команды (POST /voice/rate) */
+  id?: string;
+  /** Оценка человека: верно разобрана или нет */
+  rating?: 'up' | 'down';
 };
 const RECENT = 30;
 const RECENT_KEEP_SEC = 90 * 24 * 3600;
 
-export type SpendInfo = { path?: string; calls?: number; text?: string; result?: string };
+export type SpendInfo = { path?: string; calls?: number; text?: string; result?: string; id?: string };
 
 /** Учесть одну команду (по дням и в списке последних) */
 export async function recordSpend(store: Store, userId: string, src: SpendSource, spend: { tokens: number; rub: number }, sttSec: number, info: SpendInfo = {}, now = Date.now()) {
@@ -70,6 +74,7 @@ export async function recordSpend(store: Store, userId: string, src: SpendSource
       sttSec: Math.round(sttSec * 10) / 10,
       text: (info.text ?? '').slice(0, 200),
       result: info.result ?? '',
+      ...(info.id && { id: info.id }),
     };
     const recent = (await store.getTemp<SpendCommand[]>(`spendlog#${userId}`)) ?? [];
     await store.putTemp(`spendlog#${userId}`, [cmd, ...recent].slice(0, RECENT), RECENT_KEEP_SEC);
@@ -97,4 +102,11 @@ export function registerSpend(app: FastifyInstance, store: Store) {
     const recent = (await store.getTemp<SpendCommand[]>(`spendlog#${user.id}`)) ?? [];
     return { days: await readDays(store, user.id, days), recent };
   });
+}
+
+/** Отметить оценку команды в списке последних (экран «Расходы» показывает её у строки) */
+export async function rateRecent(store: Store, userId: string, id: string, rating: 'up' | 'down') {
+  const recent = (await store.getTemp<SpendCommand[]>(`spendlog#${userId}`)) ?? [];
+  if (!recent.some((c) => c.id === id)) return;
+  await store.putTemp(`spendlog#${userId}`, recent.map((c) => (c.id === id ? { ...c, rating } : c)), RECENT_KEEP_SEC);
 }

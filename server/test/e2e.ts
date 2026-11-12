@@ -379,8 +379,19 @@ async function scenario(name: string, store: Store) {
   assert.deepEqual([plansMe.scope, plansMe.who], [{ kind: 'me' }, [SA]]);
   // S3: в контексте есть повтор; названная суббота — ближайший существующий раз (10 октября удалён)
   assert.deepEqual(lastCtx!.existing.tasks.find((t) => t.id === 't5')?.repeat, rep);
-  const del = (await vt('удали баню в субботу', H2)).result;
+  const rated = await vt('удали баню в субботу', H2);
+  const del = rated.result;
   assert.deepEqual([del.type, del.changes[0].action, del.changes[0].occ, del.changes[0].patch], ['changes', 'delete', '2026-10-17', undefined]);
+  // Оценка команды: id приходит с ответом; 👎 с пояснением попадает в журнал оценок; чужую команду не оценить
+  assert.match(rated.cmdId, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(await ok('POST', '/voice/rate', { id: rated.cmdId, good: false, wish: 'удалить только этот раз' }, T1), { ok: true });
+  assert.deepEqual(await ok('POST', '/voice/rate', { id: rated.cmdId, good: true }, T1), { ok: true }, 'повторная оценка заменяет прежнюю');
+  const log = await store.listLog<any>('ratings', '', 10);
+  assert.deepEqual([log.length, log[0].value.good, log[0].value.transcript, log[0].value.userId], [1, true, 'удали баню в субботу', SA]);
+  assert.ok(log[0].value.context.existing.tasks.length > 0, 'с контекстом разбора — для обучения');
+  assert.equal((await call('POST', '/voice/rate', { id: rated.cmdId, good: true }, T2)).status, 404);
+  assert.equal((await ok('GET', '/stats/spend', undefined, T1)).recent.find((c: any) => c.id === rated.cmdId)?.rating, 'up');
+  assert.equal((await call('GET', '/admin/ratings', undefined, T1)).status, 401, 'оценки — только странице администратора');
   // S7: язык распознавания; по умолчанию русский, неизвестный — 400 без списания лимита
   const voice = (lang?: string) => call('POST', '/voice', { groupId: 'g1', today: '2026-10-06', now: '12:00', audio: 'AAAA', ...(lang && { lang }) }, T1, H2);
   assert.equal((await voice('en-US')).status, 200);
@@ -431,7 +442,9 @@ async function scenario(name: string, store: Store) {
   assert.match(parsed.at(-1)!, /people=Саша \| tasks=3 \| wishes=0/);
   assert.equal((await call('POST', '/voice/text', { groupId: 'nope', today: '2026-09-26', now: '12:00', text: 'x' }, T2)).status, 403);
   const vt2 = (text: string) => ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text }, T2);
-  assert.equal((await vt2('купить хлеб')).left, 2);
+  const bread = await vt2('купить хлеб');
+  assert.equal(bread.left, 2);
+  await ok('POST', '/voice/rate', { id: bread.cmdId, good: false, wish: 'в список покупок' }, T2);
   assert.equal((await vt2('непонятно что')).left, 2, 'непонятая фраза лимит не тратит');
   assert.equal((await vt2('купить молоко')).left, 1);
   assert.equal((await vt2('купить сыр')).left, 0);
@@ -467,7 +480,10 @@ async function scenario(name: string, store: Store) {
   // Сам вышел — код не меняется, можно вернуться по нему же
   assert.equal((await ops(T1, { op: 'group.leave', id: 'g2' }))[0].ok, true);
   assert.equal((await ops(T1, { op: 'group.join', code: g2.inviteCode }))[0].ok, true);
+  const mashaId = masha.me.id as string;
+  assert.ok((await store.listLog<any>('ratings', '', 50)).some((r) => r.value.userId === mashaId));
   await ok('DELETE', '/me', undefined, T2);
+  assert.ok(!(await store.listLog<any>('ratings', '', 50)).some((r) => r.value.userId === mashaId), 'оценки удаляются вместе с аккаунтом');
   assert.equal((await call('GET', '/me', undefined, T2)).status, 401);
   const s6 = await ok('POST', '/sync', {}, T1);
   const g2now = s6.groups.find((g: any) => g.id === 'g2');
