@@ -42,18 +42,29 @@ export const VoiceHeader = memo(function VoiceHeader({ header }: { header: Voice
   );
 });
 
-/** 👍 / 👎 разбора команды: выбранная — залита, вторая — приглушена */
+/** 👍 / 👎 разбора команды: выбранная — инвертированная плашка (как ярлык действия), остальные — контуром */
 const RateButtons = memo(function RateButtons({ rate }: { rate: VoiceRate }) {
   const { c } = useTheme();
-  const tone = (on: boolean) => (rate.value === null ? c.muted : on ? c.text : c.border);
+  const btn = (good: boolean) => {
+    const on = rate.value === (good ? 'up' : 'down');
+    return (
+      <Pressable
+        key={String(good)}
+        accessibilityRole="button"
+        accessibilityLabel={good ? 'Разобрано верно' : 'Разобрано неверно'}
+        accessibilityState={{ selected: on }}
+        hitSlop={6}
+        onPress={good ? rate.onUp : rate.onDown}
+        style={({ pressed }) => [styles.rateBtn, { borderColor: c.border, backgroundColor: on ? c.text : 'transparent', transform: [{ scale: pressed ? 0.92 : 1 }] }]}
+      >
+        <Icon name={good ? 'thumbUp' : 'thumbDown'} size={15} color={on ? c.bg : c.text} />
+      </Pressable>
+    );
+  };
   return (
     <View style={styles.rate}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Разобрано верно" accessibilityState={{ selected: rate.value === 'up' }} hitSlop={8} onPress={rate.onUp} style={styles.rateBtn}>
-        <Icon name="thumbUp" size={16} color={tone(rate.value === 'up')} />
-      </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Разобрано неверно" accessibilityState={{ selected: rate.value === 'down' }} hitSlop={8} onPress={rate.onDown} style={styles.rateBtn}>
-        <Icon name="thumbDown" size={16} color={tone(rate.value === 'down')} />
-      </Pressable>
+      {btn(true)}
+      {btn(false)}
     </View>
   );
 });
@@ -65,6 +76,6 @@ const styles = StyleSheet.create({
   time: { fontFamily: fonts.mono600, fontSize: 10, letterSpacing: 1 },
   badge: { height: 22, paddingHorizontal: 7, justifyContent: 'center' },
   note: { fontFamily: fonts.mono600, fontSize: 9.5, letterSpacing: 0.6 },
-  rate: { flexDirection: 'row', gap: 4, marginLeft: 2 },
-  rateBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  rate: { flexDirection: 'row', gap: 6, marginLeft: 2 },
+  rateBtn: { width: 30, height: 26, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

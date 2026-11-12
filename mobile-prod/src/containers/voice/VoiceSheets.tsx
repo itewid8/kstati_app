@@ -43,6 +43,13 @@ import {
 } from './actions';
 import { ProblemSheet } from './ProblemSheet';
 
+/** Расход команды, а сразу после оценки — пару секунд ответ на неё («СПАСИБО») */
+function useNote(): string | null {
+  const spend = useVoiceSpend((x) => x.note);
+  const flash = useVoiceRate((x) => x.flash);
+  return flash ? flash.text : spend;
+}
+
 /** 👍 / 👎 разбора последней команды; нет номера команды (старый сервер, заглушка) — без оценки */
 function useRate(): VoiceRate | undefined {
   const id = useVoiceRate((x) => x.id);
@@ -52,7 +59,7 @@ function useRate(): VoiceRate | undefined {
 
 /** Шапка окна ответа: вместо ярлыка — расход команды («1 840 ТОК · 0,37 ₽»), если сервер его прислал; оценка разбора */
 function useAnswerHeader(levels: readonly number[], ms: number, badge?: string) {
-  const note = useVoiceSpend((x) => x.note);
+  const note = useNote();
   const rate = useRate();
   return useMemo(() => ({ ...sheetHeader(levels, ms, badge), ...(note && { note }), ...(rate && { rate }) }), [levels, ms, badge, note, rate]);
 }
@@ -115,7 +122,7 @@ export const CreateSheet = memo(function CreateSheet({ item, transcript, s, leve
   const fields = useMemo(() => createFields(item, s), [item, s]);
   const onSave = useCallback(() => saveVoiceItem(item, transcript), [item, transcript]);
   const onEdit = useCallback(() => editVoiceItem(item, transcript), [item, transcript]);
-  const note = useVoiceSpend((x) => x.note);
+  const note = useNote();
   const rate = useRate();
   return (
     <VoiceCreateSheet

@@ -125,9 +125,9 @@ export const SpendScreen = memo(function SpendScreen({ periods, view, insets = N
                               accessibilityState={{ selected: on }}
                               hitSlop={6}
                               onPress={() => onRate(r.id!, good)}
-                              style={styles.rateBtn}
+                              style={({ pressed }) => [styles.rateBtn, { borderColor: c.border, backgroundColor: on ? c.text : 'transparent', transform: [{ scale: pressed ? 0.92 : 1 }] }]}
                             >
-                              <Icon name={good ? 'thumbUp' : 'thumbDown'} size={15} color={!r.rating ? c.muted : on ? c.text : c.border} />
+                              <Icon name={good ? 'thumbUp' : 'thumbDown'} size={14} color={on ? c.bg : c.text} />
                             </Pressable>
                           );
                         })}
@@ -167,6 +167,6 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.sans500, fontSize: 14 },
   meta: { fontFamily: fonts.mono400, fontSize: 9, letterSpacing: 0.4 },
   value: { fontFamily: fonts.mono500, fontSize: 12, fontVariant: ['tabular-nums'] },
-  rate: { flexDirection: 'row', gap: 2 },
-  rateBtn: { width: 28, height: 32, alignItems: 'center', justifyContent: 'center' },
+  rate: { flexDirection: 'row', gap: 6 },
+  rateBtn: { width: 30, height: 26, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

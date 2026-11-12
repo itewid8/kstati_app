@@ -53,17 +53,35 @@ const noteSpend = (spend: VoiceSpend | undefined) => useVoiceSpend.setState({ no
 
 /**
  * Оценка разбора последней команды (тест): id — номер команды на сервере (нет — оценить нельзя);
- * rating — уже поставленная; asking — открыто поле «что хотели» после 👎
+ * rating — поставленная; asking — открыто поле «что хотели» после 👎; flash — короткий ответ в шапке окна
+ * («СПАСИБО» или «НЕ ОТПРАВЛЕНО»), пару секунд вместо расхода
  */
-export const useVoiceRate = create<{ id: string | null; rating: 'up' | 'down' | null; asking: boolean }>(() => ({ id: null, rating: null, asking: false }));
-const noteCmd = (id: string | undefined) => useVoiceRate.setState({ id: id ?? null, rating: null, asking: false });
+export const useVoiceRate = create<{ id: string | null; rating: 'up' | 'down' | null; asking: boolean; flash: { text: string; ok: boolean } | null }>(() => ({
+  id: null,
+  rating: null,
+  asking: false,
+  flash: null,
+}));
+const noteCmd = (id: string | undefined) => useVoiceRate.setState({ id: id ?? null, rating: null, asking: false, flash: null });
 
-/** 👍 — команда разобрана верно; повторное нажатие ничего не меняет */
+let flashTimer: ReturnType<typeof setTimeout> | null = null;
+/** Отправить оценку: кнопка выделяется сразу; не дошла — выделение снимается, в шапке «НЕ ОТПРАВЛЕНО» */
+async function sendRate(good: boolean, wish?: string) {
+  const { id, rating: before } = useVoiceRate.getState();
+  if (!id) return;
+  useVoiceRate.setState({ rating: good ? 'up' : 'down', asking: false });
+  if (Platform.OS !== 'web') void Haptics.selectionAsync().catch(() => undefined);
+  const ok = await rateCommand(id, good, wish);
+  if (useVoiceRate.getState().id !== id) return;
+  useVoiceRate.setState({ flash: ok ? { text: 'СПАСИБО', ok } : { text: 'НЕ ОТПРАВЛЕНО', ok }, ...(!ok && { rating: before }) });
+  if (flashTimer) clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => useVoiceRate.setState({ flash: null }), 2500);
+}
+
+/** 👍 — команда разобрана верно */
 export function rateUp() {
-  const { id, rating } = useVoiceRate.getState();
-  if (!id || rating === 'up') return;
-  useVoiceRate.setState({ rating: 'up', asking: false });
-  void rateCommand(id, true);
+  if (useVoiceRate.getState().rating === 'up') return;
+  void sendRate(true);
 }
 /** 👎 — открыть поле «что хотели» */
 export function rateDown() {
@@ -71,11 +89,7 @@ export function rateDown() {
 }
 /** Отправить 👎 с пояснением (можно пустым) */
 export function sendRateDown(wish: string) {
-  const { id } = useVoiceRate.getState();
-  useVoiceRate.setState({ asking: false });
-  if (!id) return;
-  useVoiceRate.setState({ rating: 'down' });
-  void rateCommand(id, false, wish);
+  void sendRate(false, wish);
 }
 export const closeRateDown = () => useVoiceRate.setState({ asking: false });
 

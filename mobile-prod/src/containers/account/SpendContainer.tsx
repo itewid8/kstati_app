@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { spendView } from '@/adapters/account/spend';
 import { fetchSpend, rateCommand, type SpendData } from '@/lib/api';
 import { InputSheet } from '@/ui/InputSheet';
+import { useStore } from '@/lib/store';
 import { SpendScreen } from '@/screens/account/SpendScreen';
 import { useClock, useInsets } from '../common';
 
@@ -35,26 +36,34 @@ export function SpendContainer() {
 
   // Оценка команды из списка: 👍 сразу, 👎 — после поля «что хотели»
   const [asking, setAsking] = useState<string | null>(null);
-  const mark = useCallback((id: string, rating: 'up' | 'down') => {
+  const mark = useCallback((id: string, rating: 'up' | 'down' | undefined) => {
     setData((d) => (d && d !== 'error' ? { ...d, recent: d.recent.map((c) => (c.id === id ? { ...c, rating } : c)) } : d));
   }, []);
+  // Кнопка выделяется сразу; ответ сервера — сообщением внизу, не дошло — выделение снимается
+  const send = useCallback(
+    async (id: string, good: boolean, wish?: string) => {
+      const before = data && data !== 'error' ? data.recent.find((c) => c.id === id)?.rating : undefined;
+      mark(id, good ? 'up' : 'down');
+      const ok = await rateCommand(id, good, wish);
+      if (!ok) mark(id, before);
+      useStore.getState().notice(ok ? 'Спасибо, оценка учтена' : 'Оценка не отправилась');
+    },
+    [data, mark],
+  );
   const onRate = useCallback(
     (id: string, good: boolean) => {
       if (!good) return setAsking(id);
-      mark(id, 'up');
-      void rateCommand(id, true);
+      void send(id, true);
     },
-    [mark],
+    [send],
   );
   const onWish = useCallback(
     (wish: string) => {
       const id = asking;
       setAsking(null);
-      if (!id) return;
-      mark(id, 'down');
-      void rateCommand(id, false, wish);
+      if (id) void send(id, false, wish);
     },
-    [asking, mark],
+    [asking, send],
   );
   const closeWish = useCallback(() => setAsking(null), []);
 
