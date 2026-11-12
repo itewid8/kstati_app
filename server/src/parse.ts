@@ -4,16 +4,23 @@
  */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { commaItems, faithful, groundTexts, noteTail, spanTitle } from './ground.js';
 import { applyListEdit, listBody, spokenList } from './lists.js';
 import { buildCompactMessages, buildMessages, buildTunedMessages, pickBlocks } from './prompt.js';
 import { occurrences } from './recur.js';
 import { changesRepeat, firstDate, spokenRepeat, stopsRepeat, stripRepeat } from './repeat.js';
 import {
+  sameStem,
+  spokenFresh,
+  spokenGenres,
+  spokenOrigin,
+  titleStems,
   asksWhatToWatch,
   changeTarget,
   hasChangeVerb,
   isUnmark,
   nearestWeekday,
+  cleanSpeech,
   normalizeTimes,
   plainWeekday,
   spokenDateRange,
@@ -92,6 +99,7 @@ function matchPerson(name: string, ctx: Context): string | null {
 }
 
 /** «я», «me», «мне» — сам говорящий */
+const norm3 = (s: string) => s.toLowerCase().replace(/ё/g, 'е').slice(0, Math.max(3, Math.min(4, s.length - 1)));
 const isMe = (name: string) => /^(me|я|мне|меня|мой|мои|моя|у меня)$/i.test(name.trim());
 
 type ExistingTask = Context['existing']['tasks'][number];
@@ -216,6 +224,26 @@ export function findTopic<T extends { id: string; title: string }>(name: string,
   return best;
 }
 
+/**
+ * Цели правки, сверенные с фразой. Названная модель запись подходит, если её название звучит во фразе
+ * (или во фразе нет слов-названий: «удали это»). Не звучит — берём запись, чьё название звучит; нет такой — пусто (notFound)
+ */
+export function checkTarget(ids: string[], titles: Map<string, string>, transcript: string): string[] {
+  const said = titleStems(transcript);
+  if (!said.length) return ids;
+  const hits = (title: string) => titleStems(title).filter((w) => said.some((x) => sameStem(w, x))).length;
+  const ok = ids.filter((id) => hits(titles.get(id) ?? '') > 0);
+  if (ok.length) return ok;
+  let best = 0;
+  let found: string[] = [];
+  for (const [id, title] of titles) {
+    const h = hits(title);
+    if (h > best) [best, found] = [h, [id]];
+    else if (h === best && h > 0) found.push(id);
+  }
+  return found.slice(0, 3);
+}
+
 /** Прозвучало ли название темы во фразе (модель иногда сама придумывает тему, которую человек не называл) */
 function mentioned(title: string, transcript: string) {
   if (normName(transcript).includes(normName(title))) return true;
@@ -278,12 +306,19 @@ function listTopic(key: string, list: { title: string; items: string[] }, ctx: C
 function listEdit(a: RawAction, ctx: Context): DraftItem | null {
   const topics = ctx.topics ?? [];
   const name = str(a.topic);
-  const t = (name ? findTopic(name, topics) : null) ?? topics.find((x) => x.id === ctx.currentTopicId) ?? null;
+  const named = name ? findTopic(name, topics) : null;
+  let t = named ?? topics.find((x) => x.id === ctx.currentTopicId) ?? null;
   const replace = (Array.isArray(a.replace) ? a.replace : []).flatMap((r) => {
     const o = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
     return str(o.from) && str(o.to) ? [{ from: str(o.from), to: str(o.to) }] : [];
   });
   const edit = { add: strs(a.add), remove: strs(a.remove), replace, check: strs(a.check), uncheck: strs(a.uncheck) };
+  // Тема не названа или названа чужая («шапка взял»): берём список, в котором такие пункты есть, если он один
+  if (!named) {
+    const touched = [...edit.remove, ...edit.check, ...edit.uncheck, ...replace.map((r) => r.from)].map(normName).filter(Boolean);
+    const holders = touched.length ? topics.filter((x) => x.body && touched.every((i) => normName(x.body ?? '').includes(i))) : [];
+    if (holders.length === 1) t = holders[0]!;
+  }
   if (!t) return name && edit.add.length ? listTopic(randomUUID(), { title: cap(name), items: edit.add }, ctx) : null;
   const r = applyListEdit(t.body ?? '', edit);
   return r.changes.length ? { key: randomUUID(), type: 'topic', id: t.id, data: { title: t.title, body: r.body, changes: r.changes } } : null;
@@ -307,8 +342,33 @@ function groupInText(text: string, ctx: Context): string | null {
 
 /* ---------- сборка результата ---------- */
 
+/** Название, заметка, текст и пункты добавляемой записи — сверка с фразой (src/ground.ts) */
+function grounded(a: RawAction, transcript: string): RawAction {
+  if (a.intent !== 'add') return a;
+  const keys = (['title', 'text', 'note'] as const).filter((k) => str(a[k]));
+  let items = strs(a.items);
+  const fixed = groundTexts([...keys.map((k) => str(a[k])), ...items], transcript, [...keys.map((k) => k === 'text'), ...items.map(() => true)]);
+  const out: RawAction = { ...a };
+  keys.forEach((k, i) => (out[k] = fixed[i]!));
+  if (items.length) {
+    if (str(out.title)) out.title = spanTitle(str(out.title), transcript);
+    items = fixed.slice(keys.length);
+    out.items = commaItems(str(out.title), items, transcript) ?? items;
+  }
+  return out;
+}
+
+/** «Убери цемент из стройматериалов» — пункт списка, а не запись: тема названа во фразе и пункт в ней есть */
+function listRemoval(a: RawAction, ctx: Context, transcript: string): RawAction {
+  const what = str(a.query);
+  if (a.intent !== 'delete' || !what) return a;
+  const said = normName(what);
+  const topic = (ctx.topics ?? []).find((t) => t.body && mentioned(t.title, transcript) && normName(t.body).split(' ').some((w) => w.length >= 3 && (w.startsWith(said.slice(0, Math.max(3, said.length - 2))))));
+  return topic ? ({ intent: 'list_edit', topic: topic.title, remove: [what] } as RawAction) : a;
+}
+
 export function normalize(input: RawAction[], ctx: Context, transcript: string): ParseResult {
-  let actions = input;
+  let actions = input.map((a) => listRemoval(grounded(a, transcript), ctx, transcript));
   // «Что бы сегодня посмотреть?» модель принимала за вопрос о планах на сегодня (баг 08.11) — это выбор фильма
   if (!actions.some((a) => a.intent === 'query_watch') && asksWhatToWatch(transcript))
     actions = actions.map((a) => (a.intent === 'query_plans' ? ({ intent: 'query_watch' } as RawAction) : a));
@@ -316,18 +376,25 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
   const qw = actions.find((a) => a.intent === 'query_watch');
   if (qw) {
     // «Наш старый фильм» — вид названный во фразе берём сами, если модель его пропустила (eval 05.11)
+    // Вид, чьё кино и новизна — только названные во фразе: модель их додумывала («что посмотрим» → сериал) или теряла
     const saidKind = spokenKind(transcript);
+    const saidOrigin = spokenOrigin(transcript);
+    const saidFresh = spokenFresh(transcript);
     const filters: WatchFilters = {
-      kind: manyOf(KINDS, qw.kind).length ? manyOf(KINDS, qw.kind) : saidKind ? [saidKind] : [],
-      genre: manyOf(GENRES, qw.genre ?? qw.genres),
-      origin: manyOf(ORIGINS, qw.origin),
-      fresh: manyOf(['new', 'old'] as const, qw.fresh),
+      kind: saidKind ? [saidKind] : [],
+      // Жанр, названный во фразе, надёжнее ответа модели; не назван — что сказала модель
+      genre: spokenGenres(transcript).length ? manyOf(GENRES, spokenGenres(transcript)) : manyOf(GENRES, qw.genre ?? qw.genres),
+      origin: saidOrigin ? [saidOrigin] : [],
+      fresh: saidFresh ? [saidFresh] : [],
     };
     return { type: 'queryWatch', filters };
   }
   const qp = actions.find((a) => a.intent === 'query_wish');
   if (qp) {
-    const person = str(qp.person);
+    let person = str(qp.person);
+    // «Что я хотел?» — модель подставляла имя из контекста, которое во фразе не звучало
+    const heard = (n: string) => titleStems(transcript).some((x) => sameStem(x, norm3(n)));
+    if (person && !isMe(person) && !heard(person) && /(^|[^а-я])(я|мне|меня|мой|мои|моя|мое|у меня)([^а-я]|$)/i.test(transcript.replace(/ё/g, 'е'))) person = 'me';
     const id = matchPerson(person || 'me', ctx);
     return id ? { type: 'queryWish', personId: id } : { type: 'unknownPerson', name: cap(person) };
   }
@@ -363,12 +430,21 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     const period = spokenPeriod(transcript, ctx.today);
     if (period) ({ from, to } = period);
     if (to < from) [from, to] = [to, from];
+    // «Когда у нас дача?» — ищем по названию на год вперёд; что ищут, берём из фразы, если модель не сказала
+    let query = str(qp2.query);
+    const when = /^когда\s+(?:у\s+(?:нас|меня|него|нее|них|\S+)\s+|будет\s+|мы\s+|я\s+)?(.+?)[?!.]*$/i.exec(transcript.trim());
+    if (when) {
+      if (!query) query = when[1]!.toLowerCase();
+      if (!period) [from, to] = [ctx.today, addDaysIso(ctx.today, 365)];
+    } else if (!period && from === to && !/(\d|вчера|назад|прошл|было|делал|сегодн|завтра|выходн|недел|месяц|праздн|январ|феврал|март|апрел|ма[яй]|июн|июл|август|сентябр|октябр|ноябр|декабр|понедел|вторн|сред|четверг|пятниц|суббот|воскрес)/i.test(transcript))
+      // Срок не назван («какие планы у родителей?»), а модель дала один день — неделя с сегодня, как в правилах
+      [from, to] = [ctx.today, addDaysIso(ctx.today, 6)];
     // Чьи дела показывать, если модель назвала («что Карина делает в субботу» → who: ["Карина"])
     if (!who) {
       const ids = names(qp2.who).map((n) => matchPerson(n, ctx)).filter((x): x is string => !!x);
       if (ids.length) who = [...new Set(ids)];
     }
-    return { type: 'queryPlans', plans: { scope, from, to, query: str(qp2.query), ...(who && { who }) } };
+    return { type: 'queryPlans', plans: { scope, from, to, query, ...(who && { who }) } };
   }
 
   // «Покажи идеи для подарков» — открыть тему
@@ -422,8 +498,15 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     const key = randomUUID();
     // Идея: текст как сказали, тема — по названию или по смыслу
     if (a.type === 'idea') {
-      const text = cap(str(a.text) || str(a.title));
+      let text = cap(str(a.text) || str(a.title));
       const topic = resolveTopic(str(a.topic), ctx, transcript);
+      // Заметку записываем дословно: модель её пересказывает и теряет слова («в субботу на рынке свежая рыба» →
+      // «На рынке свежая рыба»). Разошлось со сказанным — берём текст из фразы
+      if (str(a.text) && !dictatedList(a, text)) {
+        const named = topic.newTopic ?? (ctx.topics ?? []).find((t) => t.id === topic.topicId)?.title ?? '';
+        const said = noteTail(transcript, mentioned(named, transcript) ? named : '');
+        if (said && !faithful(text, said)) text = cap(said);
+      }
       // Перечень без названной темы — отдельная заметка-список (тема с чек-листом)
       const list = dictatedList(a, text);
       if (list && !topic.topicId && !topic.newTopic) items.push(listTopic(key, list, ctx));
@@ -471,7 +554,7 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
       const end = endFields(day, t, date(a.end_date), time(a.end_time), minutesOf(a.duration_min));
       if (end.endDate) data.endDate = end.endDate;
       if (end.endTime) data.endTime = end.endTime;
-      const people = resolvePeople(a.people, ctx);
+      const people = resolvePeople(Array.isArray(a.people) && a.people.length ? a.people : spokenPeople(transcript, ctx), ctx);
       if (people.length) data.people = people;
       if (parent) data.parentId = parent.id;
       // Тип: день рождения — весь день и каждый год (если повтор не сказан)
@@ -499,6 +582,9 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     } else if (said && said.from === said.to) d.date = said.from;
     // «На выходных» — если модель дала дату вне периода, берём его начало
     else if (said && (!d.date || d.date < said.from || d.date > said.to) && addDaysIso(said.from, 1) >= said.to) d.date = said.from;
+    // Время, названное во фразе, надёжнее ответа модели («в 21:00» модель писала как 19:00)
+    const saidTime = spokenTime(transcript);
+    if (saidTime) d.time = saidTime;
     // «С 18 до 20» и «на два часа» считаем сами
     const span = spokenSpan(transcript);
     if (span) {
@@ -533,6 +619,8 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
   // Одна запись в «Смотреть» — тип по слову во фразе («фильм», «сериал», «мультик»), если модель его не дала
   const watches = items.filter((i) => i.type === 'watch');
   if (watches.length === 1 && watches[0].type === 'watch' && !watches[0].data.kind) watches[0].data.kind = spokenKind(transcript);
+  // Вопрос не про приложение («какая погода завтра», «сколько времени») модель записывала делом
+  if (items.length && /^(как(ая|ой|ое|ие|ов)|сколько|кто|почему|зачем|который)\s/i.test(transcript.trim()) && items.every((i) => i.type === 'task')) return { type: 'unknown' };
   if (items.length) return { type: 'items', items };
 
   // 3. Изменения существующих записей
@@ -544,11 +632,19 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
 
   const changes: ChangeDraft[] = [];
   let missing = '';
+  const titles = new Map<string, string>();
+  ctx.existing.tasks.forEach((t) => titles.set(t.id, t.title));
+  ctx.existing.watch.forEach((w) => titles.set(w.id, w.title));
+  ctx.existing.wishes.forEach((w) => titles.set(w.id, w.title));
+  ctx.existing.ideas?.forEach((i) => titles.set(i.id, i.text));
   for (const a of actions.filter((x) => ['update', 'mark', 'unmark', 'delete'].includes(x.intent))) {
     // Только реально существующие id; модель могла дописать префикс «task:»
     const ids = (Array.isArray(a.target) ? a.target : [])
       .map((x) => String(x).replace(/^(task|watch|wish|idea):/, ''))
       .filter((id) => index.has(id));
+    // Небольшая модель путает запись: название цели должно прозвучать во фразе, иначе ищем по словам сами
+    const sure = checkTarget(ids, titles, transcript);
+    ids.splice(0, ids.length, ...sure);
     if (!ids.length) {
       missing ||= str(a.query) || transcript;
       continue;
@@ -672,11 +768,36 @@ export type ParseOutput = { result: ParseResult; raw: string; usage: Usage; atte
 export const worthFullRetry = (text: string, first: Pick<ParseOutput, 'attempts' | 'raw'>): boolean =>
   text.trim().split(/\s+/).filter((w) => /[а-яёa-z0-9]/i.test(w)).length >= 3 && first.attempts < 2;
 
+const FILLER = /^(м+|мм+|э+|а+|у+|о+|хм+|ну|ой|ай|ага|угу|так|вот|ладно|короче|блин|алло|эй|да|нет)$/;
+/** Во фразе одни междометия («ммм», «ну это…») — разбирать нечего, модель не зовём */
+export const onlyFiller = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .split(/[^а-яa-z0-9]+/)
+    .filter(Boolean)
+    .every((w) => FILLER.test(w) || w === 'это') || OFF_TOPIC.test(text.toLowerCase().replace(/ё/g, 'е'));
+// Вопросы и просьбы не про приложение: отвечаем «не понял» сразу
+const OFF_TOPIC = /^(какая погода|какой прогноз погоды|будет ли дождь|сколько градусов|который час|сколько (сейчас )?времени|расскажи (анекдот|шутку|сказку)|включи (музыку|песню|радио)|поставь (песню|музыку)|какой курс|как тебя зовут|ты кто|кто ты|что ты умеешь|привет,? как дела|проверка связи|переведи|какие новости|что нового в мире|кто выиграл|вызови такси|открой (ютуб|youtube|браузер))/;
+
+/** Кто участвует, если модель не сказала: «у нас», «мы» — все в группе; «у меня» — я; «мы с Кариной» — я и Карина */
+function spokenPeople(text: string, ctx: Context): string[] {
+  const t = text.toLowerCase().replace(/ё/g, 'е').trim();
+  // «Жене в четверг забрать документы» — дело для человека, названного первым словом
+  const first = /^[а-я]+/.exec(t)?.[0] ?? '';
+  if (first.length >= 3 && ctx.people.some((p) => matchPerson(first, { ...ctx, me: { ...ctx.me, name: '\u0000' } }) === p.id)) return [first];
+  const pair = /(^|\s)мы с\s+([а-я]+)/.exec(t);
+  if (pair) return ['me', pair[2]!];
+  if (/^(у нас|мы)\s/.test(t)) return ['all'];
+  if (/^у меня\s/.test(t)) return ['me'];
+  return [];
+}
+
 /** Полный разбор: модель → проверка схемы (один повтор) → нормализация */
 export async function parseText(input: string, ctx: Context, model?: string): Promise<ParseOutput> {
-  if (!input.trim()) return { result: { type: 'unknown' }, raw: '', usage: NO_USAGE, attempts: 0 };
+  if (!input.trim() || onlyFiller(input)) return { result: { type: 'unknown' }, raw: '', usage: NO_USAGE, attempts: 0 };
   // «в 18 0 0» → «в 18:00»: время, записанное распознаванием через пробел
-  const text = normalizeTimes(input);
+  const text = cleanSpeech(normalizeTimes(input)) || input.trim();
   // Простые команды («завтра в 7 йога», «хочу наушники») — без модели: бесплатно и мгновенно
   if (config.quickRules) {
     const quick = quickParse(text, ctx);
@@ -688,10 +809,14 @@ export async function parseText(input: string, ctx: Context, model?: string): Pr
   // Сначала короткий промпт (только нужные фразе правила); «непонятно» — повтор с полным
   // Дообученная модель: правила в ней, в запросе только контекст. «Не понял» — страховка коротким промптом
   if (config.promptMode === 'tuned' && config.tunedModel) {
-    const tuned = await ask(buildTunedMessages(text, ctx), text, ctx, config.tunedModel);
-    if (tuned.result.type !== 'unknown' || !worthFullRetry(text, tuned)) return { ...tuned, path: 'tuned' };
+    // Своя модель не ответила (холодный старт, сбой) — не ошибка для человека: спрашиваем облачную
+    const tuned = await ask(buildTunedMessages(text, ctx), text, ctx, config.tunedModel).catch((e: unknown) => {
+      console.error('Своя модель не ответила:', String(e).slice(0, 200));
+      return null;
+    });
+    if (tuned && (tuned.result.type !== 'unknown' || !worthFullRetry(text, tuned))) return { ...tuned, path: 'tuned' };
     const compact = await ask(buildCompactMessages(text, ctx), text, ctx, model);
-    return { ...compact, usage: addUsage(tuned.usage, compact.usage), attempts: tuned.attempts + compact.attempts, path: 'fallback' };
+    return { ...compact, usage: addUsage(tuned?.usage ?? NO_USAGE, compact.usage), attempts: (tuned?.attempts ?? 0) + compact.attempts, path: 'fallback' };
   }
   if (config.promptMode !== 'full') {
     const first = await ask(buildCompactMessages(text, ctx), text, ctx, model);

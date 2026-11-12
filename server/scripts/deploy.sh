@@ -28,7 +28,8 @@ yc serverless container revision deploy \
   --core-fraction 100 \
   --concurrency 8 \
   --execution-timeout 60s \
-  --environment "NODE_ENV=production,LOG_DIR=stdout,YANDEX_FOLDER_ID=${FOLDER_ID},YANDEX_MODEL=${YANDEX_MODEL},PUBLIC_URL=${PUBLIC_URL},APP_SCHEME=${APP_SCHEME},YDB_DOCAPI_ENDPOINT=${YDB_DOCAPI_ENDPOINT},VK_CLIENT_ID=${VK_CLIENT_ID},MAIL_FROM=${MAIL_FROM},VOICE_DAILY_LIMIT=${VOICE_DAILY_LIMIT}" \
+  --environment "NODE_ENV=production,LOG_DIR=stdout,YANDEX_FOLDER_ID=${FOLDER_ID},YANDEX_MODEL=${YANDEX_MODEL},PUBLIC_URL=${PUBLIC_URL},APP_SCHEME=${APP_SCHEME},YDB_DOCAPI_ENDPOINT=${YDB_DOCAPI_ENDPOINT},VK_CLIENT_ID=${VK_CLIENT_ID},MAIL_FROM=${MAIL_FROM},VOICE_DAILY_LIMIT=${VOICE_DAILY_LIMIT},PROMPT_MODE=${PROMPT_MODE:-},OWN_LLM_URL=${OWN_LLM_URL:-}" \
+  ${OWN_LLM_URL:+--secret "environment-variable=OWN_LLM_KEY,id=${LOCKBOX_ID},key=OWN_LLM_KEY"} \
   --secret "environment-variable=JWT_SECRET,id=${LOCKBOX_ID},key=JWT_SECRET" \
   --secret "environment-variable=YANDEX_API_KEY,id=${LOCKBOX_ID},key=YANDEX_API_KEY" \
   --secret "environment-variable=AWS_ACCESS_KEY_ID,id=${LOCKBOX_ID},key=AWS_ACCESS_KEY_ID" \

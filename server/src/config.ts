@@ -74,7 +74,17 @@ export const config = {
   /** compact — короткий промпт; full — полный; tuned — дообученная модель (TUNED_MODEL), «не понял» — повтор коротким */
   promptMode: (['full', 'tuned'].includes(env('PROMPT_MODE')) ? env('PROMPT_MODE') : 'compact') as 'compact' | 'full' | 'tuned',
   /** Адрес дообученной модели из Yandex AI Studio (ds://…) — для PROMPT_MODE=tuned */
-  tunedModel: env('TUNED_MODEL'),
+  tunedModel: env('TUNED_MODEL') || (env('OWN_LLM_URL') ? 'own' : ''),
+  /** Своя модель вместо Яндекса (опыты): адрес OpenAI-совместимого сервера — mlx_lm.server, llama-server. Расход — 0 ₽ */
+  llmBaseUrl: env('LLM_BASE_URL').replace(/\/+$/, ''),
+  /**
+   * Своя дообученная модель в отдельном контейнере (llama.cpp, OpenAI-совместимый сервер) — для PROMPT_MODE=tuned:
+   * адрес, ключ и сколько ждать ответа. Не успела (холодный старт), упала или «не поняла» — фраза уходит
+   * в облачную модель (YANDEX_MODEL). В отличие от LLM_BASE_URL, заменяет только первый запрос, а не все
+   */
+  ownLlmUrl: env('OWN_LLM_URL').replace(/\/+$/, ''),
+  ownLlmKey: env('OWN_LLM_KEY'),
+  ownLlmTimeoutMs: Number(env('OWN_LLM_TIMEOUT_MS', '7000')),
 };
 
 /**
@@ -83,6 +93,7 @@ export const config = {
  */
 export type Price = { input: number; cached: number; output: number };
 export function priceOf(model: string): Price {
+  if (process.env.LLM_BASE_URL) return { input: 0, cached: 0, output: 0 };
   if (process.env.LLM_PRICE_PER_1K) {
     const p = Number(process.env.LLM_PRICE_PER_1K);
     return { input: p, cached: p, output: p };
@@ -95,7 +106,7 @@ export function priceOf(model: string): Price {
 
 export function assertConfig() {
   const missing = [
-    !config.apiKey && 'YANDEX_API_KEY',
+    !config.apiKey && !config.llmBaseUrl && 'YANDEX_API_KEY',
     !config.folderId && 'YANDEX_FOLDER_ID',
     !config.jwtSecret && 'JWT_SECRET',
     config.db === 'ydb' && !config.ydbEndpoint && 'YDB_DOCAPI_ENDPOINT',

@@ -75,13 +75,45 @@ export const NO_USAGE: Usage = { input: 0, output: 0, total: 0 };
  * Новые модели AI Studio (Alice AI LLM, открытые модели) — через OpenAI-совместимый API: он отдаёт число токенов
  * из кэша. YandexGPT и дообученные (ds://) — через свой Foundation Models API
  */
-const openAiStyle = (model: string) => !/^ds:\/\//.test(model) && !/yandexgpt/.test(model);
+const openAiStyle = (model: string) => !!config.llmBaseUrl || (!/^ds:\/\//.test(model) && !/yandexgpt/.test(model));
 const modelUri = (model: string) => (/^(ds|gpt):\/\//.test(model) ? model : `gpt://${config.folderId}/${model}`);
 
 /** Foundation Models API: сообщения → текст ответа модели (просим JSON) и расход токенов */
 let jsonModeSupported = true;
 
+/** Имя своей модели в настройках (TUNED_MODEL=own): запрос идёт в свой контейнер (OWN_LLM_URL), а не в Яндекс */
+export const OWN_MODEL = 'own';
+
+/**
+ * Своя модель: один запрос с коротким ожиданием, без повторов — на любой сбой есть облачная модель.
+ * Расход токенов не считаем: платим за время работы контейнера, а не за токены
+ */
+async function completeOwn(messages: Msg[]): Promise<{ text: string; usage: Usage }> {
+  const res = await fetch(`${config.ownLlmUrl}/v1/chat/completions`, {
+    method: 'POST',
+    // Ключ — в X-Api-Key: заголовок Authorization сервис контейнеров Яндекса считает своим IAM-токеном и отклоняет запрос (403)
+    headers: { 'Content-Type': 'application/json', ...(config.ownLlmKey && { 'X-Api-Key': config.ownLlmKey }) },
+    body: JSON.stringify({ temperature: 0, max_tokens: 400, response_format: { type: 'json_object' }, messages: messages.map((m) => ({ role: m.role, content: m.text })) }),
+    signal: AbortSignal.timeout(config.ownLlmTimeoutMs),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new YandexError('llm', res.status, text);
+  return { text: String(JSON.parse(text).choices?.[0]?.message?.content ?? '').replace(/<think>[\s\S]*?<\/think>/g, ''), usage: NO_USAGE };
+}
+
+let warmedAt = 0;
+/**
+ * Разбудить контейнер своей модели заранее: после простоя он запускается несколько секунд. Зовётся на любой
+ * запрос приложения (не чаще раза в минуту) — к моменту голосовой команды модель уже загружена
+ */
+export function warmOwnModel(now = Date.now()): void {
+  if (config.promptMode !== 'tuned' || !config.ownLlmUrl || now - warmedAt < 60_000) return;
+  warmedAt = now;
+  fetch(`${config.ownLlmUrl}/health`, { signal: AbortSignal.timeout(20_000) }).catch(() => undefined);
+}
+
 export async function complete(messages: Msg[], model = config.model): Promise<{ text: string; usage: Usage }> {
+  if (model === OWN_MODEL && config.ownLlmUrl) return completeOwn(messages);
   if (openAiStyle(model)) return completeChat(messages, model);
   const call = (jsonMode: boolean) =>
     retryNet('llm', () => fetch('https://llm.api.cloud.yandex.net/foundationModels/v1/completion', {
@@ -119,12 +151,15 @@ export async function complete(messages: Msg[], model = config.model): Promise<{
 let chatJsonSupported = true;
 
 async function completeChat(messages: Msg[], model: string): Promise<{ text: string; usage: Usage }> {
+  // Своя модель на Mac или своём сервере (LLM_BASE_URL): без ключа Яндекса, имя модели — как есть
+  const local = !!config.llmBaseUrl;
   const call = (jsonMode: boolean) =>
-    retryNet('llm', () => fetch('https://llm.api.cloud.yandex.net/v1/chat/completions', {
+    retryNet('llm', () => fetch(local ? `${config.llmBaseUrl}/v1/chat/completions` : 'https://llm.api.cloud.yandex.net/v1/chat/completions', {
       method: 'POST',
-      headers: { ...headers(), 'Content-Type': 'application/json' },
+      headers: local ? { 'Content-Type': 'application/json' } : { ...headers(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: modelUri(model),
+        // Свой сервер отвечает той моделью, что запущена в нём, — имя не передаём
+        ...(!local && { model: modelUri(model) }),
         temperature: 0,
         max_tokens: 600,
         ...(jsonMode && { response_format: { type: 'json_object' } }),
@@ -146,7 +181,8 @@ async function completeChat(messages: Msg[], model: string): Promise<{ text: str
   const u = r.usage ?? {};
   const cached = Number(u.prompt_tokens_details?.cached_tokens ?? 0);
   return {
-    text: r.choices?.[0]?.message?.content ?? '',
+    // Qwen3 и другие «думающие» модели присылают рассуждение в <think> — в нём бывают скобки, мешающие найти JSON
+    text: String(r.choices?.[0]?.message?.content ?? '').replace(/<think>[\s\S]*?<\/think>/g, ''),
     usage: { input: Number(u.prompt_tokens ?? 0), output: Number(u.completion_tokens ?? 0), total: Number(u.total_tokens ?? 0), ...(cached && { cached }) },
   };
 }

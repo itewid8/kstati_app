@@ -1,7 +1,7 @@
 import { bodyHint } from './lists.js';
 import { repeatShort } from './recur.js';
 import { changesRepeat } from './repeat.js';
-import { asksWhatToWatch, hasChangeVerb, isUnmark } from './spoken.js';
+import { asksWhatToWatch, hasChangeVerb, isUnmark, sameStem, titleStems } from './spoken.js';
 import type { Context } from './types.js';
 import type { Msg } from './yandex.js';
 
@@ -239,7 +239,7 @@ export function pickBlocks(text: string, ctx: Context): { blocks: Set<Block>; ca
     if (!question && !watchish) b.delete('watch');
     if (!question && !/(хоч|вишлист|подар)/.test(t)) b.delete('wish');
   }
-  const parent = !!ctx.currentParentId || /(в поездк|в план|для поездк|разбей|подзадач|в командировк|в отпуск)/.test(t);
+  const parent = !!ctx.currentParentId || /((в|во|для|к) (поездк|план|командировк|отпуск)|разбей|подзадач)/.test(t);
   if (parent) b.add('parent');
   const calendar =
     b.has('plans') || b.has('change') || parent || /(сегодня|завтра|послезавтра|через|недел|выходн|понедельник|вторник|сред[аеуы]|четверг|пятниц|суббот|воскресен|январ|феврал|март|апрел|ма[яй]|июн|июл|август|сентябр|октябр|ноябр|декабр|числ|\d)/.test(t);
@@ -282,8 +282,8 @@ export function buildCompactMessages(text: string, ctx: Context): Msg[] {
       ...(ex.ideas ?? []).map((i) => ({ title: i.text, row: `idea:${i.id} | ${i.text} | тема: ${topicTitle(i.topicId)}`, keep: false })),
     ];
     // Только записи, похожие на сказанное (по началу слов); ничего не похоже — все
-    const said = new Set(stems(text));
-    const hit = all.filter((r) => r.keep || stems(r.title).some((s) => said.has(s)));
+    const said = titleStems(text);
+    const hit = all.filter((r) => r.keep || titleStems(r.title).some((s) => said.some((x) => sameStem(s, x))));
     rows = (hit.length ? hit : all).slice(0, 80).map((r) => r.row);
   }
 

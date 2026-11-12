@@ -1,0 +1,31 @@
+# Настройки дообучения своей модели (mlx-lm, MacBook Air 8 ГБ). Запуск из папки server:
+#   mlx_lm.lora --config train/lora.yaml --adapter-path ~/kstati-ml/<папка версии> 2>&1 | tee ~/kstati-ml/<версия>.log
+# Набор — train/out/chat (npm run train:build). Журнал обучения сохраняйте: по нему видно, сходится ли модель.
+model: Qwen/Qwen2.5-0.5B-Instruct
+train: true
+fine_tune_type: lora
+data: train/out/chat
+mask_prompt: true          # ошибка считается только по ответу, не по запросу
+batch_size: 1
+grad_accumulation_steps: 4 # шаг оптимизатора — раз в 4 примера
+grad_checkpoint: true
+iters: 15000               # ≈ один проход по набору из ~14,8 тыс. примеров
+num_layers: 16             # было 8 из 24: нижние слои не дообучались вовсе
+learning_rate: 1.0e-4
+# Скорость обучения: короткий разгон и плавное снижение к концу (было — постоянная).
+# Шаги расписания — шаги оптимизатора: iters / grad_accumulation_steps = 3750
+lr_schedule:
+  name: cosine_decay
+  warmup: 100
+  warmup_init: 1.0e-6
+  arguments: [1.0e-4, 3650, 1.0e-5]
+lora_parameters:
+  rank: 8
+  dropout: 0.0
+  scale: 20.0
+max_seq_length: 1280       # самый длинный пример ≈1400 символов; обрезанный пример теряет ответ
+steps_per_report: 50
+steps_per_eval: 1500
+val_batches: 200           # было 50 примеров — оценка слишком шумная
+save_every: 1500
+seed: 0

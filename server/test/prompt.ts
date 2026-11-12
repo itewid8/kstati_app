@@ -2,8 +2,9 @@
  * Компактный промпт (src/prompt.ts): нужные части правил на месте, лишних нет, промпт заметно короче полного.
  */
 import assert from 'node:assert/strict';
-import { normalize, worthFullRetry } from '../src/parse.js';
+import { checkTarget, normalize, onlyFiller, worthFullRetry } from '../src/parse.js';
 import { buildCompactMessages, buildMessages, pickBlocks } from '../src/prompt.js';
+import { cleanSpeech } from '../src/spoken.js';
 import type { Context } from '../src/types.js';
 
 const ctx: Context = {
@@ -163,8 +164,71 @@ assert.equal(worthFullRetry('позвонить в банк про кредит'
     assert.deepEqual(body.response_format, { type: 'json_object' });
     assert.deepEqual(body.messages?.[0], { role: 'system', content: 'правила' });
     assert.deepEqual(r, { text: '{"actions":[]}', usage: { input: 900, output: 12, total: 912, cached: 768 } });
+    // Своя модель (LLM_BASE_URL): свой адрес, без ключа Яндекса и имени модели, рассуждение <think> отброшено
+    const { config } = await import('../src/config.js');
+    config.llmBaseUrl = 'http://127.0.0.1:8080';
+    let headers: Record<string, string> = {};
+    globalThis.fetch = (async (u: string, init: { body: string; headers: Record<string, string> }) => {
+      url = String(u);
+      body = JSON.parse(init.body);
+      headers = init.headers;
+      return new Response(JSON.stringify({ choices: [{ message: { content: '<think>{x}</think>{"actions":[]}' } }], usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 } }));
+    }) as typeof fetch;
+    const loc = await complete([{ role: 'user', text: 'фраза' }], 'yandexgpt-lite/latest');
+    assert.equal(url, 'http://127.0.0.1:8080/v1/chat/completions');
+    assert.equal(body.model, undefined);
+    assert.equal(headers.Authorization, undefined);
+    assert.equal(loc.text, '{"actions":[]}');
+    config.llmBaseUrl = '';
   } finally {
     globalThis.fetch = real;
   }
+}
+// Цель правки сверяется с фразой: чужое название — ищем по словам, не нашли — пусто
+{
+  const titles = new Map([['t1', 'Оплатить интернет'], ['t8', 'Йога'], ['t9', 'Стоматолог'], ['m1', 'Друзья']]);
+  assert.deepEqual(checkTarget(['t9'], titles, 'Удали йогу в субботу'), ['t8']);
+  assert.deepEqual(checkTarget(['t1'], titles, 'Удали слона'), []);
+  assert.deepEqual(checkTarget(['t1'], titles, 'Сделал оплату интернета'), ['t1']);
+  assert.deepEqual(checkTarget(['m1'], titles, 'Верни Друзей в непросмотренные'), ['m1']);
+  assert.deepEqual(checkTarget(['t9'], titles, 'Удали это'), ['t9']);
+  assert.deepEqual(checkTarget(['t9'], titles, 'Перенеси стоматолога на пятницу и добавь Карину'), ['t9']);
+  // В запрос модели идут записи, похожие на сказанное: «йогу» → «Йога», слово команды «продли» не тянет «Продукты»
+  const c4 = { ...ctx, existing: { ...ctx.existing, tasks: [{ id: 't2', title: 'Купить продукты', date: null, time: null }, { id: 't7', title: 'Йога', date: null, time: null }] } };
+  const u = buildCompactMessages('Продли йогу до 20', c4).at(-1)!.text;
+  assert.match(u, /task:t7 \| Йога/);
+  assert.doesNotMatch(u, /Купить продукты/);
+  assert.ok(onlyFiller('ммм'));
+  assert.ok(onlyFiller('ну это, э-э'));
+  assert.ok(!onlyFiller('ну завтра йога'));
+  assert.ok(onlyFiller('Какая погода завтра'));
+  // Ошибки распознавания: слова-паразиты и слипшийся предлог
+  assert.equal(cleanSpeech('ну купить продукты типа повыходным'), 'купить продукты по выходным');
+  assert.equal(cleanSpeech('эээ, тренировка впятницу в 7'), 'тренировка в пятницу в 7');
+  assert.equal(cleanSpeech('ммм'), '');
+  assert.equal(cleanSpeech('в понедельник посреди недели'), 'в понедельник посреди недели');
+  // Фильтры «что посмотреть» — по сказанному: додуманный вид убирается, названные чьё и новизна добавляются
+  assert.deepEqual(normalize([{ intent: 'query_watch', kind: ['series'] }], ctx, 'Что посмотрим?'), { type: 'queryWatch', filters: { kind: [], genre: [], origin: [], fresh: [] } });
+  assert.deepEqual(normalize([{ intent: 'query_watch', kind: ['series'], origin: ['new'] }], ctx, 'Какой сериал посмотреть из нового?'), { type: 'queryWatch', filters: { kind: ['series'], genre: [], origin: [], fresh: ['new'] } });
+  assert.deepEqual(normalize([{ intent: 'query_watch', kind: ['movie'] }], ctx, 'Какой-нибудь наш старый фильм'), { type: 'queryWatch', filters: { kind: ['movie'], genre: [], origin: ['ru'], fresh: ['old'] } });
+  assert.deepEqual(normalize([{ intent: 'query_watch', genre: ['comedy'] }], ctx, 'Что-нибудь смешное зарубежное'), { type: 'queryWatch', filters: { kind: [], genre: ['comedy'], origin: ['foreign'], fresh: [] } });
+  // «Что я хотел?» — имя, которого не было во фразе, не подставляем
+  const other = ctx.people[0]!;
+  assert.deepEqual(normalize([{ intent: 'query_wish', person: other.name }], ctx, 'Что я хотел?'), { type: 'queryWish', personId: ctx.me.id });
+  assert.deepEqual(normalize([{ intent: 'query_wish', person: other.name }], ctx, `Что хочет ${other.name}?`), { type: 'queryWish', personId: other.id });
+  // Время и участники — по сказанному, если модель ошиблась или пропустила; срок не назван — неделя с сегодня
+  const t21 = normalize([{ intent: 'add', type: 'task', title: 'Оплатить интернет', time: '19:00' }], ctx, 'Запланируй в 21:00 оплатить интернет');
+  assert.equal(t21.type === 'items' && t21.items[0]!.type === 'task' && t21.items[0]!.data.time, '21:00');
+  const mine = normalize([{ intent: 'add', type: 'task', title: 'Стоматолог', date: '2026-10-25' }], ctx, 'У меня через месяц к стоматологу');
+  assert.deepEqual(mine.type === 'items' && mine.items[0]!.type === 'task' && mine.items[0]!.data.people, [ctx.me.id]);
+  const week = normalize([{ intent: 'query_plans', scope: 'category', category: 'parents', from: '2026-10-01', to: '2026-10-01' }], ctx, 'Какие планы у родителей?');
+  assert.deepEqual(week.type === 'queryPlans' && [week.plans.from, week.plans.to], ['2026-09-25', '2026-10-01']);
+  assert.deepEqual(normalize([{ intent: 'query_watch', kind: ['movie'], fresh: ['old'] }], ctx, 'подскажи что посмотреть кино ужастик из классики'), { type: 'queryWatch', filters: { kind: ['movie'], genre: ['horror'], origin: [], fresh: ['old'] } });
+  const forK = normalize([{ intent: 'add', type: 'task', title: 'Забрать документы', date: '2026-10-01' }], ctx, 'Карине в четверг забрать документы');
+  assert.deepEqual(forK.type === 'items' && forK.items[0]!.type === 'task' && forK.items[0]!.data.people, ['u7']);
+  const when = normalize([{ intent: 'query_plans', scope: 'us', from: '2026-09-25', to: '2026-09-25' }], ctx, 'Когда у нас дача?');
+  assert.deepEqual(when.type === 'queryPlans' && [when.plans.from, when.plans.to, when.plans.query], ['2026-09-25', '2027-09-25', 'дача']);
+  assert.equal(normalize([{ intent: 'add', type: 'task', title: 'Взять погоду', date: '2026-09-26' }], ctx, 'Какая погода завтра').type, 'unknown');
+  assert.ok(!onlyFiller('Какая-нибудь комедия'));
 }
 console.log(`✓ компактный промпт: ${Math.round((100 * compact) / full)}% от полного на 6 фразах`);

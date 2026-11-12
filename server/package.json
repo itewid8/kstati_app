@@ -11,6 +11,7 @@
     "test": "tsx test/subs.ts && tsx test/repeat.ts && tsx test/ideas.ts && tsx test/lists.ts && tsx test/films.ts && tsx test/feedback.ts && tsx test/duration.ts && tsx test/v2.ts && tsx test/personal.ts && tsx test/e2e.ts",
     "eval": "tsx eval/run.ts",
     "train:data": "tsx train/generate.ts",
+    "train:build": "tsx train/build.ts",
     "typecheck": "tsc --noEmit",
     "stats": "tsx scripts/stats.ts",
     "tables": "tsx scripts/ydb-tables.ts",
@@ -22,12 +23,12 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.20.5",
     "eslint": "10.13.0",
     "eslint-plugin-security": "4.2.0",
     "globals": "17.13.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.6.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
     "typescript-eslint": "8.70.0"
   }
 }

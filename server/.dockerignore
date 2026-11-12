@@ -6,3 +6,5 @@ logs
 eval
 test
 scripts
+model
+train

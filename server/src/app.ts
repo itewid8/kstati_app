@@ -20,7 +20,7 @@ import { parseText } from './parse.js';
 import { normalizeTimes } from './spoken.js';
 import type { Store, User } from './store/index.js';
 import type { Context, ParseResult } from './types.js';
-import { recognize, STT_LANGS, YandexError, type SttLang, type Usage } from './yandex.js';
+import { recognize, STT_LANGS, warmOwnModel, YandexError, type SttLang, type Usage } from './yandex.js';
 
 const gzipAsync = promisify(gzip);
 
@@ -83,6 +83,8 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   /* ---------- веб-версия: запросы из браузера с разрешённых сайтов (CORS) ---------- */
   const allowedOrigin = (o: string | undefined) =>
     !!o && (config.webOrigins.includes(o) || (!config.isProd && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o)));
+  // Своя модель живёт в отдельном контейнере и засыпает без запросов — будим её, как только приложение вышло на связь
+  app.addHook('onRequest', async () => warmOwnModel());
   app.addHook('onRequest', async (req, reply) => {
     const origin = req.headers.origin;
     if (!allowedOrigin(origin)) return;
@@ -309,7 +311,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
     const t0 = Date.now();
     try {
       const { result, raw, usage, attempts, path } = await parse(body.text, context);
-      await writeLog({ source, userId: user.id, ...client, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
+      await writeLog({ source, userId: user.id, ...client, path, transcript: body.text, result: result.type, detail: result, raw, attempts, tokens: usage, ctx: ctxSize(context), llmMs: Date.now() - t0 });
       const left = await spendVoiceQuota(user, result, before);
       const spend = spendOf(usage, false);
       await recordSpend(store, user.id, source, spend, 0, { path, calls: attempts, text: body.text, result: result.type });
@@ -348,7 +350,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       }
       const { result, raw, usage, attempts, path } = await parse(transcript, context);
       await writeLog({
-        source: 'voice', userId: user.id, ...client, audioSec, audioBytes: audio.length, transcript, result: result.type, detail: result,
+        source: 'voice', userId: user.id, ...client, path, audioSec, audioBytes: audio.length, transcript, result: result.type, detail: result,
         raw, attempts, tokens: usage, ctx: ctxSize(context), sttMs: t1 - t0, llmMs: Date.now() - t1,
       });
       const left = await spendVoiceQuota(user, result, before);

@@ -11,6 +11,8 @@ import type { Usage } from './yandex.js';
 
 export type LogEntry = {
   ts: string;
+  /** Кто разобрал фразу: rules — правила, tuned — своя модель, fallback — облачная после своей, compact/full — облачная */
+  path?: string;
   source: 'voice' | 'text' | 'device' | 'eval';
   model: string;
   /** Кто говорил (id аккаунта) */
