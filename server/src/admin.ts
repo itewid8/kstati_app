@@ -164,7 +164,7 @@ ul.subs li:first-child { border-top:0 }
       var li = document.createElement('li');
       var who = document.createElement('div'); who.className = 'who';
       var b = document.createElement('b'); b.textContent = p.name + (p.plan ? ' · подписка' : '');
-      var sp = document.createElement('span'); sp.textContent = (p.email || '') + ' · ' + fmt(p.n) + ' команд · ' + fmt(p.tokens) + ' ток.';
+      var sp = document.createElement('span'); sp.textContent = fmt(p.n) + ' команд · ' + fmt(p.tokens) + ' ток.' + (p.plan ? ' · подписка' : '');
       who.appendChild(b); who.appendChild(sp);
       var num = document.createElement('div'); num.className = 'num'; num.textContent = rub(p.kop);
       li.appendChild(who); li.appendChild(num); ul.appendChild(li);

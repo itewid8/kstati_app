@@ -388,7 +388,9 @@ async function scenario(name: string, store: Store) {
   assert.deepEqual(await ok('POST', '/voice/rate', { id: rated.cmdId, good: true }, T1), { ok: true }, 'повторная оценка заменяет прежнюю');
   const log = await store.listLog<any>('ratings', '', 10);
   assert.deepEqual([log.length, log[0].value.good, log[0].value.transcript, log[0].value.userId], [1, true, 'удали баню в субботу', SA]);
-  assert.ok(log[0].value.context.existing.tasks.length > 0, 'с контекстом разбора — для обучения');
+  assert.equal(log[0].value.context, undefined, 'записи и люди человека не хранятся');
+  assert.match(log[0].value.did, /^удалить «Баня»/);
+  assert.equal(log[0].value.today, '2026-10-06');
   assert.equal((await call('POST', '/voice/rate', { id: rated.cmdId, good: true }, T2)).status, 404);
   assert.equal((await ok('GET', '/stats/spend', undefined, T1)).recent.find((c: any) => c.id === rated.cmdId)?.rating, 'up');
   assert.equal((await call('GET', '/admin/ratings', undefined, T1)).status, 401, 'оценки — только странице администратора');

@@ -54,7 +54,7 @@ export function registerSubs(app: FastifyInstance, store: Store) {
     return { token: signToken(user.id, 'admin') };
   });
 
-  /** Расходы всех за N дней: по дням и по людям (больше всего потратившие — первыми) */
+  /** Расходы всех за N дней: по дням и по людям (больше всего потратившие — первыми). Только имя и расход, без почты */
   app.get('/admin/stats', async (req) => {
     await requireAdmin(req, store);
     const { days } = z.object({ days: z.coerce.number().int().min(1).max(90).default(30) }).parse(req.query);
@@ -69,7 +69,7 @@ export function registerSubs(app: FastifyInstance, store: Store) {
     const users = await store.getUsers([...per.keys()]);
     const byId = new Map(users.map((u) => [u.id, u]));
     const people = [...per.entries()]
-      .map(([id, p]) => ({ id, name: byId.get(id)?.name ?? 'Удалён', email: byId.get(id)?.email ?? null, plan: byId.get(id) ? hasPlan(byId.get(id)!) : false, ...p }))
+      .map(([id, p]) => ({ id, name: byId.get(id)?.name ?? 'Удалён', plan: byId.get(id) ? hasPlan(byId.get(id)!) : false, ...p }))
       .sort((a, b) => b.kop - a.kop);
     return { days: list.map(({ users: _u, ...d }) => d), people };
   });
