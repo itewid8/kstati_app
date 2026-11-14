@@ -1,95 +1,69 @@
 # Кстати
 
-## 📚 Documentation
-| | |
+Общий планировщик для пары, семьи или компании друзей, которым управляют голосом. Сказал фразу — приложение само поняло, что это: дело, желание, фильм или заметка, и показало карточку на подтверждение.
+
+«В субботу в семь ужин у родителей» · «Мы посмотрели Интерстеллар» · «Что у нас на выходных?» · «Запиши в список продуктов сыр»
+
+## Чем отличается
+
+- **Общее пространство, а не личный помощник.** Голосовые ассистенты работают для одного человека; здесь дела, желания и списки видит вся группа.
+- **Одна фраза вместо формы.** Дата, время, повтор, участники и тип записи берутся из сказанного.
+- **Ничего не меняется молча.** Любая команда сначала показывается карточкой, которую можно поправить или отменить.
+- **Своя маленькая модель.** Команды разбирает дообученная модель на полмиллиарда параметров: быстро, предсказуемо и без платы за каждый запрос.
+- **Речь распознаёт сам телефон.** На сервер уходит только текст.
+- **Работает в России без VPN.** Весь сервер — в Yandex Cloud.
+- **Работает без связи.** Правки копятся на телефоне и уходят на сервер, когда связь появится.
+
+## Возможности
+
+- **Дела** — события и планы с датой, временем, длительностью, повторами, участниками и подзадачами; список и календарь (день, неделя, месяц, год); напоминания.
+- **Хочу** — личный список желаний, который видят люди из ваших групп.
+- **Смотреть** — общий список фильмов и сериалов с рейтингом и описанием.
+- **Заметки** — темы, заметки и списки с отметками; тему можно открыть группе.
+- **Голос** — добавить, перенести, переименовать, отметить, удалить, спросить о планах.
+- **Группы** — пара, семья, друзья; у каждого дела своя видимость.
+- **Календарь телефона** — перенос событий в приложение.
+- **Виджет** на рабочем столе, светлая и тёмная темы, веб-версия.
+
+## На чём построено
+
+| Часть | Технологии |
 |---|---|
-| [⚙️ Architecture](docs/architecture.md) | System design, components and flow |
-| [📁 Structure](docs/structure.md) | Project organization and responsibilities |
-| [🚀 Installation](docs/installation.md) | Requirements and steps to run the project |
-| [🧠 Technical decisions](docs/decisions.md) | Trade-offs and design justifications |
-| [📖 Usage guide](docs/usage.md) | How the app is used: flows and voice examples |
-| [🔌 API](docs/api.md) | HTTP endpoints, request/response and errors |
-| [🧪 Testing](docs/testing.md) | Server tests, model evaluation, type checks |
-| [☁️ Yandex Cloud deployment](docs/deploy-yandex.md) | One-time cloud setup (in Russian) |
-| [🎙 Voice command contract](docs/voice-api.md) | Parse result format shared by server and app (in Russian) |
+| Приложение | Expo 57, React Native 0.86, TypeScript, Expo Router, Zustand; Android, iOS и веб из одного кода |
+| Сервер | Node 22, Fastify, Zod |
+| Данные | YDB (serverless) |
+| Разбор команд | своя модель на основе Vikhr-Qwen-2.5-0.5B (LoRA, mlx-lm), запуск через llama.cpp в отдельном контейнере |
+| Распознавание речи | встроенное в телефон; Yandex SpeechKit — там, где его нет |
+| Инфраструктура | Yandex Cloud: Serverless Containers, Lockbox, Postbox; выкладка через GitHub Actions |
 
----
+## Подходы
 
-## Description
+- **Модель понимает, код считает.** Модель переводит фразу в JSON по строгой схеме; даты, поиск записи и проверку выполняет код сервера. Название записи сверяется со сказанным, чтобы модель ничего не выдумала.
+- **Три ступени разбора.** Простые команды — правилами без модели, остальные — своей моделью, непонятые — облачной.
+- **Обучение на сгенерированных данных.** Фразы строит генератор по шаблонам, ответы проверяет тот же код, что работает на сервере.
+- **Проверка на незнакомом.** Качество модели измеряется на словах, которых не было в обучении, — так видно понимание, а не заучивание.
+- **Устойчивость к ошибкам распознавания.** В обучающие фразы подмешиваются искажения, какие даёт распознавание речи.
+- **Обучение голосом.** В приложении есть раздел с карточками: человек произносит фразу или формулирует задание своими словами, оценивает результат, и оценённые попытки становятся примерами для следующей версии модели.
+- **Телефон — источник правды.** Каждая правка — операция в очереди, сервер применяет её один раз; синхронизация отдаёт только изменившееся.
 
-«Кстати» is a voice-first shared planner for couples, families and groups of friends. Four lists live in one app:
-
-- **Дела** — tasks and plans with dates, times, durations, repeats, participants and sub-tasks, shown as a list or a week/day/month/year calendar;
-- **Хочу** — a personal wishlist that the people in your groups can see (“what should I give Masha?”);
-- **Смотреть** — a shared watchlist of movies and series with kind, genres and origin;
-- **Идеи** — a personal notebook of ideas grouped by topics, optionally opened read-only to a group.
-
-The main input is a short voice phrase: «В субботу в семь ужин у родителей», «Мы посмотрели Интерстеллар», «Что у друзей на выходных?». The server transcribes it with Yandex SpeechKit, YandexGPT lays it out into a strict JSON schema, server code validates and completes it, and the app shows a card the user confirms before anything is changed.
-
-The product targets Russia and must work without a VPN, so the whole backend runs on Yandex Cloud (Serverless Containers, YDB, Lockbox, Postbox, AI Studio).
-
-## Quick start
-
-Run the server locally on a file database and point the Android emulator at it:
+## Запуск
 
 ```bash
-# server (terminal 1)
+# сервер
 cd server
 npm install
-cp .env.example .env          # set YANDEX_API_KEY
-npm run dev                   # http://localhost:3000, emulator: http://10.0.2.2:3000
+cp .env.example .env
+npm run dev
 
-# app (terminal 2)
+# приложение
 cd mobile-prod
 npm install
 echo 'EXPO_PUBLIC_API_URL=http://10.0.2.2:3000' > .env
 npx expo run:android
 ```
 
-Without `EXPO_PUBLIC_API_URL` the app starts in demo mode: in-memory sample data, simulated recording and a local rule-based parser (`mobile-prod/src/lib/mockParser.ts`).
+Без `EXPO_PUBLIC_API_URL` приложение запускается в демо-режиме с учебными данными.
 
-## Technologies used
+## Документация
 
-| Area | Stack |
-|---|---|
-| Mobile | Expo SDK 57, React Native 0.86, TypeScript, Expo Router, Zustand (persisted to a JSON file), Reanimated 4, Gesture Handler, react-native-svg, expo-audio, expo-notifications, expo-background-task, expo-widgets |
-| Native code | Local Expo modules in Kotlin: `kstati-widget` (Android home-screen widget), `kstati-net` (VPN detection); config plugins for IPv4-first networking, WorkManager versions and iOS push entitlement |
-| Server | Node 22, Fastify 5, Zod, `tsx` for dev, `tsc` for the production build |
-| AI | Yandex SpeechKit (speech-to-text), YandexGPT via Foundation Models API (`yandexgpt-lite/latest` by default) |
-| Data | YDB serverless through the Document API (DynamoDB protocol, SigV4 signing, no SDK); a JSON file store for local development |
-| Infrastructure | Yandex Serverless Containers, Container Registry, Lockbox, Postbox (email), GitHub Actions deploy |
-| Design | Geist and Geist Mono, monochrome theme with per-person colors |
-
-## Quick installation
-
-1. Install Node 22, Android Studio (SDK, emulator, JDK) and, for voice on a local server, `ffmpeg`.
-2. `npm install` in `server/` and `mobile-prod/`, fill `server/.env` and `mobile-prod/.env`.
-3. `npm run dev` in `server/`, `npx expo run:android` in `mobile-prod/`.
-
-Details, environment variables and cloud deployment: [docs/installation.md](docs/installation.md).
-
-## Architecture (summary)
-
-The phone is the source of truth for the user's own edits and keeps working offline: every change becomes an idempotent operation in a persisted outbox, which is pushed to `POST /ops`; `POST /sync` then returns only the groups and people whose revision changed. The server owns permissions, shared data and the voice pipeline: audio → ffmpeg → SpeechKit → YandexGPT with a context built from the database → deterministic post-processing → a `ParseResult` that the app turns into a confirmation card. Reminders are local notifications, and a background task refreshes data, the widget and reminders while the app is closed. See [docs/architecture.md](docs/architecture.md).
-
-## Project structure
-
-```
-.github/workflows/   server and web deploy to Yandex Cloud on push to main
-docs/                documentation, cloud setup, voice contract
-mobile-prod/         the app: iOS, Android and web (Expo)
-  app/               routes (Expo Router)
-  src/screens/       screens; src/containers/ — wiring; src/adapters/ — pure view logic
-  src/ui/            design system; src/components/ — shared UI
-  src/lib/           store, sync, voice, auth, dates, repeats, reminders, notes
-  modules/           local native modules (widget, VPN check, share)
-  plugins/           Expo config plugins
-  public/            web: index.html, PWA manifest
-server/              Fastify API
-  src/               routes, auth, voice parsing, Yandex clients, storage
-  test/              unit and end-to-end tests
-  eval/              phrase evaluation against the real model
-  scripts/           YDB tables, deploy, log stats, read-only inspection
-```
-
-Full tree and responsibilities: [docs/structure.md](docs/structure.md).
+[Архитектура](docs/architecture.md) · [Структура](docs/structure.md) · [Установка](docs/installation.md) · [Решения](docs/decisions.md) · [Сценарии](docs/usage.md) · [API](docs/api.md) · [Тесты](docs/testing.md) · [Yandex Cloud](docs/deploy-yandex.md) · [Формат голосовых команд](docs/voice-api.md)
