@@ -94,6 +94,18 @@ assert.deepEqual([log[0]!.value.audio, log[0]!.value.alts, log[1]!.value.said, l
 assert.equal((await store.listLog('practice-audio', '', 10)).length, 1, 'запись голоса сохранена');
 assert.equal((await call('GET', '/admin/practice')).status, 401, 'выгрузка — только админу');
 
+// Оценка человека: «неверно» при несовпадении — ошибка модели; «верно» при несовпадении — образец под вопросом
+reply = { type: 'unknown' };
+const rated = (await call('POST', '/practice/attempt', { cardId: cards[5]!.id, mode: 'say', text: cards[5]!.phrase })).body;
+if (!rated.parseOk) {
+  const r1 = (await call('POST', '/practice/flag', { id: rated.id, good: false, note: 'не то название' })).body;
+  assert.deepEqual([r1.good, r1.card], [false, false]);
+  const r2 = (await call('POST', '/practice/flag', { id: rated.id, good: true })).body;
+  assert.deepEqual([r2.good, r2.card], [true, true]);
+  const kept = (await store.listLog<any>('practice', '', 10)).at(-1)!.value;
+  assert.deepEqual([kept.good, kept.note, kept.card], [true, undefined, true], 'комментарий — только у «неверно»');
+}
+
 // Итог словами
 assert.equal(explainResult({ type: 'queryWatch', filters: { kind: ['cartoon'], genre: [], origin: [], fresh: [] } }, card.ctx), 'Что посмотреть: мультфильмы');
 assert.equal(explainResult(item('Баня', '2026-11-20'), card.ctx), 'Дело «Баня» · 20 ноября, пятница');

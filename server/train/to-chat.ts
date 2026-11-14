@@ -14,7 +14,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-type Row = { request: { role: string; text: string }[]; response: string; ctx?: unknown; variant?: string };
+type Row = { request: { role: string; text: string }[]; response: string; ctx?: unknown; variant?: string; fix?: boolean };
 const ood = process.argv.includes('--ood');
 const dirs = process.argv.slice(2).filter((a) => a !== '--ood');
 if (!dirs.length) {
@@ -56,13 +56,17 @@ if (ood) {
   process.exit(0);
 }
 const isHeld = (r: Row) => hash(phraseOf(r)) % 10 === 0;
-const valid = all.filter(isHeld);
+// Попытки «Обучения» с оценкой человека (train/practice-report.ts): услышанный текст → образец; ошибки модели — дважды.
+// Их фразы из проверки убираем: фраза в обучении и в проверке сразу показывала бы заучивание
+const practice = read(join(process.cwd(), '..', 'private', 'practice-train.jsonl'));
+const practised = new Set(practice.map(phraseOf));
+const valid = all.filter((r) => isHeld(r) && !practised.has(phraseOf(r)));
 const held = new Set(valid.map(phraseOf));
 // Живые фразы, разобранные моделью-учителем (train/distill.ts), — только в обучение, дважды: их мало, а они важнее
 const live = read(join(process.cwd(), '..', 'private', 'distill.jsonl'));
-const train = all.filter((r) => !isHeld(r)).concat(live, live);
+const train = all.filter((r) => !isHeld(r)).concat(live, live, practice, practice.filter((r) => r.fix));
 
 writeFileSync(join(out, 'train.jsonl'), train.map(chat).join('\n') + '\n');
 writeFileSync(join(out, 'valid.jsonl'), valid.map(chat).join('\n') + '\n');
 writeFileSync(join(out, 'valid-ctx.jsonl'), valid.map(meta).join('\n') + '\n');
-console.log(`Обучение: ${train.length} (живых фраз ${live.length}), проверка: ${valid.length} (фраз в проверке: ${held.size}) → train/out/chat`);
+console.log(`Обучение: ${train.length} (живых фраз ${live.length}, из карточек ${practice.length}), проверка: ${valid.length} (фраз в проверке: ${held.size}) → train/out/chat`);

@@ -77,6 +77,12 @@ export type Attempt = {
    */
   said?: boolean;
   card?: boolean;
+  /**
+   * Оценка человека: то, что получилось, — верно или нет; note — что не так. Оценка расходится со сверкой
+   * (верно, а с образцом не совпало; неверно, а совпало) — образец под вопросом: card ставится сам
+   */
+  good?: boolean;
+  note?: string;
 };
 
 /** Вердикт с учётом отметок */
@@ -85,7 +91,7 @@ const judged = <T extends Pick<Attempt, 'mode' | 'textOk' | 'strict' | 'soft' | 
   return { sttOk: own ? null : a.textOk, parseOk: own ? a.soft : a.strict };
 };
 /** Ошибка телефона или модели — для выбора карточек; плохая карточка без «сказал иначе» ошибкой не считается */
-const isMiss = (a: Pick<Attempt, 'sttOk' | 'parseOk' | 'said' | 'card'>) => !(a.card && !a.said) && !(a.parseOk && a.sttOk !== false);
+const isMiss = (a: Pick<Attempt, 'sttOk' | 'parseOk' | 'good'>) => (a.good !== undefined ? !a.good : !a.parseOk) || a.sttOk === false;
 
 type UserState = { consent: boolean; seen: string[]; total: number; day: string; today: number };
 type Stats = Record<string, { n: number; bad: number }>;
@@ -180,7 +186,14 @@ const AttemptBody = z.object({
   device: z.string().max(200).optional(),
 });
 // flag — от первой версии приложения (одна отметка из двух)
-const FlagBody = z.object({ id: z.string().uuid(), said: z.boolean().optional(), card: z.boolean().optional(), flag: z.enum(['etalon', 'said']).nullable().optional() });
+const FlagBody = z.object({
+  id: z.string().uuid(),
+  said: z.boolean().optional(),
+  card: z.boolean().optional(),
+  good: z.boolean().nullable().optional(),
+  note: z.string().trim().max(500).optional(),
+  flag: z.enum(['etalon', 'said']).nullable().optional(),
+});
 
 /* ---------- итог разбора словами — для экрана ---------- */
 
@@ -402,7 +415,8 @@ export function registerPractice(app: FastifyInstance, store: Store, deps: { par
   });
 
   /**
-   * Отметки попытки: said — сказал иначе, card — плохая карточка; независимые, в течение суток.
+   * Оценка и отметки попытки, в течение суток: good — получилось верно или нет (note — что не так),
+   * said — сказал иначе; card — плохая карточка (старые версии приложения).
    * Ответ — вердикт заново: «сказал иначе» снимает сверку текста и сверяет разбор без названий
    */
   app.post('/practice/flag', async (req) => {
@@ -413,12 +427,17 @@ export function registerPractice(app: FastifyInstance, store: Store, deps: { par
     if (!kept || kept.userId !== user.id) throw new HttpError(404, 'not_found', 'Эту попытку уже не отметить');
     const { shown, ...rec } = kept;
     const said = b.flag !== undefined ? b.flag === 'said' : (b.said ?? !!rec.said);
-    const bad = b.flag !== undefined ? b.flag === 'etalon' : (b.card ?? !!rec.card);
-    const { said: _s, card: _c, ...rest } = rec;
+    const good = b.good === undefined ? rec.good : (b.good ?? undefined);
+    const note = good === false ? (b.note ?? rec.note ?? '') : '';
+    const { said: _s, card: _c, good: _g, note: _n, ...rest } = rec;
     void _s;
     void _c;
-    const base = { ...rest, ...(said && { said }), ...(bad && { card: bad }) };
-    const upd: Attempt = { ...base, ...judged(base) };
+    void _g;
+    void _n;
+    const verdict = judged({ ...rest, said });
+    // Оценка человека против сверки с образцом — образец под вопросом; без оценки — как отметили (старые версии)
+    const bad = good !== undefined ? good !== verdict.parseOk : b.flag !== undefined ? b.flag === 'etalon' : (b.card ?? !!rec.card);
+    const upd: Attempt = { ...rest, ...verdict, ...(said && { said }), ...(bad && { card: bad }), ...(good !== undefined && { good }), ...(note && { note }) };
     await store.putLog(LOG, `${rec.ts}#${rec.id}`, upd, KEEP_SEC);
     await store.putTemp(`practice#a#${b.id}`, { ...upd, shown }, 24 * 3600);
     // Выбор карточек: считается ошибка телефона или модели, а не плохая карточка
@@ -438,7 +457,7 @@ export function registerPractice(app: FastifyInstance, store: Store, deps: { par
       else delete all[rec.cardId];
       await store.putTemp(BAD_KEY, all, STATE_KEEP_SEC);
     }
-    return { ok: true, id: upd.id, heard: upd.heard, sttOk: upd.sttOk, parseOk: upd.parseOk, did: shown?.did ?? upd.did, want: shown?.want ?? upd.want, said, card: bad };
+    return { ok: true, id: upd.id, heard: upd.heard, sttOk: upd.sttOk, parseOk: upd.parseOk, did: shown?.did ?? upd.did, want: shown?.want ?? upd.want, said, card: bad, good: good ?? null };
   });
 
   /** Попытки для разбора (страница /admin): по 500, дальше — с after. Без привязки к человеку: speaker — обезличенный голос */

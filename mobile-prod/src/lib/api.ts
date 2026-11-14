@@ -221,8 +221,8 @@ export type PracticeNext = { consent: boolean; card?: PracticeCard; progress: Pr
  * с образцом; did и want — что получилось и что нужно, словами (по строке на запись)
  */
 export type PracticeVerdict = { id: string; heard: string; sttOk: boolean | null; parseOk: boolean; did: string; want: string; progress: PracticeProgress };
-/** Отметки попытки, независимые: said — сказал иначе, card — плохая карточка */
-export type PracticeFlags = { said: boolean; card: boolean };
+/** Оценка и отметка попытки: good — получилось верно или нет, note — что не так; said — сказал иначе, чем на карточке */
+export type PracticeMark = { good?: boolean; note?: string; said?: boolean };
 
 const problemOf = (e: unknown): string =>
   e instanceof ApiError ? e.message : e instanceof NetError ? 'Нет связи с сервером' : String((e as Error)?.message ?? e);
@@ -279,10 +279,10 @@ export async function practiceAttempt(a: {
   }
 }
 
-/** POST /practice/flag — отметки попытки; ответ — вердикт заново («сказал иначе» меняет сверку). null — не дошло */
-export async function practiceFlag(id: string, flags: PracticeFlags): Promise<Pick<PracticeVerdict, 'sttOk' | 'parseOk'> | null> {
+/** POST /practice/flag — оценка или отметка попытки; ответ — вердикт заново («сказал иначе» меняет сверку). null — не дошло */
+export async function practiceMark(id: string, mark: PracticeMark): Promise<Pick<PracticeVerdict, 'sttOk' | 'parseOk'> | null> {
   try {
-    const r = await request<{ sttOk?: boolean | null; parseOk?: boolean }>('/practice/flag', { token: useStore.getState().session?.token, body: { id, ...flags }, timeoutMs: 15_000 });
+    const r = await request<{ sttOk?: boolean | null; parseOk?: boolean }>('/practice/flag', { token: useStore.getState().session?.token, body: { id, ...mark }, timeoutMs: 15_000 });
     return typeof r?.parseOk === 'boolean' ? { sttOk: r.sttOk ?? null, parseOk: r.parseOk } : null;
   } catch {
     return null;

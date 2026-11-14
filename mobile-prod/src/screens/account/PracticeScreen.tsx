@@ -1,14 +1,14 @@
 /**
  * «Обучение» (из Настроек, тест): карточка с фразой или заданием своими словами, диктовка, текст по мере распознавания
- * и итог сверки с образцом — услышано ли слово в слово и так ли разобрано. Презентационный экран: данные — пропсами.
+ * и итог: услышано ли слово в слово и что получилось. Человек оценивает одно — верно получилось или нет
+ * (при «неверно» контейнер спросит, что не так). Презентационный экран: данные — пропсами.
  */
 import { memo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { PracticeCard, PracticeFlags, PracticeProgress, PracticeVerdict } from '@/lib/api';
+import type { PracticeCard, PracticeProgress, PracticeVerdict } from '@/lib/api';
 import { Icon, SectionBox, fonts, size as S, space, useTheme } from '@/ui';
 import { AccountHeader } from './components/AccountHeader';
 
-export type PracticeFlag = keyof PracticeFlags;
 export type PracticePhase = 'idle' | 'listening' | 'sending' | 'done';
 
 export type PracticeView =
@@ -25,8 +25,8 @@ export type PracticeView =
       /** Текст по мере распознавания */
       live: string;
       verdict: PracticeVerdict | null;
-      /** Отметки попытки — независимые */
-      flags: PracticeFlags;
+      /** Отметка «сказал иначе, чем на карточке» */
+      said: boolean;
       /** «Не расслышал», «Нет связи» */
       note: string | null;
     };
@@ -43,13 +43,15 @@ export type PracticeScreenProps = {
   onNext?: () => void;
   /** Та же карточка ещё раз */
   onRepeat?: () => void;
-  onFlag?: (flag: PracticeFlag) => void;
+  /** Оценка: получилось верно или нет — и к следующей карточке */
+  onRate?: (good: boolean) => void;
+  onToggleSaid?: () => void;
 };
 
 const NO_INSETS = { top: 0, bottom: 0 };
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-export const PracticeScreen = memo(function PracticeScreen({ view, progress, insets = NO_INSETS, onBack, onAgree, onRetry, onMic, onNext, onRepeat, onFlag }: PracticeScreenProps) {
+export const PracticeScreen = memo(function PracticeScreen({ view, progress, insets = NO_INSETS, onBack, onAgree, onRetry, onMic, onNext, onRepeat, onRate, onToggleSaid }: PracticeScreenProps) {
   const { c } = useTheme();
   const box = [styles.box, { borderColor: c.border, backgroundColor: c.panel }];
   const button = (label: string, onPress: (() => void) | undefined, opts: { solid?: boolean; red?: boolean; on?: boolean; icon?: 'mic' } = {}) => (
@@ -137,15 +139,15 @@ export const PracticeScreen = memo(function PracticeScreen({ view, progress, ins
                   </View>
                 ) : null}
                 <View style={[styles.row, { backgroundColor: c.panel }, verdict.sttOk !== null && { borderTopWidth: S.hairline, borderTopColor: c.hair }]}>
-                  <Text style={[styles.rowLabel, { color: c.text }]}>Разбор</Text>
-                  <Text style={[styles.value, { color: verdict.parseOk ? c.text : c.red }]}>{verdict.parseOk ? 'ВЕРНО' : 'НЕВЕРНО'}</Text>
+                  <Text style={[styles.rowLabel, { color: c.text }]}>Сверка с образцом</Text>
+                  <Text style={[styles.value, { color: verdict.parseOk ? c.text : c.red }]}>{verdict.parseOk ? 'СОВПАЛО' : 'НЕ СОВПАЛО'}</Text>
                 </View>
                 <View style={[styles.detail, { backgroundColor: c.panel, borderTopColor: c.hair }]}>
                   <Text style={[styles.meta, { color: c.muted }]}>ПОЛУЧИЛОСЬ</Text>
                   <Text style={[styles.small, { color: c.text }]}>{verdict.did}</Text>
                   {!verdict.parseOk ? (
                     <>
-                      <Text style={[styles.meta, styles.gap, { color: c.muted }]}>НУЖНО</Text>
+                      <Text style={[styles.meta, styles.gap, { color: c.muted }]}>ОБРАЗЕЦ</Text>
                       <Text style={[styles.small, { color: c.text }]}>{verdict.want}</Text>
                     </>
                   ) : null}
@@ -164,12 +166,12 @@ export const PracticeScreen = memo(function PracticeScreen({ view, progress, ins
             {v.phase === 'done' ? (
               <>
                 <View style={styles.buttons}>
-                  {button('ДАЛЬШЕ', onNext, { solid: true })}
-                  {button('ЕЩЁ РАЗ', onRepeat)}
+                  {button('ВЕРНО', onRate ? () => onRate(true) : undefined, { solid: true })}
+                  {button('НЕВЕРНО', onRate ? () => onRate(false) : undefined)}
                 </View>
                 <View style={styles.buttons}>
-                  {button('ПЛОХАЯ КАРТОЧКА', onFlag ? () => onFlag('card') : undefined, { on: v.flags.card })}
-                  {button('СКАЗАЛ ИНАЧЕ', onFlag ? () => onFlag('said') : undefined, { on: v.flags.said })}
+                  {button('ЕЩЁ РАЗ', onRepeat)}
+                  {button('СКАЗАЛ ИНАЧЕ', onToggleSaid, { on: v.said })}
                 </View>
               </>
             ) : null}
