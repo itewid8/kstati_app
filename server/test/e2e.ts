@@ -101,13 +101,14 @@ async function scenario(name: string, store: Store) {
   assert.equal((await call('POST', '/auth/email/code', { email: 'masha@example.ru', purpose: 'register' })).status, 429);
   await store.deleteTemp('cooldown#register#masha@example.ru');
   const masha = await reg('masha@example.ru', 'Маша');
-  const T2 = masha.token as string;
+  let T2 = masha.token as string;
 
   // Сброс пароля
   const { devCode: resetCode } = await ok('POST', '/auth/email/code', { email: 'masha@example.ru', purpose: 'reset' });
   await ok('POST', '/auth/reset', { email: 'masha@example.ru', code: resetCode, password: 'new-secret-456' });
   assert.equal((await call('POST', '/auth/login', { email: 'masha@example.ru', password: 'secret-123' })).status, 401, 'старый пароль больше не подходит');
-  await ok('POST', '/auth/login', { email: 'masha@example.ru', password: 'new-secret-456' });
+  // Сброс пароля гасит прежние входы — дальше работаем с новым токеном (со старым тест падал, если сброс попадал на следующую секунду)
+  T2 = (await ok('POST', '/auth/login', { email: 'masha@example.ru', password: 'new-secret-456' })).token as string;
   // Сброс для несуществующего адреса отвечает так же, но без кода
   const ghost = await ok('POST', '/auth/email/code', { email: 'nobody@example.ru', purpose: 'reset' });
   assert.equal(ghost.devCode, undefined);

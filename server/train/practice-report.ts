@@ -24,7 +24,6 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { gunzipSync } from 'node:zlib';
 import type { Attempt, Card } from '../src/practice.js';
 import { buildTunedMessages } from '../src/prompt.js';
 import { cleanSpeech } from '../src/spoken.js';
@@ -147,9 +146,9 @@ writeFileSync(
 
 /* ---------- примеры для обучения ---------- */
 
-const deckFile = join(process.cwd(), 'data', 'practice.jsonl.gz');
+const deckFile = join(process.cwd(), 'data', 'practice.ndjson');
 const deck = new Map<string, Card>(
-  existsSync(deckFile) ? gunzipSync(readFileSync(deckFile)).toString('utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card).map((c) => [c.id, c]) : [],
+  existsSync(deckFile) ? readFileSync(deckFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card).map((c) => [c.id, c]) : [],
 );
 const examples = new Map<string, string>();
 let fixes = 0;

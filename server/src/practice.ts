@@ -1,6 +1,6 @@
 /**
  * «Обучение» (тест): человек проговаривает карточки, сервер сверяет услышанное и разбор с образцом.
- * Карточка — фраза или задание своими словами в учебном наборе записей (data/practice.jsonl.gz, train/practice-deck.ts):
+ * Карточка — фраза или задание своими словами в учебном наборе записей (data/practice.ndjson, train/practice-deck.ts):
  * разбор идёт вхолостую — записи человека не читаются и не меняются, лимит голосовых команд не тратится.
  * Разбирает только своя модель (parseText, ownOnly): правила сервера и облачная модель в обучении не участвуют.
  * Попытки копятся в журнале «practice» (текст, итог сверки, запись голоса) — материал для словаря исправлений,
@@ -11,7 +11,6 @@ import type { FastifyInstance } from 'fastify';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { gunzipSync } from 'node:zlib';
 import { z } from 'zod';
 import type { toOggOpus } from './audio.js';
 import { HttpError, requireUser } from './auth.js';
@@ -128,9 +127,9 @@ export function makeDeck(cards: Card[]): Deck {
 
 function loadDeck(): Deck {
   if (deck) return deck;
-  const file = fileURLToPath(new URL('../data/practice.jsonl.gz', import.meta.url));
+  const file = fileURLToPath(new URL('../data/practice.ndjson', import.meta.url));
   const cards = existsSync(file)
-    ? gunzipSync(readFileSync(file)).toString('utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card)
+    ? readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card)
     : [];
   deck = makeDeck(cards);
   return deck;

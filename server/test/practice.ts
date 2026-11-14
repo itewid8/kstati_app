@@ -4,7 +4,6 @@
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { gunzipSync } from 'node:zlib';
 import { buildApp } from '../src/app.js';
 import { signToken } from '../src/auth.js';
 import { deletePracticeOf, explainResult, makeDeck, pickCard, wantOf, type Card } from '../src/practice.js';
@@ -22,7 +21,7 @@ assert.ok(sameResult(item('Баня', '2026-11-20'), item('Сауна', '2026-11
 assert.ok(!sameResult(item('Баня', '2026-11-20'), item('Баня', '2026-11-21'), true), 'мягко — дата сверяется');
 
 /* ---------- карточки ---------- */
-const cards = gunzipSync(readFileSync(new URL('../data/practice.jsonl.gz', import.meta.url))).toString('utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card);
+const cards = readFileSync(new URL('../data/practice.ndjson', import.meta.url), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card);
 assert.ok(cards.length > 500, 'карточки собраны (npx tsx train/practice-deck.ts)');
 assert.equal(new Set(cards.map((c) => c.id)).size, cards.length, 'id не повторяются');
 for (const c of cards.slice(0, 200)) assert.notEqual(resultKey(wantOf(c)), '', `образец разбирается: ${c.phrase}`);

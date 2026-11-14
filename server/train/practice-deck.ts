@@ -1,5 +1,5 @@
 /**
- * Карточки для «Обучения» в приложении (src/practice.ts): data/practice.jsonl.gz.
+ * Карточки для «Обучения» в приложении (src/practice.ts): data/practice.ndjson.
  *
  *   npx tsx train/practice-deck.ts
  *
@@ -14,7 +14,6 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gzipSync } from 'node:zlib';
 import { normalize } from '../src/parse.js';
 import { dayLabel, type Card } from '../src/practice.js';
 import { resultKey } from '../src/practiceCheck.js';
@@ -158,8 +157,9 @@ for (const c of [...cards.values()].sort((a, b) => a.id.localeCompare(b.id))) {
   out.push(c);
 }
 mkdirSync(join(process.cwd(), 'data'), { recursive: true });
-const file = join(process.cwd(), 'data', 'practice.jsonl.gz');
-writeFileSync(file, gzipSync(out.map((c) => JSON.stringify(c)).join('\n') + '\n'));
+// Обычный текст: архивы в репозиторий не кладём (проверка «Лишние файлы»)
+const file = join(process.cwd(), 'data', 'practice.ndjson');
+writeFileSync(file, out.map((c) => JSON.stringify(c)).join('\n') + '\n');
 const variants = [...new Set(out.map((c) => c.variant))].sort();
 console.log(`Карточек ${out.length}: словарь обучения ${out.filter((c) => c.vocab === 'base').length}, незнакомые слова ${out.filter((c) => c.vocab === 'test').length}`);
 console.log(`С заданием своими словами ${out.filter((c) => c.brief).length}, контрольных ${out.filter((c) => c.control).length}`);
