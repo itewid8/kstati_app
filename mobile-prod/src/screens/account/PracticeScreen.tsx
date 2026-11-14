@@ -130,7 +130,13 @@ export const PracticeScreen = memo(function PracticeScreen({ view, progress, ins
 
             {v.note ? <Text style={[styles.meta, { color: c.red }]}>{v.note.toUpperCase()}</Text> : null}
 
-            {verdict ? (
+            {verdict?.collect ? (
+              <View style={box}>
+                <Text style={[styles.meta, { color: c.muted }]}>ФРАЗА СОХРАНЕНА</Text>
+                <Text style={[styles.text, { color: c.text }]}>Голосом это пока не делается — фраза пригодится, когда научим</Text>
+              </View>
+            ) : null}
+            {verdict && !verdict.collect ? (
               <SectionBox title="ИТОГ">
                 {verdict.sttOk !== null ? (
                   <View style={[styles.row, { backgroundColor: c.panel }]}>

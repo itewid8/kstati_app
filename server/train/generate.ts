@@ -774,7 +774,7 @@ const evalPhrases = new Set(
   [...readFileSync(join(process.cwd(), 'eval', 'run.ts'), 'utf8').matchAll(/^\s*\['([^']+)'/gm)].map((m) => m[1]!.toLowerCase().replace(/[?!.,]/g, '').trim()),
 );
 
-/** said — фраза, как её говорит человек (до искажений распознавания): для карточек обучения (train/practice-deck.ts) */
+/** said — фраза, как её говорит человек (до искажений распознавания) */
 type Row = { variant: string; phrase: string; said: string; request: { role: string; text: string }[]; response: string; ctx: Ctx };
 const rows: Row[] = [];
 type Stat = { ok: number; dropped: number; rules: number; reasons: Record<string, number>; examples: string[] };

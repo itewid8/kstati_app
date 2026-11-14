@@ -1,6 +1,7 @@
 /**
  * «Обучение» (тест): человек проговаривает карточки, сервер сверяет услышанное и разбор с образцом.
- * Карточка — фраза или задание своими словами в учебном наборе записей (data/practice.ndjson, train/practice-deck.ts):
+ * Карточка — задание своими словами в учебном наборе записей (data/practice.ndjson, train/scenarios.ts — по карточкам
+ * на каждый код матрицы действий docs/action-matrix.md):
  * разбор идёт вхолостую — записи человека не читаются и не меняются, лимит голосовых команд не тратится.
  * Разбирает только своя модель (parseText, ownOnly): правила сервера и облачная модель в обучении не участвуют.
  * Попытки копятся в журнале «practice» (текст, итог сверки, запись голоса) — материал для словаря исправлений,
@@ -37,6 +38,11 @@ export type Card = {
   /** Образец ответа модели */
   actions: unknown[];
   control: boolean;
+  /**
+   * «Сбор фраз»: действие есть в приложении, но голосом пока не делается — правильного ответа нет, сверять не с чем.
+   * Карточка показывает задание, фраза сохраняется на будущее
+   */
+  collect?: boolean;
 };
 export type Mode = 'say' | 'do';
 
@@ -62,6 +68,10 @@ export type Attempt = {
   textOk: boolean | null;
   strict: boolean;
   soft: boolean;
+  /** Карточка «сбор фраз»: сверки нет, фраза сохранена на будущее */
+  collect?: boolean;
+  /** Ожидаемый ответ согласуется со сказанным: разобранный по услышанной фразе, он даёт то же, что по фразе карточки */
+  consistent?: boolean;
   raw: string;
   path?: string;
   did: string;
@@ -86,12 +96,13 @@ export type Attempt = {
 };
 
 /** Вердикт с учётом отметок */
-const judged = <T extends Pick<Attempt, 'mode' | 'textOk' | 'strict' | 'soft' | 'said'>>(a: T) => {
+const judged = <T extends Pick<Attempt, 'mode' | 'textOk' | 'strict' | 'soft' | 'said' | 'consistent'>>(a: T) => {
   const own = a.mode === 'do' || !!a.said;
-  return { sttOk: own ? null : a.textOk, parseOk: own ? a.soft : a.strict };
+  // Своими словами: если ожидаемое согласуется со сказанным (названия оттуда же) — сверка полная, иначе без названий
+  return { sttOk: own ? null : a.textOk, parseOk: own && !a.consistent ? a.soft : a.strict };
 };
 /** Ошибка телефона или модели — для выбора карточек; плохая карточка без «сказал иначе» ошибкой не считается */
-const isMiss = (a: Pick<Attempt, 'sttOk' | 'parseOk' | 'good'>) => (a.good !== undefined ? !a.good : !a.parseOk) || a.sttOk === false;
+const isMiss = (a: Pick<Attempt, 'sttOk' | 'parseOk' | 'good' | 'collect'>) => !a.collect && ((a.good !== undefined ? !a.good : !a.parseOk) || a.sttOk === false);
 
 type UserState = { consent: boolean; seen: string[]; total: number; day: string; today: number };
 type Stats = Record<string, { n: number; bad: number }>;
@@ -102,14 +113,13 @@ const KEEP_SEC = 365 * 24 * 3600;
 const STATE_KEEP_SEC = 400 * 24 * 3600;
 const DAILY_LIMIT = 400;
 const SEEN_MAX = 600;
-/** Доля заданий «своими словами» среди карточек, где задание есть; у заметок — выше: там важнее живые формулировки */
-const DO_SHARE = 0.3;
-const DO_SHARE_NOTES = 0.7;
 /**
- * Виды команд, которые выдаются чаще: заметки (что считать заметкой, а что делом или фильмом — слабое место)
- * и добавление фильмов (худший вид по замеру на незнакомых словах)
+ * Коды матрицы действий (docs/action-matrix.md), которые выдаются чаще: заметки, списки и темы (что считать заметкой,
+ * а что делом или фильмом — слабое место) и «Смотреть» (худший раздел по замеру на незнакомых словах)
  */
-const boostOf = (variant: string) => (variant.startsWith('idea.') ? 3 : variant === 'watch.add' ? 2 : 1);
+const boostOf = (variant: string) => (/^[NLP]\d/.test(variant) ? 3 : /^F\d/.test(variant) ? 2.5 : 1);
+/** «Сбор фраз» — реже: сверять там нечего, это задел на будущее */
+const COLLECT_WEIGHT = 0.4;
 const stateKey = (userId: string) => `practice#u#${userId}`;
 const STATS_KEY = 'practice#stats';
 /** Сколько раз карточку отметили плохой; с двух отметок её больше не выдаём */
@@ -150,10 +160,11 @@ export function pickCard(d: Deck, seen: readonly string[], stats: Stats, rnd: ()
   if (!d.cards.length) return null;
   const was = new Set(seen);
   const variants = [...d.byVariant.keys()];
-  const total = variants.reduce((a, v) => a + weightOf(stats[v], v), 0);
+  const w = (v: string) => weightOf(stats[v], v) * (d.byVariant.get(v)![0]!.collect ? COLLECT_WEIGHT : 1);
+  const total = variants.reduce((a, v) => a + w(v), 0);
   for (let i = 0; i < 12; i++) {
     let x = rnd() * total;
-    const v = variants.find((k) => (x -= weightOf(stats[k], k)) <= 0) ?? variants.at(-1)!;
+    const v = variants.find((k) => (x -= w(k)) <= 0) ?? variants.at(-1)!;
     const pool = d.byVariant.get(v)!.filter((c) => !was.has(c.id));
     if (pool.length) return pool[Math.floor(rnd() * pool.length)]!;
   }
@@ -163,7 +174,8 @@ export function pickCard(d: Deck, seen: readonly string[], stats: Stats, rnd: ()
 }
 
 /** Образец итога: ответ-образец, разобранный кодом сервера по фразе карточки */
-export const wantOf = (card: Card): ParseResult => normalize(card.actions as never, card.ctx, cleanSpeech(normalizeTimes(card.phrase)));
+export const wantOf = (card: Card): ParseResult =>
+  card.collect ? { type: 'unknown' } : normalize(card.actions as never, card.ctx, cleanSpeech(normalizeTimes(card.phrase)));
 
 const speakerOf = (userId: string) => createHash('sha256').update(`practice:${userId}`).digest('hex').slice(0, 8);
 
@@ -211,8 +223,27 @@ const FRESH: Record<string, string> = { new: 'новые', old: 'старые' }
 const TASK_KIND: Record<string, string> = { birthday: 'день рождения', important: 'важный день', trip: 'путешествие' };
 const NOUN: Record<string, string> = { task: 'дело', wish: 'хотелку', watch: 'запись в «Смотреть»', idea: 'заметку' };
 const MARKED: Record<string, string> = { task: 'сделанным', wish: 'полученным', watch: 'просмотренным', idea: 'сделанным' };
-const GROUP_KIND: Record<string, string> = { couple: 'пары', family: 'семьи', parents: 'родителей', friends: 'друзей', other: 'других групп' };
+const GROUP_KIND: Record<string, string> = { couple: 'пара', family: 'семья', parents: 'родители', friends: 'друзья', other: 'другие группы' };
+/** Правка списка словами: «✓ Сыр» → «отмечено: Сыр» */
+const listChange = (c: string) =>
+  c.startsWith('✓ ') ? `отмечено: ${c.slice(2)}` : c.startsWith('○ ') ? `снята отметка: ${c.slice(2)}` : c.startsWith('+ ') ? `добавлено: ${c.slice(2)}` : c.startsWith('− ') ? `убрано: ${c.slice(2)}` : c.includes(' → ') ? `заменено: ${c.replace(' → ', ' на ')}` : c;
 const quoted = (s: string) => `«${s}»`;
+const WD_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const MONTH_NAMES = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+const EVERY: Record<string, [string, string]> = { day: ['каждый день', 'дн.'], week: ['каждую неделю', 'нед.'], month: ['каждый месяц', 'мес.'], year: ['каждый год', 'г.'] };
+type RepeatLike = { freq: string; every: number; weekdays?: number[]; monthDays?: number[]; months?: number[]; until?: string | null; count?: number | null };
+/** «каждую неделю: пн, ср · до 30 ноября» */
+export const repeatLabel = (r: RepeatLike) =>
+  [
+    (r.every > 1 ? `раз в ${r.every} ${EVERY[r.freq]?.[1] ?? r.freq}` : (EVERY[r.freq]?.[0] ?? r.freq)) +
+      (r.weekdays?.length ? `: ${r.weekdays.map((d) => WD_SHORT[d % 7]).join(', ')}` : '') +
+      (r.monthDays?.length ? `: ${r.monthDays.join(', ')}-го` : '') +
+      (r.months?.length ? ` (${r.months.map((m) => MONTH_NAMES[m - 1] ?? m).join(', ')})` : ''),
+    r.until && `до ${dayLabel(r.until)}`,
+    r.count && `${r.count} раз`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
 /** Что приложение сделало бы по команде — обычными словами, по строке на запись или правку */
 export function explainResult(r: ParseResult, ctx: Context): string {
@@ -235,22 +266,22 @@ export function explainResult(r: ParseResult, ctx: Context): string {
             const d = i.data;
             const extra = [
               d.kind && TASK_KIND[d.kind],
-              d.repeat && 'с повтором',
+              d.repeat && `повтор: ${repeatLabel(d.repeat)}`,
               d.people?.length && `участники: ${d.people.map(nameOf).join(', ')}`,
               d.parentId && `внутри плана ${quoted(titleOf(d.parentId))}`,
               d.note && `заметка: ${d.note}`,
             ].filter(Boolean);
             return [`Дело ${quoted(d.title)}`, whenOf(d.date, d.time, d.endDate, d.endTime), ...extra].join(' · ');
           }
-          if (i.type === 'wish') return [`В «Хочу»: ${quoted(i.data.title)}`, i.data.note && `заметка: ${i.data.note}`].filter(Boolean).join(' · ');
-          if (i.type === 'watch') return [`В «Смотреть»: ${quoted(i.data.title)}`, i.data.kind && WATCH_ONE[i.data.kind], ...i.data.genres.map((g) => GENRE[g] ?? g)].filter(Boolean).join(' · ');
+          if (i.type === 'wish') return [`В «Хочу»: ${quoted(i.data.title)}`, i.data.note && `заметка: ${i.data.note}`, i.data.link && `ссылка: ${i.data.link}`].filter(Boolean).join(' · ');
+          if (i.type === 'watch') return [`В «Смотреть»: ${quoted(i.data.title)}`, i.data.kind && WATCH_ONE[i.data.kind], ...i.data.genres.map((g) => GENRE[g] ?? g), i.data.origin && ORIGIN[i.data.origin], i.data.year && String(i.data.year)].filter(Boolean).join(' · ');
           if (i.type === 'idea') {
             const topic = i.data.newTopic ? `в новую тему ${quoted(i.data.newTopic)}` : topicOf(i.data.topicId) ? `в тему ${quoted(topicOf(i.data.topicId)!)}` : '';
             return [`Заметка ${quoted(i.data.title)}`, topic].filter(Boolean).join(' · ');
           }
           const lines = (i.data.body ?? '').split('\n').map((l) => l.replace(/^- \[[ x]\] /, '').trim()).filter(Boolean);
           // Правка списка — что поменялось («✓ Цемент», «+ Сыр»); новый — пункты целиком; без пунктов — тема
-          if (i.id) return `Список ${quoted(i.data.title)}: ${i.data.changes?.join(', ') || lines.join(', ') || 'без изменений'}`;
+          if (i.id) return `Список ${quoted(i.data.title)}: ${i.data.changes?.map(listChange).join(', ') || lines.join(', ') || 'без изменений'}`;
           return lines.length ? `Новый список ${quoted(i.data.title)}: ${lines.join(', ')}` : `Новая тема ${quoted(i.data.title)}`;
         })
         .join('\n');
@@ -266,9 +297,9 @@ export function explainResult(r: ParseResult, ctx: Context): string {
             p.title !== undefined && `название — ${quoted(p.title)}`,
             p.date !== undefined && `день — ${p.date ? dayLabel(p.date) : 'без даты'}`,
             p.time !== undefined && `время — ${p.time ?? 'без времени'}`,
-            p.endDate !== undefined && `до дня — ${p.endDate ? dayLabel(p.endDate) : 'нет'}`,
-            p.endTime !== undefined && `до — ${p.endTime ?? 'нет'}`,
-            p.repeat !== undefined && (p.repeat ? 'повтор изменён' : 'повтор снят'),
+            p.endDate != null && `последний день — ${dayLabel(p.endDate)}`,
+            p.endTime !== undefined && `окончание — ${p.endTime ?? 'не задано'}`,
+            p.repeat !== undefined && (p.repeat ? `повтор — ${repeatLabel(p.repeat)}` : 'повтор снят'),
             p.people !== undefined && `участники — ${p.people.map(nameOf).join(', ') || 'никто'}`,
             p.topicId !== undefined && `тема — ${topicOf(p.topicId) ? quoted(topicOf(p.topicId)!) : 'без темы'}`,
             p.newTopic != null && `новая тема — ${quoted(p.newTopic)}`,
@@ -281,7 +312,9 @@ export function explainResult(r: ParseResult, ctx: Context): string {
       const whose =
         s.kind === 'me' ? 'мои' : s.kind === 'us' || s.kind === 'current' ? 'наши' : s.kind === 'category' ? GROUP_KIND[s.category] : s.names.join(', ');
       const period = r.plans.from === r.plans.to ? dayLabel(r.plans.from) : `${dayLabel(r.plans.from)} — ${dayLabel(r.plans.to)}`;
-      return [`Показать планы: ${whose}`, period, r.plans.who?.length && `чьи: ${r.plans.who.map(nameOf).join(', ')}`, r.plans.query && `найти ${quoted(r.plans.query)}`].filter(Boolean).join(' · ');
+      // «Когда у нас баня» — поиск по названию на год вперёд: период не показываем
+      if (r.plans.query) return `Найти в планах (${whose}): когда ${quoted(r.plans.query)}`;
+      return [`Показать планы: ${whose}`, period, r.plans.who?.length && `чьи: ${r.plans.who.map(nameOf).join(', ')}`].filter(Boolean).join(' · ');
     }
     case 'queryWatch': {
       const f = [...r.filters.kind.map((k) => WATCH_KIND[k] ?? k), ...r.filters.genre.map((g) => GENRE[g] ?? g), ...r.filters.origin.map((o) => ORIGIN[o] ?? o), ...r.filters.fresh.map((x) => FRESH[x] ?? x)];
@@ -333,7 +366,9 @@ export function registerPractice(app: FastifyInstance, store: Store, deps: { par
     const hidden = Object.keys(bad).filter((k) => bad[k]! >= BAD_HIDE);
     const card = (again && d.byId.get(again)) || pickCard(d, [...s.seen, ...hidden], await statsOf());
     if (!card) throw new HttpError(503, 'no_deck', 'Карточки ещё не собраны');
-    const mode: Mode = card.brief && !again && Math.random() < (card.variant.startsWith('idea.') ? DO_SHARE_NOTES : DO_SHARE) ? 'do' : 'say';
+    // Все карточки — «своими словами»: показано, что должно получиться, слова человек выбирает сам.
+    // Фразой (say) — только карточка старого набора без задания
+    const mode: Mode = card.brief ? 'do' : 'say';
     return {
       consent: true,
       card: { id: card.id, mode, text: mode === 'say' ? card.phrase : null, brief: mode === 'do' ? card.brief : null, today: `${dayLabel(card.ctx.today)} · ${card.ctx.now}` },
@@ -369,7 +404,14 @@ export function registerPractice(app: FastifyInstance, store: Store, deps: { par
     const strict = sameResult(out.result, want);
     const soft = sameResult(out.result, want, true);
     const textOk = b.mode === 'say' ? sameText(heard, card.phrase) : null;
-    const { sttOk, parseOk } = judged({ mode: b.mode, textOk, strict, soft });
+    let consistent = false;
+    if (!card.collect)
+      try {
+      consistent = sameResult(normalize(card.actions as never, card.ctx, cleanSpeech(heard)), want);
+    } catch {
+      /* ожидаемое по сказанному не разобралось — сверяем без названий */
+    }
+    const { sttOk, parseOk } = judged({ mode: b.mode, textOk, strict, soft, consistent });
     const id = randomUUID();
     const ts = new Date().toISOString();
     const logId = `${ts}#${id}`;
@@ -401,6 +443,8 @@ export function registerPractice(app: FastifyInstance, store: Store, deps: { par
       textOk,
       strict,
       soft,
+      consistent,
+      ...(card.collect && { collect: true }),
       raw: out.raw.slice(0, 2000),
       ...(out.path && { path: out.path }),
       did: describeResult(out.result, card.ctx).slice(0, 500),
@@ -423,7 +467,7 @@ export function registerPractice(app: FastifyInstance, store: Store, deps: { par
     stats[card.variant] = { n: v.n + 1, bad: v.bad + (isMiss(rec) ? 1 : 0) };
     await store.putTemp(STATS_KEY, stats, STATE_KEEP_SEC);
 
-    return { id, heard, sttOk, parseOk, ...shown, said: false, card: false, progress: progress(next) };
+    return { id, heard, sttOk, parseOk, ...shown, said: false, card: false, ...(card.collect && { collect: true }), progress: progress(next) };
   });
 
   /**

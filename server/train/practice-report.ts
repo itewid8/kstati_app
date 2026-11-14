@@ -1,5 +1,6 @@
 /**
- * Разбор попыток «Обучения» (страница /admin → «Обучение» → «Скачать»).
+ * Разбор попыток «Обучения» (страница /admin → «Обучение» → «Скачать»). Карточки — train/scenarios.ts,
+ * вид команды в таблицах — код из матрицы действий (docs/action-matrix.md).
  *
  *   npx tsx train/practice-report.ts ~/Downloads/practice-2026-11-14.json
  *   npx tsx train/practice-report.ts ~/Downloads/practice-2026-11-14-audio.json   — ещё и записи голоса в private/practice-audio
@@ -10,9 +11,11 @@
  *                         и для шума в обучающем наборе (train/generate.ts, asrNoise);
  *   practice-review.md  — фразы, которые телефон услышал верно, а модель разобрала не так: ошибки разбора.
  *   practice-wordings.txt — как люди говорят сами: задания своими словами и попытки с отметкой «сказал иначе»;
+ *   practice-collect.txt — фразы с карточек «сбор фраз»: действия, которых голос пока не умеет (задел на будущее);
  *   practice-cards.md   — карточки с отметкой «плохая карточка»: кривая фраза или неверный образец, править генератор.
  *   practice-train.jsonl — готовые примеры для обучения (их подхватывает train/to-chat.ts): услышанный текст → образец.
- *                         Берутся фразы, сказанные слово в слово, без отметок человека; где разбор не совпал
+ *                         Берутся попытки без замечаний (свои формулировки — если ожидаемый ответ согласуется
+ *                         со сказанным); где разбор не совпал
  *                         с ожидаемым — ошибка модели, такие примеры to-chat кладёт дважды. Перед обучением файл
  *                         practice-review.md просматривается: карточки с неверным ожидаемым ответом вносятся
  *                         в private/practice-bad-cards.txt (id карточки в начале строки) и в обучение не идут.
@@ -28,8 +31,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Attempt, Card } from '../src/practice.js';
 import { buildTunedMessages } from '../src/prompt.js';
-import { cleanSpeech } from '../src/spoken.js';
-import { textKey } from '../src/practiceCheck.js';
+import { cleanSpeech, normalizeTimes } from '../src/spoken.js';
+import { normalize } from '../src/parse.js';
+import { resultKey, textKey } from '../src/practiceCheck.js';
 
 /** flag — отметка первой версии (одна из двух) */
 type Row = Omit<Attempt, 'userId'> & { logId: string; speaker: string; ogg?: string; flag?: 'etalon' | 'said' };
@@ -39,17 +43,24 @@ if (!file) {
   console.error('Укажите файл с попытками: npx tsx train/practice-report.ts ~/Downloads/practice-….json');
   process.exit(1);
 }
-const all = (JSON.parse(readFileSync(file, 'utf8')) as Row[]).map((r) => {
+const deckFile = join(process.cwd(), 'data', 'practice.ndjson');
+const deck = new Map<string, Card>(
+  existsSync(deckFile) ? readFileSync(deckFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card).map((c) => [c.id, c]) : [],
+);
+// Попытки по карточкам прежних наборов (их уже нет) не считаются
+const raw = JSON.parse(readFileSync(file, 'utf8')) as Row[];
+const all = raw.filter((r) => deck.has(r.cardId)).map((r) => {
   const said = !!r.said || r.flag === 'said';
   return { ...r, said, card: !!r.card || r.flag === 'etalon', ...(said && { sttOk: null, parseOk: r.soft ?? r.parseOk }) };
 });
 const PRIVATE = join(process.cwd(), '..', 'private');
 mkdirSync(PRIVATE, { recursive: true });
 
+if (raw.length !== all.length) console.log(`Попыток по карточкам прежних наборов: ${raw.length - all.length} — не считаются`);
 const pct = (n: number, of: number) => (of ? `${Math.round((100 * n) / of)}%` : '—');
 const own = (r: Row) => r.mode === 'do' || !!r.said;
 // Без оценки человека плохая карточка в счёт не идёт; с оценкой — решает оценка
-const clean = all.filter((r) => r.good !== undefined || !(r.card && !r.said));
+const clean = all.filter((r) => !r.collect && (r.good !== undefined || !(r.card && !r.said)));
 const say = clean.filter((r) => !own(r));
 const todo = clean.filter(own);
 const heardOk = say.filter((r) => r.sttOk);
@@ -57,14 +68,16 @@ const rated = all.filter((r) => r.good !== undefined);
 /** Верно ли получилось: оценка человека, а без неё — сверка с образцом */
 const right = (r: Row) => r.good ?? r.parseOk;
 
-console.log(`Попыток ${all.length}: фраз слово в слово ${say.length}, своими словами ${todo.length} (из них «сказал иначе» ${todo.filter((r) => r.said).length}), на плохих карточках ${all.length - clean.length} (не считаются), голосов ${new Set(all.map((r) => r.speaker)).size}`);
-console.log('');
-console.log('Фразы с карточки');
-console.log(`  телефон услышал слово в слово      ${pct(heardOk.length, say.length)} (${heardOk.length} из ${say.length})`);
-console.log(`  услышано верно → разобрано верно   ${pct(heardOk.filter((r) => right(r)).length, heardOk.length)}   — ошибки здесь: модель`);
-const misheard = say.filter((r) => !r.sttOk);
-console.log(`  услышано с ошибкой → разобрано верно ${pct(misheard.filter((r) => right(r)).length, misheard.length)} (${misheard.length} фраз) — насколько модель терпит искажения`);
-console.log(`  итог: верно от начала до конца     ${pct(say.filter((r) => right(r)).length, say.length)}`);
+console.log(`Попыток ${all.length}: фраз слово в слово ${say.length}, своими словами ${todo.length} (из них «сказал иначе» ${todo.filter((r) => r.said).length}), сбор фраз ${all.filter((r) => r.collect).length}, с замечаниями ${all.filter((r) => !r.collect).length - clean.length} (не считаются), голосов ${new Set(all.map((r) => r.speaker)).size}`);
+if (say.length) {
+  console.log('');
+  console.log('Фразы с карточки');
+  console.log(`  телефон услышал слово в слово      ${pct(heardOk.length, say.length)} (${heardOk.length} из ${say.length})`);
+  console.log(`  услышано верно → разобрано верно   ${pct(heardOk.filter((r) => right(r)).length, heardOk.length)}   — ошибки здесь: модель`);
+  const misheard = say.filter((r) => !r.sttOk);
+  console.log(`  услышано с ошибкой → разобрано верно ${pct(misheard.filter((r) => right(r)).length, misheard.length)} (${misheard.length} фраз) — насколько модель терпит искажения`);
+  console.log(`  итог: верно от начала до конца     ${pct(say.filter((r) => right(r)).length, say.length)}`);
+}
 if (todo.length) console.log(`Своими словами: разобрано верно ${pct(todo.filter((r) => right(r)).length, todo.length)} (без сверки названий)`);
 if (rated.length)
   console.log(
@@ -148,19 +161,31 @@ writeFileSync(
 
 /* ---------- примеры для обучения ---------- */
 
-const deckFile = join(process.cwd(), 'data', 'practice.ndjson');
-const deck = new Map<string, Card>(
-  existsSync(deckFile) ? readFileSync(deckFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card).map((c) => [c.id, c]) : [],
-);
 // Карточки, которые при разборе признаны негодными (по id, по строке) — их попытки в обучение не идут
 const blockFile = join(PRIVATE, 'practice-bad-cards.txt');
 const blocked = new Set(existsSync(blockFile) ? readFileSync(blockFile, 'utf8').split('\n').map((l) => l.trim().split(/\s/)[0]!).filter(Boolean) : []);
 const examples = new Map<string, string>();
 let fixes = 0;
+let toTeacher = 0;
 for (const r of all) {
   const card = deck.get(r.cardId);
-  // Только фразы слово в слово с карточек из словаря обучения, не контрольных и без отметок
-  if (!card || card.control || card.vocab !== 'base' || r.mode === 'do' || r.said || r.card || blocked.has(r.cardId)) continue;
+  // Только карточки из словаря обучения, не контрольные и без замечаний
+  if (!card || card.collect || r.collect || card.control || card.vocab !== 'base' || r.card || blocked.has(r.cardId)) continue;
+  // Своими словами: ожидаемый ответ годится как образец, только если он согласуется со сказанным — код сервера,
+  // разобрав его по услышанной фразе, даёт то же, что по фразе карточки (названия взяты из сказанного, повтор и
+  // время названы так же). Иначе человек сказал другое — фраза уходит в practice-wordings.txt на разметку учителем
+  if (own(r)) {
+    try {
+      const byHeard = normalize(card.actions as never, card.ctx, cleanSpeech(normalizeTimes(r.heard)));
+      const byCard = normalize(card.actions as never, card.ctx, cleanSpeech(normalizeTimes(card.phrase)));
+      if (resultKey(byHeard) !== resultKey(byCard)) {
+        toTeacher++;
+        continue;
+      }
+    } catch {
+      continue;
+    }
+  }
   // Старые попытки с оценкой человека: «неверно» с пояснением и «верно» при несовпадении — на просмотр, не в обучение
   if ((r.good === false && r.note) || (r.good === true && !r.strict)) continue;
   // Разбор не совпал с ожидаемым — ошибка модели: такой пример to-chat кладёт дважды
@@ -173,6 +198,10 @@ for (const r of all) {
 }
 writeFileSync(join(PRIVATE, 'practice-train.jsonl'), [...examples.values()].join('\n') + (examples.size ? '\n' : ''));
 
+// «Сбор фраз»: как люди просят то, чего голос пока не умеет, — по кодам матрицы (docs/action-matrix.md)
+const collected = all.filter((r) => r.collect && !r.card);
+writeFileSync(join(PRIVATE, 'practice-collect.txt'), collected.map((r) => `${r.variant}\t${r.heard}\t${deck.get(r.cardId)?.brief?.join(' / ') ?? ''}`).sort().join('\n') + (collected.length ? '\n' : ''));
+
 const withAudio = all.filter((r) => r.ogg);
 if (withAudio.length) {
   const dir = join(PRIVATE, 'practice-audio');
@@ -184,5 +213,6 @@ if (withAudio.length) {
 }
 console.log(`\nИскажений распознавания: ${sorted.length} видов → private/practice-pairs.txt${sorted.length ? `; частые: ${sorted.slice(0, 5).map(([k]) => k).join('; ')}` : ''}`);
 console.log(`Ошибок разбора при верно услышанной фразе: ${misses.length} → private/practice-review.md`);
-console.log(`Примеров для обучения: ${examples.size} (из них ошибок модели ${fixes}) → private/practice-train.jsonl${examples.size >= 300 ? ' — набралось на переобучение' : ''}`);
+console.log(`Примеров для обучения: ${examples.size} (из них ошибок модели ${fixes}) → private/practice-train.jsonl${examples.size >= 300 ? ' — набралось на переобучение' : ''}; сказано иначе, чем ожидалось, — ${toTeacher} (на разметку учителем)`);
+console.log(`Фраз для действий, которых голос пока не умеет: ${collected.length} → private/practice-collect.txt`);
 console.log(`Своих формулировок: ${wordings.length} → private/practice-wordings.txt; плохих карточек: ${badCards.size} → private/practice-cards.md`);

@@ -22,7 +22,7 @@ assert.ok(!sameResult(item('Баня', '2026-11-20'), item('Баня', '2026-11-
 
 /* ---------- карточки ---------- */
 const cards = readFileSync(new URL('../data/practice.ndjson', import.meta.url), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card);
-assert.ok(cards.length > 500, 'карточки собраны (npx tsx train/practice-deck.ts)');
+assert.ok(cards.length > 500, 'карточки собраны (npx tsx train/scenarios.ts)');
 assert.equal(new Set(cards.map((c) => c.id)).size, cards.length, 'id не повторяются');
 for (const c of cards.slice(0, 200)) assert.notEqual(resultKey(wantOf(c)), '', `образец разбирается: ${c.phrase}`);
 const deck = makeDeck(cards);
@@ -53,9 +53,10 @@ const call = async (method: 'GET' | 'POST', url: string, body?: unknown, token =
 assert.equal((await call('GET', '/practice/next')).body.consent, false, 'без согласия карточек нет');
 assert.equal((await call('POST', '/practice/attempt', { cardId: cards[0]!.id, mode: 'say', text: 'привет' })).status, 403);
 await call('POST', '/practice/consent');
-const next = (await call('GET', '/practice/next')).body;
-assert.equal(next.consent, true);
-const card = deck.byId.get(next.card.id)!;
+assert.equal((await call('GET', '/practice/next')).body.consent, true);
+// Карточка со сверкой — берём определённую, чтобы тест не зависел от случая
+const card = cards.find((c) => !c.collect && c.variant === 'T03')!;
+const next = (await call('GET', `/practice/next?again=${card.id}`)).body;
 assert.ok(card && (next.card.mode === 'say' ? next.card.text === card.phrase && !next.card.brief : !next.card.text && next.card.brief.length), 'фраза или задание');
 
 // Услышано и разобрано верно; с записью голоса
@@ -66,9 +67,10 @@ assert.deepEqual([good.sttOk, good.parseOk, good.progress.total], [true, true, 1
 reply = { type: 'unknown' };
 const bad = (await call('POST', '/practice/attempt', { cardId: card.id, mode: 'say', text: `${card.phrase} семя` })).body;
 assert.deepEqual([bad.sttOk, bad.parseOk, bad.progress.today], [false, card.variant === 'unknown', 2]);
-// Та же карточка ещё раз — только фразой
+// Та же карточка ещё раз; все карточки — «своими словами»
 const again = (await call('GET', `/practice/next?again=${card.id}`)).body.card;
-assert.deepEqual([again.id, again.mode], [card.id, 'say']);
+assert.deepEqual([again.id, again.mode, again.text], [card.id, 'do', null]);
+assert.ok(cards.every((c) => c.brief?.length), 'задание есть у каждой карточки');
 // Отметки независимы. «Сказал иначе»: текст не сверяется, разбор — без названий; вердикт приходит заново
 assert.equal(typeof good.did, 'string');
 reply = wantOf(card);
@@ -95,7 +97,8 @@ assert.equal((await call('GET', '/admin/practice')).status, 401, 'выгрузк
 
 // Оценка человека: «неверно» при несовпадении — ошибка модели; «верно» при несовпадении — образец под вопросом
 reply = { type: 'unknown' };
-const rated = (await call('POST', '/practice/attempt', { cardId: cards[5]!.id, mode: 'say', text: cards[5]!.phrase })).body;
+const other = cards.find((c) => !c.collect && c.variant === 'T20')!;
+const rated = (await call('POST', '/practice/attempt', { cardId: other.id, mode: 'say', text: other.phrase })).body;
 if (!rated.parseOk) {
   const r1 = (await call('POST', '/practice/flag', { id: rated.id, good: false, note: 'не то название' })).body;
   assert.deepEqual([r1.good, r1.card], [false, false]);
@@ -106,6 +109,16 @@ if (!rated.parseOk) {
   await call('POST', '/practice/flag', { id: rated.id, good: null, card: false });
   assert.equal((await store.listLog<any>('practice', '', 10)).at(-1)!.value.note, undefined, 'отметку сняли — замечания нет');
 }
+
+// «Сбор фраз»: сверки нет, попытка сохраняется
+const col = cards.find((c) => c.collect)!;
+assert.ok(col.brief?.length && !col.actions.length);
+const saved = (await call('POST', '/practice/attempt', { cardId: col.id, mode: 'do', text: 'покажи это только мне' })).body;
+assert.equal(saved.collect, true);
+assert.equal((await store.listLog<any>('practice', '', 20)).at(-1)!.value.collect, true);
+// Матрица: карточки есть по каждому коду, со сверкой — большинство
+const codes = new Set(cards.map((c) => c.variant));
+assert.ok(codes.size >= 110 && new Set(cards.filter((c) => !c.collect).map((c) => c.variant)).size >= 85, `кодов ${codes.size}`);
 
 // Итог словами
 assert.equal(explainResult({ type: 'queryWatch', filters: { kind: ['cartoon'], genre: [], origin: [], fresh: [] } }, card.ctx), 'Что посмотреть: мультфильмы');

@@ -220,7 +220,17 @@ export type PracticeNext = { consent: boolean; card?: PracticeCard; progress: Pr
  * Итог попытки: sttOk — услышано слово в слово (null — не сверяется: задание или «сказал иначе»), parseOk — разбор совпал
  * с образцом; did и want — что получилось и что нужно, словами (по строке на запись)
  */
-export type PracticeVerdict = { id: string; heard: string; sttOk: boolean | null; parseOk: boolean; did: string; want: string; progress: PracticeProgress };
+export type PracticeVerdict = {
+  id: string;
+  heard: string;
+  sttOk: boolean | null;
+  parseOk: boolean;
+  did: string;
+  want: string;
+  /** «Сбор фраз»: голосом это действие пока не делается — сверки нет, фраза сохранена */
+  collect?: boolean;
+  progress: PracticeProgress;
+};
 /** Отметки попытки по желанию: said — сказал иначе, чем на карточке; card — замечание к карточке или результату (note — текст) */
 export type PracticeMark = { said?: boolean; card?: boolean; note?: string };
 
