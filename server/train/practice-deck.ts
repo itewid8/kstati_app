@@ -59,8 +59,18 @@ function briefOf(r: ParseResult, ctx: Context): string[] | null {
     }
     if (it.type === 'wish') return empty(it.data.note) && empty(it.data.link) ? [`Добавить в «Хочу»: ${it.data.title}`] : null;
     if (it.type === 'watch') return empty(it.data.kind) && empty(it.data.genres) ? [`Добавить в «Смотреть»: ${it.data.title}`] : null;
-    if (it.type === 'idea') return empty(it.data.topicId) && empty(it.data.newTopic) ? [`Записать заметку: ${it.data.title}`] : null;
-    return null;
+    if (it.type === 'idea') {
+      const topic = ctx.topics?.find((t) => t.id === it.data.topicId)?.title;
+      if (it.data.topicId && !topic) return null;
+      return [`Записать заметку: ${it.data.title.replace(/\.$/, '')}`, ...(topic ? [`В тему: ${topic}`] : []), ...(it.data.newTopic ? [`В новую тему: ${it.data.newTopic}`] : [])];
+    }
+    // Тема или список: новый — с пунктами; правка — что поменять
+    const lines = (it.data.body ?? '').split('\n').map((l) => l.replace(/^- \[[ x]\] /, '').trim()).filter(Boolean);
+    if (!it.id) return lines.length ? [`Создать список: ${it.data.title}`, `Пункты: ${lines.join(', ')}`] : [`Создать тему: ${it.data.title}`];
+    const changes = (it.data.changes ?? []).map((c) =>
+      c.startsWith('✓ ') ? `Отметить готовым: ${c.slice(2)}` : c.startsWith('+ ') ? `Добавить: ${c.slice(2)}` : /^[−-] /.test(c) ? `Убрать: ${c.slice(2)}` : `Изменить: ${c}`,
+    );
+    return changes.length ? [`В списке: ${it.data.title}`, ...changes] : null;
   }
   if (r.type === 'changes') {
     if (r.changes.length !== 1) return null;

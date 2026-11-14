@@ -102,8 +102,14 @@ const KEEP_SEC = 365 * 24 * 3600;
 const STATE_KEEP_SEC = 400 * 24 * 3600;
 const DAILY_LIMIT = 400;
 const SEEN_MAX = 600;
-/** Доля заданий «своими словами» среди карточек, где задание есть */
+/** Доля заданий «своими словами» среди карточек, где задание есть; у заметок — выше: там важнее живые формулировки */
 const DO_SHARE = 0.3;
+const DO_SHARE_NOTES = 0.7;
+/**
+ * Виды команд, которые выдаются чаще: заметки (что считать заметкой, а что делом или фильмом — слабое место)
+ * и добавление фильмов (худший вид по замеру на незнакомых словах)
+ */
+const boostOf = (variant: string) => (variant.startsWith('idea.') ? 3 : variant === 'watch.add' ? 2 : 1);
 const stateKey = (userId: string) => `practice#u#${userId}`;
 const STATS_KEY = 'practice#stats';
 /** Сколько раз карточку отметили плохой; с двух отметок её больше не выдаём */
@@ -138,16 +144,16 @@ export const dayLabel = (iso: string) => {
 };
 
 /** Вес вида команды: чем больше ошибок, тем чаще карточки; без попыток — как при каждой четвёртой ошибке */
-const weightOf = (s: { n: number; bad: number } | undefined) => 0.5 + 4 * (s ? (s.bad + 1) / (s.n + 4) : 0.25);
+const weightOf = (s: { n: number; bad: number } | undefined, variant = '') => boostOf(variant) * (0.5 + 4 * (s ? (s.bad + 1) / (s.n + 4) : 0.25));
 
 export function pickCard(d: Deck, seen: readonly string[], stats: Stats, rnd: () => number = Math.random): Card | null {
   if (!d.cards.length) return null;
   const was = new Set(seen);
   const variants = [...d.byVariant.keys()];
-  const total = variants.reduce((a, v) => a + weightOf(stats[v]), 0);
+  const total = variants.reduce((a, v) => a + weightOf(stats[v], v), 0);
   for (let i = 0; i < 12; i++) {
     let x = rnd() * total;
-    const v = variants.find((k) => (x -= weightOf(stats[k])) <= 0) ?? variants.at(-1)!;
+    const v = variants.find((k) => (x -= weightOf(stats[k], k)) <= 0) ?? variants.at(-1)!;
     const pool = d.byVariant.get(v)!.filter((c) => !was.has(c.id));
     if (pool.length) return pool[Math.floor(rnd() * pool.length)]!;
   }
@@ -243,7 +249,9 @@ export function explainResult(r: ParseResult, ctx: Context): string {
             return [`Заметка ${quoted(i.data.title)}`, topic].filter(Boolean).join(' · ');
           }
           const lines = (i.data.body ?? '').split('\n').map((l) => l.replace(/^- \[[ x]\] /, '').trim()).filter(Boolean);
-          return [`${i.id ? 'Список' : 'Новый список'} ${quoted(i.data.title)}`, lines.length ? lines.join(', ') : ''].filter(Boolean).join(': ');
+          // Правка списка — что поменялось («✓ Цемент», «+ Сыр»); новый — пункты целиком; без пунктов — тема
+          if (i.id) return `Список ${quoted(i.data.title)}: ${i.data.changes?.join(', ') || lines.join(', ') || 'без изменений'}`;
+          return lines.length ? `Новый список ${quoted(i.data.title)}: ${lines.join(', ')}` : `Новая тема ${quoted(i.data.title)}`;
         })
         .join('\n');
     case 'changes':
@@ -325,7 +333,7 @@ export function registerPractice(app: FastifyInstance, store: Store, deps: { par
     const hidden = Object.keys(bad).filter((k) => bad[k]! >= BAD_HIDE);
     const card = (again && d.byId.get(again)) || pickCard(d, [...s.seen, ...hidden], await statsOf());
     if (!card) throw new HttpError(503, 'no_deck', 'Карточки ещё не собраны');
-    const mode: Mode = card.brief && !again && Math.random() < DO_SHARE ? 'do' : 'say';
+    const mode: Mode = card.brief && !again && Math.random() < (card.variant.startsWith('idea.') ? DO_SHARE_NOTES : DO_SHARE) ? 'do' : 'say';
     return {
       consent: true,
       card: { id: card.id, mode, text: mode === 'say' ? card.phrase : null, brief: mode === 'do' ? card.brief : null, today: `${dayLabel(card.ctx.today)} · ${card.ctx.now}` },
