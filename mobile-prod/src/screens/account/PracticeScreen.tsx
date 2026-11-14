@@ -4,11 +4,11 @@
  */
 import { memo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { PracticeCard, PracticeProgress, PracticeVerdict } from '@/lib/api';
+import type { PracticeCard, PracticeFlags, PracticeProgress, PracticeVerdict } from '@/lib/api';
 import { Icon, SectionBox, fonts, size as S, space, useTheme } from '@/ui';
 import { AccountHeader } from './components/AccountHeader';
 
-export type PracticeFlag = 'etalon' | 'said';
+export type PracticeFlag = keyof PracticeFlags;
 export type PracticePhase = 'idle' | 'listening' | 'sending' | 'done';
 
 export type PracticeView =
@@ -25,7 +25,8 @@ export type PracticeView =
       /** Текст по мере распознавания */
       live: string;
       verdict: PracticeVerdict | null;
-      flag: PracticeFlag | null;
+      /** Отметки попытки — независимые */
+      flags: PracticeFlags;
       /** «Не расслышал», «Нет связи» */
       note: string | null;
     };
@@ -139,14 +140,16 @@ export const PracticeScreen = memo(function PracticeScreen({ view, progress, ins
                   <Text style={[styles.rowLabel, { color: c.text }]}>Разбор</Text>
                   <Text style={[styles.value, { color: verdict.parseOk ? c.text : c.red }]}>{verdict.parseOk ? 'ВЕРНО' : 'НЕВЕРНО'}</Text>
                 </View>
-                {!verdict.parseOk ? (
-                  <View style={[styles.detail, { backgroundColor: c.panel, borderTopColor: c.hair }]}>
-                    <Text style={[styles.meta, { color: c.muted }]}>НУЖНО</Text>
-                    <Text style={[styles.small, { color: c.text }]}>{verdict.want}</Text>
-                    <Text style={[styles.meta, { color: c.muted }]}>ПОЛУЧИЛОСЬ</Text>
-                    <Text style={[styles.small, { color: c.text }]}>{verdict.did}</Text>
-                  </View>
-                ) : null}
+                <View style={[styles.detail, { backgroundColor: c.panel, borderTopColor: c.hair }]}>
+                  <Text style={[styles.meta, { color: c.muted }]}>ПОЛУЧИЛОСЬ</Text>
+                  <Text style={[styles.small, { color: c.text }]}>{verdict.did}</Text>
+                  {!verdict.parseOk ? (
+                    <>
+                      <Text style={[styles.meta, styles.gap, { color: c.muted }]}>НУЖНО</Text>
+                      <Text style={[styles.small, { color: c.text }]}>{verdict.want}</Text>
+                    </>
+                  ) : null}
+                </View>
               </SectionBox>
             ) : null}
 
@@ -165,8 +168,8 @@ export const PracticeScreen = memo(function PracticeScreen({ view, progress, ins
                   {button('ЕЩЁ РАЗ', onRepeat)}
                 </View>
                 <View style={styles.buttons}>
-                  {button('ПЛОХАЯ КАРТОЧКА', onFlag ? () => onFlag('etalon') : undefined, { on: v.flag === 'etalon' })}
-                  {button('СКАЗАЛ ИНАЧЕ', onFlag ? () => onFlag('said') : undefined, { on: v.flag === 'said' })}
+                  {button('ПЛОХАЯ КАРТОЧКА', onFlag ? () => onFlag('card') : undefined, { on: v.flags.card })}
+                  {button('СКАЗАЛ ИНАЧЕ', onFlag ? () => onFlag('said') : undefined, { on: v.flags.said })}
                 </View>
               </>
             ) : null}
@@ -192,6 +195,7 @@ const styles = StyleSheet.create({
   rowLabel: { fontFamily: fonts.sans500, fontSize: 14 },
   value: { fontFamily: fonts.mono500, fontSize: 11, letterSpacing: 0.6 },
   detail: { padding: 10, gap: 4, borderTopWidth: S.hairline },
+  gap: { marginTop: 6 },
   buttons: { flexDirection: 'row', gap: 6 },
   button: { flex: 1, minHeight: 44, paddingHorizontal: 8, borderWidth: S.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   buttonText: { fontFamily: fonts.mono500, fontSize: 10, letterSpacing: 0.8 },

@@ -216,8 +216,13 @@ export async function enrichWatch(groupId: string): Promise<{ updated: number; l
 export type PracticeCard = { id: string; mode: 'say' | 'do'; text: string | null; brief: string[] | null; today: string };
 export type PracticeProgress = { today: number; total: number };
 export type PracticeNext = { consent: boolean; card?: PracticeCard; progress: PracticeProgress };
-/** Итог попытки: sttOk — услышано слово в слово (null у задания), parseOk — разбор совпал с образцом */
+/**
+ * Итог попытки: sttOk — услышано слово в слово (null — не сверяется: задание или «сказал иначе»), parseOk — разбор совпал
+ * с образцом; did и want — что получилось и что нужно, словами (по строке на запись)
+ */
 export type PracticeVerdict = { id: string; heard: string; sttOk: boolean | null; parseOk: boolean; did: string; want: string; progress: PracticeProgress };
+/** Отметки попытки, независимые: said — сказал иначе, card — плохая карточка */
+export type PracticeFlags = { said: boolean; card: boolean };
 
 const problemOf = (e: unknown): string =>
   e instanceof ApiError ? e.message : e instanceof NetError ? 'Нет связи с сервером' : String((e as Error)?.message ?? e);
@@ -274,12 +279,12 @@ export async function practiceAttempt(a: {
   }
 }
 
-/** POST /practice/flag — «плохая карточка» / «сказал иначе»; null — снять. false — не дошло */
-export async function practiceFlag(id: string, flag: 'etalon' | 'said' | null): Promise<boolean> {
+/** POST /practice/flag — отметки попытки; ответ — вердикт заново («сказал иначе» меняет сверку). null — не дошло */
+export async function practiceFlag(id: string, flags: PracticeFlags): Promise<Pick<PracticeVerdict, 'sttOk' | 'parseOk'> | null> {
   try {
-    await request('/practice/flag', { token: useStore.getState().session?.token, body: { id, flag }, timeoutMs: 15_000 });
-    return true;
+    const r = await request<{ sttOk?: boolean | null; parseOk?: boolean }>('/practice/flag', { token: useStore.getState().session?.token, body: { id, ...flags }, timeoutMs: 15_000 });
+    return typeof r?.parseOk === 'boolean' ? { sttOk: r.sttOk ?? null, parseOk: r.parseOk } : null;
   } catch {
-    return false;
+    return null;
   }
 }

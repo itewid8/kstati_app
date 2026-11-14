@@ -9,6 +9,7 @@ import { PracticeScreen, type PracticeFlag, type PracticeView } from '@/screens/
 import { useInsets } from '../common';
 
 const back = () => (router.canGoBack() ? router.back() : router.replace('/settings/app'));
+const NO_FLAGS = { said: false, card: false };
 const DEVICE = `${Platform.OS} ${String(Platform.Version)}${Constants.deviceName ? ` · ${Constants.deviceName}` : ''}`.slice(0, 200);
 type CardView = Extract<PracticeView, { kind: 'card' }>;
 
@@ -35,7 +36,7 @@ export function PracticeContainer() {
     if ('problem' in r) return setView({ kind: 'problem', text: r.problem });
     setProgress(r.progress);
     if (!r.consent || !r.card) return setView({ kind: 'consent' });
-    setView({ kind: 'card', card: r.card, phase: 'idle', live: '', verdict: null, flag: null, note: null });
+    setView({ kind: 'card', card: r.card, phase: 'idle', live: '', verdict: null, flags: NO_FLAGS, note: null });
   }, []);
 
   useEffect(() => {
@@ -85,18 +86,20 @@ export function PracticeContainer() {
     if (started !== 'ok') patch({ phase: 'idle', note: started === 'denied' ? 'Нет доступа к микрофону' : 'Микрофон не включился' });
   }, [finish, patch]);
 
-  const onRepeat = useCallback(() => patch({ phase: 'idle', live: '', verdict: null, flag: null, note: null }), [patch]);
+  const onRepeat = useCallback(() => patch({ phase: 'idle', live: '', verdict: null, flags: NO_FLAGS, note: null }), [patch]);
 
   const onFlag = useCallback(
     async (flag: PracticeFlag) => {
       const v = current.current;
       if (!v?.verdict) return;
-      const next = v.flag === flag ? null : flag;
-      patch({ flag: next });
-      if (!(await practiceFlag(v.verdict.id, next)) && live.current) {
-        patch({ flag: v.flag });
-        useStore.getState().notice('Отметка не отправилась');
-      }
+      // Отметки независимы; «сказал иначе» меняет сверку — вердикт приходит с сервера заново
+      const flags = { ...v.flags, [flag]: !v.flags[flag] };
+      patch({ flags });
+      const r = await practiceFlag(v.verdict.id, flags);
+      if (!live.current) return;
+      if (r) return patch({ verdict: { ...v.verdict, ...r } });
+      patch({ flags: v.flags });
+      useStore.getState().notice('Отметка не отправилась');
     },
     [patch],
   );

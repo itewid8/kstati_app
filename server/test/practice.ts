@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { buildApp } from '../src/app.js';
 import { signToken } from '../src/auth.js';
-import { deletePracticeOf, makeDeck, pickCard, wantOf, type Card } from '../src/practice.js';
+import { deletePracticeOf, explainResult, makeDeck, pickCard, wantOf, type Card } from '../src/practice.js';
 import { resultKey, sameResult, sameText } from '../src/practiceCheck.js';
 import { MemoryStore } from '../src/store/memory.js';
 import type { ParseResult } from '../src/types.js';
@@ -70,15 +70,33 @@ assert.deepEqual([bad.sttOk, bad.parseOk, bad.progress.today], [false, card.vari
 // Та же карточка ещё раз — только фразой
 const again = (await call('GET', `/practice/next?again=${card.id}`)).body.card;
 assert.deepEqual([again.id, again.mode], [card.id, 'say']);
-// Отметка
-assert.equal((await call('POST', '/practice/flag', { id: bad.id, flag: 'said' })).status, 200);
-assert.equal((await call('POST', '/practice/flag', { id: bad.id, flag: 'said' }, signToken('u2'))).status, 401, 'чужая попытка');
+// Отметки независимы. «Сказал иначе»: текст не сверяется, разбор — без названий; вердикт приходит заново
+assert.equal(typeof good.did, 'string');
+reply = wantOf(card);
+const own = (await call('POST', '/practice/attempt', { cardId: card.id, mode: 'say', text: `${card.phrase} пожалуйста` })).body;
+assert.equal(own.sttOk, false);
+const f1 = (await call('POST', '/practice/flag', { id: own.id, said: true })).body;
+assert.deepEqual([f1.sttOk, f1.parseOk, f1.said, f1.card], [null, true, true, false]);
+const f2 = (await call('POST', '/practice/flag', { id: own.id, card: true })).body;
+assert.deepEqual([f2.said, f2.card], [true, true], 'вторая отметка первую не снимает');
+const f3 = (await call('POST', '/practice/flag', { id: own.id, said: false })).body;
+assert.deepEqual([f3.sttOk, f3.said, f3.card], [false, false, true]);
+assert.equal((await call('POST', '/practice/flag', { id: bad.id, flag: 'said' })).body.said, true, 'отметка первой версии приложения');
+assert.equal((await call('POST', '/practice/flag', { id: bad.id, said: true }, signToken('u2'))).status, 401, 'чужая попытка');
+// Карточка с двумя отметками «плохая» больше не выдаётся
+await call('POST', '/practice/flag', { id: bad.id, card: true });
+assert.deepEqual(await store.getTemp('practice#bad'), { [card.id]: 2 });
+for (let i = 0; i < 30; i++) assert.notEqual((await call('GET', '/practice/next')).body.card.id, card.id, 'плохая карточка скрыта');
 
 const log = await store.listLog<any>('practice', '', 10);
-assert.equal(log.length, 2);
-assert.deepEqual([log[0]!.value.audio, log[0]!.value.alts, log[1]!.value.flag], [true, ['другое'], 'said']);
+assert.equal(log.length, 3);
+assert.deepEqual([log[0]!.value.audio, log[0]!.value.alts, log[1]!.value.said, log[1]!.value.card, log[2]!.value.card], [true, ['другое'], true, true, true]);
 assert.equal((await store.listLog('practice-audio', '', 10)).length, 1, 'запись голоса сохранена');
 assert.equal((await call('GET', '/admin/practice')).status, 401, 'выгрузка — только админу');
+
+// Итог словами
+assert.equal(explainResult({ type: 'queryWatch', filters: { kind: ['cartoon'], genre: [], origin: [], fresh: [] } }, card.ctx), 'Что посмотреть: мультфильмы');
+assert.equal(explainResult(item('Баня', '2026-11-20'), card.ctx), 'Дело «Баня» · 20 ноября, пятница');
 
 await deletePracticeOf(store, 'u1');
 assert.equal((await store.listLog('practice', '', 10)).length + (await store.listLog('practice-audio', '', 10)).length, 0, 'с аккаунтом стирается всё');
