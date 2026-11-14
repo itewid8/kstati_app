@@ -87,6 +87,13 @@ ul.subs li:first-child { border-top:0 }
     <div class="err" id="ratesErr"></div>
   </div>
 
+  <div id="practice" class="box" hidden>
+    <div class="cap">Обучение: попытки по карточкам</div>
+    <button type="button" id="practiceGet">Скачать</button>
+    <button type="button" id="practiceAudio">Скачать с записями голоса</button>
+    <div class="err" id="practiceErr"></div>
+  </div>
+
   <div id="list" class="box" hidden>
     <div class="cap" id="count">Выдано</div>
     <ul class="subs" id="subs"></ul>
@@ -110,7 +117,7 @@ ul.subs li:first-child { border-top:0 }
       });
     }, function () { throw new Error('Нет связи с сервером'); });
   }
-  function signOut() { token = null; try { sessionStorage.removeItem('kstati-admin'); } catch (e) {} $('login').hidden = false; $('grant').hidden = true; $('list').hidden = true; $('stats').hidden = true; $('rates').hidden = true; }
+  function signOut() { token = null; try { sessionStorage.removeItem('kstati-admin'); } catch (e) {} $('login').hidden = false; $('grant').hidden = true; $('list').hidden = true; $('stats').hidden = true; $('rates').hidden = true; $('practice').hidden = true; }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function ru(isoDay) { var p = isoDay.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; }
@@ -174,7 +181,7 @@ ul.subs li:first-child { border-top:0 }
   function load() {
     call('GET', '/admin/stats?days=30').then(stats, function () {});
     return call('GET', '/admin/subs').then(function (j) {
-      $('login').hidden = true; $('grant').hidden = false; $('list').hidden = false; $('rates').hidden = false; render(j.subs || []);
+      $('login').hidden = true; $('grant').hidden = false; $('list').hidden = false; $('rates').hidden = false; $('practice').hidden = false; render(j.subs || []);
     });
   }
   $('login').addEventListener('submit', function (e) {
@@ -213,6 +220,36 @@ ul.subs li:first-child { border-top:0 }
       err.className = 'err ok'; err.textContent = 'Оценок: ' + items.length + ', из них неверно: ' + bad;
     }).catch(function (x) { err.textContent = x.message; }).then(function () { b.disabled = false; });
   });
+  // Попытки «Обучения» — одним файлом practice-ГГГГ-ММ-ДД.json (для train/practice-report.ts); с записями — в поле ogg
+  function practice(withAudio) {
+    return function () {
+      var b = this; var err = $('practiceErr'); var all = [];
+      b.disabled = true; err.className = 'err'; err.textContent = '';
+      function page(after) {
+        return call('GET', '/admin/practice?after=' + encodeURIComponent(after)).then(function (j) {
+          all = all.concat(j.items || []);
+          return j.next ? page(j.next) : all;
+        });
+      }
+      function audio(items, i) {
+        while (i < items.length && !items[i].audio) i++;
+        if (i >= items.length) return items;
+        err.textContent = 'Записи: ' + (i + 1) + ' из ' + items.length;
+        return call('GET', '/admin/practice/audio?id=' + encodeURIComponent(items[i].logId))
+          .then(function (j) { items[i].ogg = j.ogg; }, function () {})
+          .then(function () { return audio(items, i + 1); });
+      }
+      page('').then(function (items) { return withAudio ? audio(items, 0) : items; }).then(function (items) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(items, null, 1)], { type: 'application/json' }));
+        a.download = 'practice-' + iso(new Date()) + (withAudio ? '-audio' : '') + '.json'; document.body.appendChild(a); a.click(); a.remove();
+        var bad = items.filter(function (x) { return !x.parseOk || x.sttOk === false; }).length;
+        err.className = 'err ok'; err.textContent = 'Попыток: ' + items.length + ', из них с ошибкой: ' + bad;
+      }).catch(function (x) { err.textContent = x.message; }).then(function () { b.disabled = false; });
+    };
+  }
+  $('practiceGet').addEventListener('click', practice(false));
+  $('practiceAudio').addEventListener('click', practice(true));
   $('logout').addEventListener('click', signOut);
   if (token) load().catch(signOut);
 })();

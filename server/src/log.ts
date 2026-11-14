@@ -13,7 +13,8 @@ export type LogEntry = {
   ts: string;
   /** Кто разобрал фразу: rules — правила, tuned — своя модель, fallback — облачная после своей, compact/full — облачная */
   path?: string;
-  source: 'voice' | 'text' | 'device' | 'eval';
+  /** practice — карточка «Обучения» (src/practice.ts): разбор вхолостую */
+  source: 'voice' | 'text' | 'device' | 'eval' | 'practice';
   model: string;
   /** Кто говорил (id аккаунта) */
   userId?: string;

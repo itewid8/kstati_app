@@ -45,7 +45,7 @@ let interim = '';
 let failure: { error: string; message?: string } | null = null;
 let running = false;
 let waiters: (() => void)[] = [];
-let hooks: { level?: (v: number) => void; ended?: () => void } = {};
+let hooks: { level?: (v: number) => void; ended?: () => void; text?: (t: string) => void } = {};
 
 /* ---------- громкость с микрофона ---------- */
 let media: MediaStream | null = null;
@@ -92,7 +92,11 @@ function settle() {
   w.forEach((f) => f());
 }
 
-export async function startDeviceSpeech(lang: string, on: { level?: (v: number) => void; ended?: () => void }): Promise<'ok' | 'denied' | 'error'> {
+export async function startDeviceSpeech(
+  lang: string,
+  on: { level?: (v: number) => void; ended?: () => void; text?: (t: string) => void },
+  _opts: { record?: boolean; alternatives?: number } = {},
+): Promise<'ok' | 'denied' | 'error'> {
   if (!Ctor) return 'error';
   try {
     hooks = on;
@@ -114,6 +118,7 @@ export async function startDeviceSpeech(lang: string, on: { level?: (v: number) 
         if (res!.isFinal) finals.push(t);
         else interim = [interim, t].filter(Boolean).join(' ');
       }
+      hooks.text?.([...finals, interim].filter(Boolean).join(' '));
     };
     r.onerror = (e) => {
       failure = e;
@@ -160,6 +165,9 @@ export async function stopDeviceSpeech(): Promise<SpeechOutcome> {
   if (f.error === 'network') return { error: 'network', detail: f.message ?? f.error };
   return { error: 'failed', detail: `${f.error}${f.message ? `: ${f.message}` : ''}` };
 }
+
+/** В браузере записи и вариантов распознавания нет */
+export const speechExtras = (): { alts: string[]; audioUri: string | null } => ({ alts: [], audioUri: null });
 
 export function abortDeviceSpeech() {
   hooks = {};

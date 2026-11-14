@@ -209,3 +209,77 @@ export async function enrichWatch(groupId: string): Promise<{ updated: number; l
     return null;
   }
 }
+
+/* ---------- «Обучение»: карточки (сервер — src/practice.ts) ---------- */
+
+/** Карточка: фраза (say) или задание своими словами (do); today — день учебного набора, от него считаются «завтра», «в субботу» */
+export type PracticeCard = { id: string; mode: 'say' | 'do'; text: string | null; brief: string[] | null; today: string };
+export type PracticeProgress = { today: number; total: number };
+export type PracticeNext = { consent: boolean; card?: PracticeCard; progress: PracticeProgress };
+/** Итог попытки: sttOk — услышано слово в слово (null у задания), parseOk — разбор совпал с образцом */
+export type PracticeVerdict = { id: string; heard: string; sttOk: boolean | null; parseOk: boolean; did: string; want: string; progress: PracticeProgress };
+
+const problemOf = (e: unknown): string =>
+  e instanceof ApiError ? e.message : e instanceof NetError ? 'Нет связи с сервером' : String((e as Error)?.message ?? e);
+
+/** GET /practice/next — следующая карточка; consent: false — сначала согласие */
+export async function practiceNext(): Promise<PracticeNext | { problem: string }> {
+  try {
+    const r = await request<PracticeNext>('/practice/next', { token: useStore.getState().session?.token, timeoutMs: 15_000 });
+    return r && typeof r.consent === 'boolean' && r.progress ? r : { problem: 'Сервер ответил непонятно' };
+  } catch (e) {
+    return { problem: problemOf(e) };
+  }
+}
+
+/** POST /practice/consent — согласие на хранение попыток и записей голоса. Текст проблемы или null */
+export async function practiceConsent(): Promise<string | null> {
+  try {
+    await request('/practice/consent', { token: useStore.getState().session?.token, body: {}, timeoutMs: 15_000 });
+    return null;
+  } catch (e) {
+    return problemOf(e);
+  }
+}
+
+/** Запись длиннее не отправляем: предел тела запроса на сервере */
+const PRACTICE_AUDIO_MAX = 1_000_000;
+
+/** POST /practice/attempt — услышанный текст (и запись голоса, если есть) → итог сверки. Файл записи удаляется */
+export async function practiceAttempt(a: {
+  cardId: string;
+  mode: PracticeCard['mode'];
+  text: string;
+  alts: string[];
+  audioUri: string | null;
+  device: string;
+}): Promise<PracticeVerdict | { problem: string }> {
+  let audio: string | undefined;
+  if (a.audioUri) {
+    try {
+      const bytes = await readBytes(a.audioUri);
+      if (bytes.byteLength <= PRACTICE_AUDIO_MAX) audio = toBase64(bytes);
+    } catch {
+      /* запись не прочиталась — попытка уходит без неё */
+    } finally {
+      deleteRecording(a.audioUri);
+    }
+  }
+  try {
+    const s = useStore.getState();
+    const body = { cardId: a.cardId, mode: a.mode, text: a.text, alts: a.alts.slice(0, 5), device: a.device, lang: s.voiceLang, ...(audio && { audio }) };
+    return await request<PracticeVerdict>('/practice/attempt', { token: s.session?.token, body, timeoutMs: 60_000 });
+  } catch (e) {
+    return { problem: problemOf(e) };
+  }
+}
+
+/** POST /practice/flag — «плохая карточка» / «сказал иначе»; null — снять. false — не дошло */
+export async function practiceFlag(id: string, flag: 'etalon' | 'said' | null): Promise<boolean> {
+  try {
+    await request('/practice/flag', { token: useStore.getState().session?.token, body: { id, flag }, timeoutMs: 15_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}

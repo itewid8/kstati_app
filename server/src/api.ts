@@ -10,6 +10,7 @@
  * Все права проверяются здесь: телефону доверять нельзя.
  */
 import { deleteRatingsOf } from './ratings.js';
+import { deletePracticeOf } from './practice.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, randomInt } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
@@ -965,6 +966,7 @@ export class Data {
     for (const n of await s.listNotes(user.id)) await s.deleteNote(user.id, n.id);
     await s.deletePrefs(user.id);
     await deleteRatingsOf(s, user.id);
+    await deletePracticeOf(s, user.id);
     if (user.email) await s.deleteKey(`email#${user.email}`);
     if (user.vkId) await s.deleteKey(`vk#${user.vkId}`);
     if (user.nick) await s.deleteKey(nickKey(user.nick));

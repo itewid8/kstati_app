@@ -10,6 +10,7 @@ import { registerPages } from './pages.js';
 import { mskDay, registerSubs, voiceLimitOf } from './subs.js';
 import { recordSpend, registerSpend } from './spend.js';
 import { registerRatings, rememberCommand } from './ratings.js';
+import { registerPractice } from './practice.js';
 import { appVersion } from './client.js';
 import { config } from './config.js';
 import { sendMail, type MailFile } from './mail.js';
@@ -154,6 +155,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   registerSubs(app, store);
   registerSpend(app, store);
   registerRatings(app, store);
+  registerPractice(app, store, { parse, toOgg });
   registerData(app, store, data);
 
   /** Контекст для ИИ собирает сервер из базы: люди моих групп, дела текущей группы, мои хотелки */

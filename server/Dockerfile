@@ -15,5 +15,7 @@ ENV NODE_ENV=production LOG_DIR=stdout
 COPY package.json package-lock.json* ./
 RUN (npm ci --omit=dev || npm install --omit=dev) && npm cache clean --force
 COPY --from=build /app/dist ./dist
+# Карточки «Обучения» (train/practice-deck.ts)
+COPY data ./data
 # Serverless Containers передаёт порт в PORT
 CMD ["node", "dist/index.js"]

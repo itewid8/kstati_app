@@ -22,6 +22,7 @@ type Native = {
   addListener(name: 'error', fn: (e: ErrorEvent) => void): Sub;
   addListener(name: 'end' | 'start', fn: () => void): Sub;
   addListener(name: 'volumechange', fn: (e: { value: number }) => void): Sub;
+  addListener(name: 'audioend', fn: (e: { uri: string | null }) => void): Sub;
 };
 
 const native = requireOptionalNativeModule<Native>('ExpoSpeechRecognition');
@@ -52,7 +53,12 @@ let failure: ErrorEvent | null = null;
 let running = false;
 let waiters: (() => void)[] = [];
 let subs: Sub[] = [];
-let hooks: { level?: (v: number) => void; ended?: () => void } = {};
+type Hooks = { level?: (v: number) => void; ended?: () => void; text?: (t: string) => void };
+let hooks: Hooks = {};
+/** «Обучение»: другие варианты распознавания и файл записи последней диктовки (speechExtras) */
+let alts: string[] = [];
+let finals = 0;
+let audioUri: string | null = null;
 
 function settle() {
   running = false;
@@ -66,10 +72,19 @@ function listen() {
   subs = [
     native.addListener('result', (e) => {
       const t = (e.results[0]?.transcript ?? '').trim();
-      if (!e.isFinal) return void (interim = t);
+      if (!e.isFinal) {
+        interim = t;
+        return void hooks.text?.([committed, interim].filter(Boolean).join(' '));
+      }
       // iPhone присылает весь текст целиком, Android — по фразам
       committed = Platform.OS === 'ios' ? t : [committed, t].filter(Boolean).join(' ');
       interim = '';
+      // Варианты относятся к одной фразе: пришло несколько кусков — не склеиваем
+      alts = finals++ === 0 ? e.results.slice(1).map((r) => (r.transcript ?? '').trim()).filter(Boolean) : [];
+      hooks.text?.(committed);
+    }),
+    native.addListener('audioend', (e) => {
+      audioUri = e.uri ?? null;
     }),
     native.addListener('error', (e) => {
       failure = e;
@@ -85,9 +100,11 @@ function listen() {
 }
 
 /**
- * Начать слушать. level — громкость 0…1 для волны; ended — служба закончила сама (замолчали), запись пора завершать
+ * Начать слушать. level — громкость 0…1 для волны; ended — служба закончила сама (замолчали), запись пора завершать;
+ * text — текст по мере распознавания. opts («Обучение»): record — сохранить запись в файл, alternatives — сколько
+ * вариантов распознавания просить; итог — speechExtras()
  */
-export async function startDeviceSpeech(lang: string, on: { level?: (v: number) => void; ended?: () => void }): Promise<'ok' | 'denied' | 'error'> {
+export async function startDeviceSpeech(lang: string, on: Hooks, opts: { record?: boolean; alternatives?: number } = {}): Promise<'ok' | 'denied' | 'error'> {
   if (!native) return 'error';
   try {
     const perm = await native.requestPermissionsAsync();
@@ -97,6 +114,9 @@ export async function startDeviceSpeech(lang: string, on: { level?: (v: number) 
     committed = '';
     interim = '';
     failure = null;
+    alts = [];
+    finals = 0;
+    audioUri = null;
     running = true;
     // «АВТО»: у служб телефона нет такого языка — без подсказки они слушают по-английски. Основной — русский;
     // Android 14+ сам переключится на английский, если услышит его. На iPhone и старом Android — русский
@@ -114,7 +134,9 @@ export async function startDeviceSpeech(lang: string, on: { level?: (v: number) 
       interimResults: true,
       continuous: false,
       addsPunctuation: false,
-      maxAlternatives: 1,
+      maxAlternatives: opts.alternatives ?? 1,
+      // 16 кГц, 16 бит — как на Android: на iPhone запись иначе в разы тяжелее
+      ...(opts.record && { recordingOptions: { persist: true, outputSampleRate: 16000, outputEncoding: 'pcmFormatInt16' } }),
       // На телефоне без сети, если модель языка скачана; иначе служба решает сама
       requiresOnDeviceRecognition: false,
       iosTaskHint: 'dictation',
@@ -153,6 +175,9 @@ export async function stopDeviceSpeech(): Promise<SpeechOutcome> {
   if (f.error === 'network') return { error: 'network', detail: f.message };
   return { error: 'failed', detail: `${f.error}: ${f.message}` };
 }
+
+/** Что ещё дала последняя диктовка: другие варианты текста и файл записи (если просили) */
+export const speechExtras = (): { alts: string[]; audioUri: string | null } => ({ alts, audioUri });
 
 /** Отменить без результата */
 export function abortDeviceSpeech() {

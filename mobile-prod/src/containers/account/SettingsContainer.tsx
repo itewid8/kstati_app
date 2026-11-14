@@ -18,6 +18,8 @@ import { noteImportRoute } from '@/components/ShareHost';
 
 /** Расходы на ИИ (прототип, отладка) */
 const openSpend = () => router.push('/settings/spend');
+/** Обучение: карточки (тест) */
+const openPractice = () => router.push('/settings/practice');
 
 /** «0.1.0 (1)»: версия и номер сборки из app.json */
 const VERSION = (() => {
@@ -94,6 +96,7 @@ export function SettingsContainer() {
       onContactSupport={contactSupport}
       onOpenPrivacy={openPrivacy}
       onOpenSpend={openSpend}
+      onOpenPractice={openPractice}
       canSave={canSave}
       onBack={backToProfile}
       onChangeTheme={onChangeTheme}

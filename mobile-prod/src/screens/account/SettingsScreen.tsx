@@ -49,6 +49,8 @@ export type SettingsScreenProps = {
   onEditAllDayReminders?: () => void;
   onContactSupport?: () => void;
   onOpenPrivacy?: () => void;
+  /** «Обучение»: карточки для проверки распознавания и разбора (тест) */
+  onOpenPractice?: () => void;
   /** «Расходы на ИИ» (прототип, отладка) */
   onOpenSpend?: () => void;
   /** Отзыв: ошибка или предложение */
@@ -218,6 +220,7 @@ export const SettingsScreen = memo(function SettingsScreen(props: SettingsScreen
           <SectionBox title="ЛИМИТ ГОЛОСОВЫХ КОМАНД НА СЕГОДНЯ" count={`${pad2(voiceUsed)} / ${pad2(voiceLimit)}`}>
             <VoiceMeter used={voiceUsed} limit={voiceLimit} />
             {onOpenSpend ? <AccountRow label="Расходы на ИИ" onPress={onOpenSpend} /> : null}
+            {props.onOpenPractice ? <AccountRow label="Обучение" onPress={props.onOpenPractice} /> : null}
           </SectionBox>
 
           <SectionBox title="СОЕДИНЕНИЕ">

@@ -774,7 +774,8 @@ const evalPhrases = new Set(
   [...readFileSync(join(process.cwd(), 'eval', 'run.ts'), 'utf8').matchAll(/^\s*\['([^']+)'/gm)].map((m) => m[1]!.toLowerCase().replace(/[?!.,]/g, '').trim()),
 );
 
-type Row = { variant: string; phrase: string; request: { role: string; text: string }[]; response: string; ctx: Ctx };
+/** said — фраза, как её говорит человек (до искажений распознавания): для карточек обучения (train/practice-deck.ts) */
+type Row = { variant: string; phrase: string; said: string; request: { role: string; text: string }[]; response: string; ctx: Ctx };
 const rows: Row[] = [];
 type Stat = { ok: number; dropped: number; rules: number; reasons: Record<string, number>; examples: string[] };
 const report: Record<string, Stat> = {};
@@ -846,7 +847,8 @@ for (const v of VARIANTS) {
     const ex = v.make();
     if (!ex) continue;
     // Как в проде: распознанная фраза проходит чистку сервера (cleanSpeech) до правил и модели
-    const phrase = cleanSpeech(speechLike(ex.phrase.replace(/\s+/g, ' ').trim()));
+    const said = ex.phrase.replace(/\s+/g, ' ').trim();
+    const phrase = cleanSpeech(speechLike(said));
     const key = phrase.toLowerCase().replace(/[?!.,]/g, '').trim();
     if (evalPhrases.has(key)) continue;
     if (seen.has(`${key}|${ex.ctx.today}`)) continue;
@@ -871,7 +873,7 @@ for (const v of VARIANTS) {
     }
     seen.add(`${key}|${ex.ctx.today}`);
     const [system, user] = buildTunedMessages(phrase, ex.ctx);
-    rows.push({ variant: v.id, phrase, request: [system!, user!], response: JSON.stringify({ actions: ex.actions }), ctx: ex.ctx });
+    rows.push({ variant: v.id, phrase, said, request: [system!, user!], response: JSON.stringify({ actions: ex.actions }), ctx: ex.ctx });
     st.ok++;
     if (st.examples.length < 3) st.examples.push(`«${phrase}» → ${JSON.stringify({ actions: ex.actions })}`);
   }
@@ -883,7 +885,7 @@ mkdirSync(join(ROOT, 'out'), { recursive: true });
 const mixed = shuffle(rows);
 const valid = mixed.filter((_, i) => i % 10 === 0);
 const train = mixed.filter((_, i) => i % 10 !== 0);
-const line = (r: Row) => JSON.stringify({ request: r.request, response: r.response, ctx: r.ctx, variant: r.variant });
+const line = (r: Row) => JSON.stringify({ request: r.request, response: r.response, ctx: r.ctx, variant: r.variant, said: r.said });
 writeFileSync(join(ROOT, 'out', 'train.jsonl'), train.map(line).join('\n') + '\n');
 writeFileSync(join(ROOT, 'out', 'valid.jsonl'), valid.map(line).join('\n') + '\n');
 

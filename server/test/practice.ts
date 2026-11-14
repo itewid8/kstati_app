@@ -1,0 +1,87 @@
+/**
+ * «Обучение» (src/practice.ts): согласие, выдача карточки, сверка попытки с образцом, отметка, выгрузка, удаление.
+ *   npm test
+ */
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import { buildApp } from '../src/app.js';
+import { signToken } from '../src/auth.js';
+import { deletePracticeOf, makeDeck, pickCard, wantOf, type Card } from '../src/practice.js';
+import { resultKey, sameResult, sameText } from '../src/practiceCheck.js';
+import { MemoryStore } from '../src/store/memory.js';
+import type { ParseResult } from '../src/types.js';
+
+/* ---------- сравнение ---------- */
+assert.ok(sameText('Запиши в пятницу в 18 00 Ёлку.', 'запиши в пятницу в 18:00 елку'), 'регистр, «ё», знаки и запись времени не мешают');
+assert.ok(!sameText('в пятницу в семь', 'в пятницу в семя'));
+const item = (title: string, date: string): ParseResult => ({ type: 'items', items: [{ key: Math.random().toString(), type: 'task', data: { title, date, time: null, note: '' } }] });
+assert.ok(sameResult(item('Баня', '2026-11-20'), item('баня.', '2026-11-20')), 'ключ, регистр и точка не сравниваются');
+assert.ok(!sameResult(item('Баня', '2026-11-20'), item('Сауна', '2026-11-20')));
+assert.ok(sameResult(item('Баня', '2026-11-20'), item('Сауна', '2026-11-20'), true), 'мягко — без названий');
+assert.ok(!sameResult(item('Баня', '2026-11-20'), item('Баня', '2026-11-21'), true), 'мягко — дата сверяется');
+
+/* ---------- карточки ---------- */
+const cards = gunzipSync(readFileSync(new URL('../data/practice.jsonl.gz', import.meta.url))).toString('utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card);
+assert.ok(cards.length > 500, 'карточки собраны (npx tsx train/practice-deck.ts)');
+assert.equal(new Set(cards.map((c) => c.id)).size, cards.length, 'id не повторяются');
+for (const c of cards.slice(0, 200)) assert.notEqual(resultKey(wantOf(c)), '', `образец разбирается: ${c.phrase}`);
+const deck = makeDeck(cards);
+const variants = [...deck.byVariant.keys()];
+// Вид с ошибками выпадает чаще остальных
+const stats = { [variants[0]!]: { n: 40, bad: 40 }, ...Object.fromEntries(variants.slice(1).map((v) => [v, { n: 40, bad: 0 }])) };
+let seed = 1;
+const rnd = () => ((seed = (seed * 16807) % 2147483647), seed / 2147483647);
+const hits = Array.from({ length: 2000 }, () => pickCard(deck, [], stats, rnd)!.variant).filter((v) => v === variants[0]).length;
+assert.ok(hits > (2000 / variants.length) * 3, `вид с ошибками — чаще (${hits})`);
+const one = makeDeck(cards.slice(0, 2));
+assert.equal(pickCard(one, [cards[0]!.id], {}, rnd)!.id, cards[1]!.id, 'виденные не повторяются, пока есть новые');
+
+/* ---------- запросы ---------- */
+const store = new MemoryStore();
+await store.putUser({ id: 'u1', name: 'Саня', createdAt: new Date().toISOString() });
+let reply: ParseResult = { type: 'unknown' };
+const app = await buildApp({
+  store,
+  parse: async () => ({ result: reply, raw: '{}', usage: { input: 0, output: 0 } as never, attempts: 1, path: 'tuned' }),
+  toOgg: async (b) => ({ ogg: Buffer.from(`ogg:${b.length}`), seconds: 2 }),
+});
+const T = signToken('u1');
+const call = async (method: 'GET' | 'POST', url: string, body?: unknown, token = T) => {
+  const r = await app.inject({ method, url, payload: body as never, headers: { authorization: `Bearer ${token}` } });
+  return { status: r.statusCode, body: r.json() as any };
+};
+assert.equal((await call('GET', '/practice/next')).body.consent, false, 'без согласия карточек нет');
+assert.equal((await call('POST', '/practice/attempt', { cardId: cards[0]!.id, mode: 'say', text: 'привет' })).status, 403);
+await call('POST', '/practice/consent');
+const next = (await call('GET', '/practice/next')).body;
+assert.equal(next.consent, true);
+const card = deck.byId.get(next.card.id)!;
+assert.ok(card && (next.card.mode === 'say' ? next.card.text === card.phrase && !next.card.brief : !next.card.text && next.card.brief.length), 'фраза или задание');
+
+// Услышано и разобрано верно; с записью голоса
+reply = wantOf(card);
+const good = (await call('POST', '/practice/attempt', { cardId: card.id, mode: 'say', text: card.phrase, alts: [card.phrase, 'другое'], audio: Buffer.from('wav').toString('base64'), device: 'test' })).body;
+assert.deepEqual([good.sttOk, good.parseOk, good.progress.total], [true, true, 1]);
+// Услышано с ошибкой, разбор другой
+reply = { type: 'unknown' };
+const bad = (await call('POST', '/practice/attempt', { cardId: card.id, mode: 'say', text: `${card.phrase} семя` })).body;
+assert.deepEqual([bad.sttOk, bad.parseOk, bad.progress.today], [false, card.variant === 'unknown', 2]);
+// Та же карточка ещё раз — только фразой
+const again = (await call('GET', `/practice/next?again=${card.id}`)).body.card;
+assert.deepEqual([again.id, again.mode], [card.id, 'say']);
+// Отметка
+assert.equal((await call('POST', '/practice/flag', { id: bad.id, flag: 'said' })).status, 200);
+assert.equal((await call('POST', '/practice/flag', { id: bad.id, flag: 'said' }, signToken('u2'))).status, 401, 'чужая попытка');
+
+const log = await store.listLog<any>('practice', '', 10);
+assert.equal(log.length, 2);
+assert.deepEqual([log[0]!.value.audio, log[0]!.value.alts, log[1]!.value.flag], [true, ['другое'], 'said']);
+assert.equal((await store.listLog('practice-audio', '', 10)).length, 1, 'запись голоса сохранена');
+assert.equal((await call('GET', '/admin/practice')).status, 401, 'выгрузка — только админу');
+
+await deletePracticeOf(store, 'u1');
+assert.equal((await store.listLog('practice', '', 10)).length + (await store.listLog('practice-audio', '', 10)).length, 0, 'с аккаунтом стирается всё');
+assert.equal((await call('GET', '/practice/next')).body.consent, false);
+await app.close();
+console.log('practice: ok');
