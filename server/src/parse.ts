@@ -793,8 +793,32 @@ function spokenPeople(text: string, ctx: Context): string[] {
   return [];
 }
 
-/** Полный разбор: модель → проверка схемы (один повтор) → нормализация */
-export async function parseText(input: string, ctx: Context, model?: string): Promise<ParseOutput> {
+/** Сколько раз спрашиваем свою модель, когда кроме неё некому: первый запрос будит контейнер (холодный старт дольше таймаута) */
+const OWN_TRIES = 3;
+
+/**
+ * Только своя модель: без правил сервера, без отсева посторонних фраз и без страховки облачной моделью.
+ * Так видно и исправляется именно она. Ответ модели дальше, как всегда, разбирает код сервера (normalize)
+ */
+async function parseOwn(input: string, ctx: Context): Promise<ParseOutput> {
+  const text = cleanSpeech(normalizeTimes(input)) || input.trim();
+  let last: unknown;
+  for (let i = 0; i < OWN_TRIES; i++) {
+    try {
+      return { ...(await ask(buildTunedMessages(text, ctx), text, ctx, config.tunedModel)), path: 'tuned' };
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last;
+}
+
+/**
+ * Полный разбор: модель → проверка схемы (один повтор) → нормализация.
+ * opts.ownOnly (и OWN_ONLY=1 для всего сервера) — только своя модель, см. parseOwn
+ */
+export async function parseText(input: string, ctx: Context, model?: string, opts: { ownOnly?: boolean } = {}): Promise<ParseOutput> {
+  if ((opts.ownOnly || config.ownOnly) && config.tunedModel && input.trim()) return parseOwn(input, ctx);
   if (!input.trim() || onlyFiller(input)) return { result: { type: 'unknown' }, raw: '', usage: NO_USAGE, attempts: 0 };
   // «в 18 0 0» → «в 18:00»: время, записанное распознаванием через пробел
   const text = cleanSpeech(normalizeTimes(input)) || input.trim();

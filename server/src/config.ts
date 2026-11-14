@@ -75,6 +75,8 @@ export const config = {
   promptMode: (['full', 'tuned'].includes(env('PROMPT_MODE')) ? env('PROMPT_MODE') : 'compact') as 'compact' | 'full' | 'tuned',
   /** Адрес дообученной модели из Yandex AI Studio (ds://…) — для PROMPT_MODE=tuned */
   tunedModel: env('TUNED_MODEL') || (env('OWN_LLM_URL') ? 'own' : ''),
+  /** Все команды разбирает только своя модель: без правил сервера и без страховки облачной (src/parse.ts, parseOwn) */
+  ownOnly: env('OWN_ONLY') === '1',
   /** Своя модель вместо Яндекса (опыты): адрес OpenAI-совместимого сервера — mlx_lm.server, llama-server. Расход — 0 ₽ */
   llmBaseUrl: env('LLM_BASE_URL').replace(/\/+$/, ''),
   /**

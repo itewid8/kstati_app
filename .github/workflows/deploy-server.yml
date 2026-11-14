@@ -81,7 +81,7 @@ jobs:
             --core-fraction 100 \
             --concurrency 8 \
             --execution-timeout 60s \
-            --environment "NODE_ENV=production,LOG_DIR=stdout,YANDEX_FOLDER_ID=${{ vars.FOLDER_ID }},YANDEX_MODEL=${{ vars.YANDEX_MODEL }},PUBLIC_URL=${{ vars.PUBLIC_URL }},APP_SCHEME=${{ vars.APP_SCHEME }},YDB_DOCAPI_ENDPOINT=${{ vars.YDB_DOCAPI_ENDPOINT }},VK_CLIENT_ID=${{ vars.VK_CLIENT_ID }},MAIL_FROM=${{ vars.MAIL_FROM }},FEEDBACK_EMAIL=$FEEDBACK_EMAIL,VOICE_DAILY_LIMIT=${{ vars.VOICE_DAILY_LIMIT }},PAID_DAILY_LIMIT=${{ vars.PAID_DAILY_LIMIT }},ADMIN_EMAILS=$ADMIN_EMAILS,PROMPT_MODE=${{ vars.PROMPT_MODE }},OWN_LLM_URL=$OWN_LLM_URL" \
+            --environment "NODE_ENV=production,LOG_DIR=stdout,YANDEX_FOLDER_ID=${{ vars.FOLDER_ID }},YANDEX_MODEL=${{ vars.YANDEX_MODEL }},PUBLIC_URL=${{ vars.PUBLIC_URL }},APP_SCHEME=${{ vars.APP_SCHEME }},YDB_DOCAPI_ENDPOINT=${{ vars.YDB_DOCAPI_ENDPOINT }},VK_CLIENT_ID=${{ vars.VK_CLIENT_ID }},MAIL_FROM=${{ vars.MAIL_FROM }},FEEDBACK_EMAIL=$FEEDBACK_EMAIL,VOICE_DAILY_LIMIT=${{ vars.VOICE_DAILY_LIMIT }},PAID_DAILY_LIMIT=${{ vars.PAID_DAILY_LIMIT }},ADMIN_EMAILS=$ADMIN_EMAILS,PROMPT_MODE=${{ vars.PROMPT_MODE }},OWN_ONLY=${{ vars.OWN_ONLY }},OWN_LLM_URL=$OWN_LLM_URL" \
             --secret "environment-variable=OWN_LLM_KEY,id=${{ vars.LOCKBOX_ID }},key=OWN_LLM_KEY" \
             --secret "environment-variable=JWT_SECRET,id=${{ vars.LOCKBOX_ID }},key=JWT_SECRET" \
             --secret "environment-variable=YANDEX_API_KEY,id=${{ vars.LOCKBOX_ID }},key=YANDEX_API_KEY" \

@@ -2,6 +2,7 @@
  * «Обучение» (тест): человек проговаривает карточки, сервер сверяет услышанное и разбор с образцом.
  * Карточка — фраза или задание своими словами в учебном наборе записей (data/practice.jsonl.gz, train/practice-deck.ts):
  * разбор идёт вхолостую — записи человека не читаются и не меняются, лимит голосовых команд не тратится.
+ * Разбирает только своя модель (parseText, ownOnly): правила сервера и облачная модель в обучении не участвуют.
  * Попытки копятся в журнале «practice» (текст, итог сверки, запись голоса) — материал для словаря исправлений,
  * шума в обучающем наборе и сравнения систем распознавания (train/practice-report.ts).
  * Карточки чаще берутся из видов команд, где ошибок больше. Каждая десятая — контрольная: в обучение не идёт.
@@ -355,7 +356,11 @@ export function registerPractice(app: FastifyInstance, store: Store, deps: { par
 
     const heard = normalizeTimes(b.text);
     const t0 = Date.now();
-    const out = await deps.parse(heard, card.ctx);
+    // Только своя модель: без правил сервера и облачной страховки — обучение про неё
+    const out = await deps.parse(heard, card.ctx, undefined, { ownOnly: true }).catch((e: unknown) => {
+      req.log.error({ err: String(e).slice(0, 200) }, 'Своя модель не ответила на карточку');
+      throw new HttpError(503, 'own_model', 'Модель не ответила — попробуйте ещё раз');
+    });
     let want: ParseResult = { type: 'unknown' };
     try {
       want = wantOf(card);
