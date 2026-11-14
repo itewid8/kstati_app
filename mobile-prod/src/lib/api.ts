@@ -221,8 +221,8 @@ export type PracticeNext = { consent: boolean; card?: PracticeCard; progress: Pr
  * с образцом; did и want — что получилось и что нужно, словами (по строке на запись)
  */
 export type PracticeVerdict = { id: string; heard: string; sttOk: boolean | null; parseOk: boolean; did: string; want: string; progress: PracticeProgress };
-/** Отметки попытки по желанию: said — сказал иначе, чем на карточке; card — в карточке ошибка */
-export type PracticeMark = { said?: boolean; card?: boolean };
+/** Отметки попытки по желанию: said — сказал иначе, чем на карточке; card — замечание к карточке или результату (note — текст) */
+export type PracticeMark = { said?: boolean; card?: boolean; note?: string };
 
 const problemOf = (e: unknown): string =>
   e instanceof ApiError ? e.message : e instanceof NetError ? 'Нет связи с сервером' : String((e as Error)?.message ?? e);

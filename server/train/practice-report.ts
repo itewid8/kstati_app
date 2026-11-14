@@ -143,7 +143,7 @@ const badCards = new Map<string, Row>();
 for (const r of all.filter((x) => x.card)) badCards.set(r.cardId, r);
 writeFileSync(
   join(PRIVATE, 'practice-cards.md'),
-  ['# Плохие карточки', '', ...[...badCards.values()].flatMap((r) => [`## «${r.phrase}»`, '', `- карточка ${r.cardId}, вид: ${r.variant}`, `- образец: ${r.want}`, `- сказано: «${r.heard}»${r.said ? ' (иначе, чем на карточке)' : ''}`, `- получилось: ${r.did}`, ''])].join('\n'),
+  ['# Плохие карточки', '', ...[...badCards.values()].flatMap((r) => [`## «${r.phrase}»`, '', `- карточка ${r.cardId}, вид: ${r.variant}`, `- образец: ${r.want}`, `- сказано: «${r.heard}»${r.said ? ' (иначе, чем на карточке)' : ''}`, `- получилось: ${r.did}`, ...(r.note ? [`- замечание: ${r.note}`] : []), ''])].join('\n'),
 );
 
 /* ---------- примеры для обучения ---------- */

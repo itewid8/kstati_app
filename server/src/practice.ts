@@ -440,7 +440,8 @@ export function registerPractice(app: FastifyInstance, store: Store, deps: { par
     const { shown, ...rec } = kept;
     const said = b.flag !== undefined ? b.flag === 'said' : (b.said ?? !!rec.said);
     const good = b.good === undefined ? rec.good : (b.good ?? undefined);
-    const note = good === false ? (b.note ?? rec.note ?? '') : '';
+    // Замечание человека к попытке (и к карточке): что не так или как должно быть; снимается вместе с отметкой
+    const note = b.card === false ? '' : (b.note ?? rec.note ?? '');
     const { said: _s, card: _c, good: _g, note: _n, ...rest } = rec;
     void _s;
     void _c;

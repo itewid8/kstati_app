@@ -6,6 +6,7 @@ import { practiceAttempt, practiceConsent, practiceMark, practiceNext, type Prac
 import { abortDeviceSpeech, deviceSpeechAvailable, speechExtras, startDeviceSpeech, stopDeviceSpeech } from '@/lib/deviceSpeech';
 import { useStore } from '@/lib/store';
 import { PracticeScreen, type PracticeView } from '@/screens/account/PracticeScreen';
+import { InputSheet } from '@/ui/InputSheet';
 import { useInsets } from '../common';
 
 const back = () => (router.canGoBack() ? router.back() : router.replace('/settings/app'));
@@ -87,13 +88,14 @@ export function PracticeContainer() {
 
   const onRepeat = useCallback(() => patch({ phase: 'idle', live: '', verdict: null, said: false, bad: false, note: null }), [patch]);
 
-  // Отметки по желанию. «Сказал иначе» меняет сверку — вердикт приходит с сервера заново
-  const toggle = useCallback(
-    async (key: 'said' | 'bad') => {
+  // Отметки по желанию. «Сказал иначе» меняет сверку — вердикт приходит с сервера заново.
+  // «Замечание» — поле с текстом: кривая фраза, не то ожидается, приложение должно вести себя иначе
+  const mark = useCallback(
+    async (key: 'said' | 'bad', on: boolean, note?: string) => {
       const v = current.current;
       if (!v?.verdict) return;
-      patch({ [key]: !v[key] });
-      const r = await practiceMark(v.verdict.id, key === 'said' ? { said: !v.said } : { card: !v.bad });
+      patch({ [key]: on });
+      const r = await practiceMark(v.verdict.id, key === 'said' ? { said: on } : { card: on, ...(note && { note }) });
       if (!live.current) return;
       if (r) return patch({ verdict: { ...v.verdict, ...r } });
       patch({ [key]: v[key] });
@@ -101,8 +103,22 @@ export function PracticeContainer() {
     },
     [patch],
   );
-  const onToggleSaid = useCallback(() => void toggle('said'), [toggle]);
-  const onToggleBad = useCallback(() => void toggle('bad'), [toggle]);
+  const [asking, setAsking] = useState(false);
+  const onToggleSaid = useCallback(() => void mark('said', !current.current?.said), [mark]);
+  const onToggleBad = useCallback(() => (current.current?.bad ? void mark('bad', false) : setAsking(true)), [mark]);
+  const onNote = useCallback(
+    (note: string) => {
+      setAsking(false);
+      void mark('bad', true, note);
+    },
+    [mark],
+  );
+  const closeNote = useCallback(() => setAsking(false), []);
 
-  return <PracticeScreen view={view} progress={progress} insets={insets} onBack={back} onAgree={onAgree} onRetry={load} onMic={onMic} onNext={load} onRepeat={onRepeat} onToggleSaid={onToggleSaid} onToggleBad={onToggleBad} />;
+  return (
+    <>
+      <PracticeScreen view={view} progress={progress} insets={insets} onBack={back} onAgree={onAgree} onRetry={load} onMic={onMic} onNext={load} onRepeat={onRepeat} onToggleSaid={onToggleSaid} onToggleBad={onToggleBad} />
+      <InputSheet visible={asking} value="" multiline maxLength={500} title="ЧТО НЕ ТАК ИЛИ КАК ДОЛЖНО БЫТЬ" submitLabel="ОТПРАВИТЬ" bottomInset={insets.bottom} onSubmit={onNote} onClose={closeNote} />
+    </>
+  );
 }

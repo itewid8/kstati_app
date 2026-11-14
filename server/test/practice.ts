@@ -102,7 +102,9 @@ if (!rated.parseOk) {
   const r2 = (await call('POST', '/practice/flag', { id: rated.id, good: true })).body;
   assert.deepEqual([r2.good, r2.card], [true, true]);
   const kept = (await store.listLog<any>('practice', '', 10)).at(-1)!.value;
-  assert.deepEqual([kept.good, kept.note, kept.card], [true, undefined, true], 'комментарий — только у «неверно»');
+  assert.deepEqual([kept.good, kept.note, kept.card], [true, 'не то название', true], 'замечание остаётся, пока карточка отмечена');
+  await call('POST', '/practice/flag', { id: rated.id, good: null, card: false });
+  assert.equal((await store.listLog<any>('practice', '', 10)).at(-1)!.value.note, undefined, 'отметку сняли — замечания нет');
 }
 
 // Итог словами

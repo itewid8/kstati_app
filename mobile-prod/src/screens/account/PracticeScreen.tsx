@@ -25,7 +25,7 @@ export type PracticeView =
       /** Текст по мере распознавания */
       live: string;
       verdict: PracticeVerdict | null;
-      /** Отметки по желанию: сказал иначе, чем на карточке; в карточке ошибка (кривая фраза, не то ожидается) */
+      /** Отметки по желанию: сказал иначе, чем на карточке; оставлено замечание (кривая фраза, не то ожидается, должно быть иначе) */
       said: boolean;
       bad: boolean;
       /** «Не расслышал», «Нет связи» */
@@ -171,7 +171,7 @@ export const PracticeScreen = memo(function PracticeScreen({ view, progress, ins
                 </View>
                 <View style={styles.buttons}>
                   {button('СКАЗАЛ ИНАЧЕ', onToggleSaid, { on: v.said })}
-                  {button('ОШИБКА В КАРТОЧКЕ', onToggleBad, { on: v.bad })}
+                  {button('ЗАМЕЧАНИЕ', onToggleBad, { on: v.bad })}
                 </View>
               </>
             ) : null}
