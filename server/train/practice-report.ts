@@ -12,9 +12,11 @@
  *   practice-wordings.txt — как люди говорят сами: задания своими словами и попытки с отметкой «сказал иначе»;
  *   practice-cards.md   — карточки с отметкой «плохая карточка»: кривая фраза или неверный образец, править генератор.
  *   practice-train.jsonl — готовые примеры для обучения (их подхватывает train/to-chat.ts): услышанный текст → образец.
- *                         Берутся попытки с оценкой человека, где образцу можно верить: «верно» при совпадении с образцом
- *                         (проверено человеком) и «неверно» без пояснения при несовпадении (ошибка модели — такие
- *                         примеры to-chat кладёт дважды). Только карточки из словаря обучения и не контрольные:
+ *                         Берутся фразы, сказанные слово в слово, без отметок человека; где разбор не совпал
+ *                         с ожидаемым — ошибка модели, такие примеры to-chat кладёт дважды. Перед обучением файл
+ *                         practice-review.md просматривается: карточки с неверным ожидаемым ответом вносятся
+ *                         в private/practice-bad-cards.txt (id карточки в начале строки) и в обучение не идут.
+ *                         Только карточки из словаря обучения и не контрольные:
  *                         слова проверочного словаря в обучение не идут, иначе замер на незнакомых словах перестанет
  *                         что-либо показывать;
  * «Неверно» с пояснением и расхождения оценки со сверкой — в practice-review.md и practice-cards.md: их смотрит человек.
@@ -132,7 +134,7 @@ writeFileSync(join(PRIVATE, 'practice-pairs.txt'), sorted.map(([k, p]) => `${Str
 const review = ['# Услышано верно, разобрано не так', ''];
 const misses = learn.filter((r) => !right(r) && (own(r) || r.sttOk));
 for (const r of misses)
-  review.push(`## «${r.heard}»`, '', `- вид: ${r.variant}${own(r) ? ' (своими словами)' : ''}, разбор: ${r.path ?? 'правила'}`, `- нужно: ${r.want}`, `- сделано: ${r.did}`, ...(r.note ? [`- что не так: ${r.note}`] : []), ...(r.good === false && r.parseOk ? ['- с образцом совпало: неверен и образец'] : []), `- ответ модели: \`${r.raw.slice(0, 300)}\``, '');
+  review.push(`## «${r.heard}»`, '', `- карточка ${r.cardId}`, `- вид: ${r.variant}${own(r) ? ' (своими словами)' : ''}, разбор: ${r.path ?? 'правила'}`, `- нужно: ${r.want}`, `- сделано: ${r.did}`, ...(r.note ? [`- что не так: ${r.note}`] : []), ...(r.good === false && r.parseOk ? ['- с образцом совпало: неверен и образец'] : []), `- ответ модели: \`${r.raw.slice(0, 300)}\``, '');
 writeFileSync(join(PRIVATE, 'practice-review.md'), review.join('\n'));
 
 const wordings = learn.filter(own).map((r) => `${r.variant}\t${r.heard}\t${r.mode === 'do' ? r.want : r.phrase}`);
@@ -150,14 +152,19 @@ const deckFile = join(process.cwd(), 'data', 'practice.ndjson');
 const deck = new Map<string, Card>(
   existsSync(deckFile) ? readFileSync(deckFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Card).map((c) => [c.id, c]) : [],
 );
+// Карточки, которые при разборе признаны негодными (по id, по строке) — их попытки в обучение не идут
+const blockFile = join(PRIVATE, 'practice-bad-cards.txt');
+const blocked = new Set(existsSync(blockFile) ? readFileSync(blockFile, 'utf8').split('\n').map((l) => l.trim().split(/\s/)[0]!).filter(Boolean) : []);
 const examples = new Map<string, string>();
 let fixes = 0;
-for (const r of rated) {
+for (const r of all) {
   const card = deck.get(r.cardId);
-  if (!card || card.control || card.vocab !== 'base' || r.mode === 'do' || r.said) continue;
-  const verified = r.good === true && r.strict;
-  const fix = r.good === false && !r.strict && !r.note;
-  if (!verified && !fix) continue;
+  // Только фразы слово в слово с карточек из словаря обучения, не контрольных и без отметок
+  if (!card || card.control || card.vocab !== 'base' || r.mode === 'do' || r.said || r.card || blocked.has(r.cardId)) continue;
+  // Старые попытки с оценкой человека: «неверно» с пояснением и «верно» при несовпадении — на просмотр, не в обучение
+  if ((r.good === false && r.note) || (r.good === true && !r.strict)) continue;
+  // Разбор не совпал с ожидаемым — ошибка модели: такой пример to-chat кладёт дважды
+  const fix = !r.strict;
   const phrase = cleanSpeech(r.heard);
   const [system, user] = buildTunedMessages(phrase, card.ctx);
   const k = `${phrase.toLowerCase()}|${card.id}`;

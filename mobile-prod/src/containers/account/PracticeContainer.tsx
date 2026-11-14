@@ -6,7 +6,6 @@ import { practiceAttempt, practiceConsent, practiceMark, practiceNext, type Prac
 import { abortDeviceSpeech, deviceSpeechAvailable, speechExtras, startDeviceSpeech, stopDeviceSpeech } from '@/lib/deviceSpeech';
 import { useStore } from '@/lib/store';
 import { PracticeScreen, type PracticeView } from '@/screens/account/PracticeScreen';
-import { InputSheet } from '@/ui/InputSheet';
 import { useInsets } from '../common';
 
 const back = () => (router.canGoBack() ? router.back() : router.replace('/settings/app'));
@@ -36,7 +35,7 @@ export function PracticeContainer() {
     if ('problem' in r) return setView({ kind: 'problem', text: r.problem });
     setProgress(r.progress);
     if (!r.consent || !r.card) return setView({ kind: 'consent' });
-    setView({ kind: 'card', card: r.card, phase: 'idle', live: '', verdict: null, said: false, note: null });
+    setView({ kind: 'card', card: r.card, phase: 'idle', live: '', verdict: null, said: false, bad: false, note: null });
   }, []);
 
   useEffect(() => {
@@ -86,40 +85,24 @@ export function PracticeContainer() {
     if (started !== 'ok') patch({ phase: 'idle', note: started === 'denied' ? 'Нет доступа к микрофону' : 'Микрофон не включился' });
   }, [finish, patch]);
 
-  const onRepeat = useCallback(() => patch({ phase: 'idle', live: '', verdict: null, said: false, note: null }), [patch]);
+  const onRepeat = useCallback(() => patch({ phase: 'idle', live: '', verdict: null, said: false, bad: false, note: null }), [patch]);
 
-  // «Сказал иначе» меняет сверку — вердикт приходит с сервера заново
-  const onToggleSaid = useCallback(async () => {
-    const v = current.current;
-    if (!v?.verdict) return;
-    patch({ said: !v.said });
-    const r = await practiceMark(v.verdict.id, { said: !v.said });
-    if (!live.current) return;
-    if (r) return patch({ verdict: { ...v.verdict, ...r } });
-    patch({ said: v.said });
-    useStore.getState().notice('Отметка не отправилась');
-  }, [patch]);
-
-  // Оценка: «верно» — сразу к следующей карточке; «неверно» — сначала поле «что не так» (можно оставить пустым)
-  const [asking, setAsking] = useState(false);
-  const rate = useCallback(
-    async (good: boolean, note?: string) => {
-      const id = current.current?.verdict?.id;
-      if (!id) return;
-      setAsking(false);
-      void load();
-      if (!(await practiceMark(id, { good, ...(note && { note }) })) && live.current) useStore.getState().notice('Оценка не отправилась');
+  // Отметки по желанию. «Сказал иначе» меняет сверку — вердикт приходит с сервера заново
+  const toggle = useCallback(
+    async (key: 'said' | 'bad') => {
+      const v = current.current;
+      if (!v?.verdict) return;
+      patch({ [key]: !v[key] });
+      const r = await practiceMark(v.verdict.id, key === 'said' ? { said: !v.said } : { card: !v.bad });
+      if (!live.current) return;
+      if (r) return patch({ verdict: { ...v.verdict, ...r } });
+      patch({ [key]: v[key] });
+      useStore.getState().notice('Отметка не отправилась');
     },
-    [load],
+    [patch],
   );
-  const onRate = useCallback((good: boolean) => (good ? void rate(true) : setAsking(true)), [rate]);
-  const onNote = useCallback((note: string) => void rate(false, note), [rate]);
-  const onNoNote = useCallback(() => void rate(false), [rate]);
+  const onToggleSaid = useCallback(() => void toggle('said'), [toggle]);
+  const onToggleBad = useCallback(() => void toggle('bad'), [toggle]);
 
-  return (
-    <>
-      <PracticeScreen view={view} progress={progress} insets={insets} onBack={back} onAgree={onAgree} onRetry={load} onMic={onMic} onNext={load} onRepeat={onRepeat} onRate={onRate} onToggleSaid={onToggleSaid} />
-      <InputSheet visible={asking} value="" multiline maxLength={500} title="ЧТО НЕ ТАК" submitLabel="ОТПРАВИТЬ" bottomInset={insets.bottom} onSubmit={onNote} onClose={onNoNote} />
-    </>
-  );
+  return <PracticeScreen view={view} progress={progress} insets={insets} onBack={back} onAgree={onAgree} onRetry={load} onMic={onMic} onNext={load} onRepeat={onRepeat} onToggleSaid={onToggleSaid} onToggleBad={onToggleBad} />;
 }
