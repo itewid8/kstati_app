@@ -40,6 +40,8 @@ import {
   type Group,
   type ID,
   type Idea,
+  type Link,
+  type LinkRef,
   type Me,
   type Topic,
   type ReminderRule,
@@ -56,6 +58,7 @@ import {
 
 import { uid } from './ids';
 import { PERSONAL } from './visibility';
+import { linkedToDeleted, noteRef, pairsToLink, taskRef, watchRef, wishRef, canLink } from './linked';
 export { uid };
 const code = () => {
   const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -164,6 +167,13 @@ type State = {
   /** Идеи: мои темы и темы, которые мне открыли другие (только чтение) */
   topics: Topic[];
   ideas: Idea[];
+  /** Связи записей (мои и тех, с кем у меня общие группы); видна, если видны оба конца (lib/linked.ts) */
+  links: Link[];
+  /**
+   * Удаляют запись, с которой что-то связано: окно «что сделать со связанным» (LinkDeleteHost).
+   * refs — что удаляют, linked — что с ними связано, run — само удаление
+   */
+  linkAsk: { refs: LinkRef[]; linked: LinkRef[]; run: () => void } | null;
   /** Какие ревизии идей людей уже скачаны (строки сервера) */
   ideaRevs: Record<ID, string>;
   /** Открытая на экране тема: голос кладёт идеи в неё */
@@ -234,6 +244,13 @@ type State = {
 export type Profile = { name: string; nick: string; gender: Gender | null };
 
 type Actions = {
+  /** Связать две записи разных типов; уже связаны или одного типа — null */
+  linkItems: (a: LinkRef, b: LinkRef) => ID | null;
+  unlink: (id: ID) => void;
+  /** Ответ на окно удаления со связанным: что из связанного удалить вместе ([] — ничего); null — не удалять вовсе */
+  resolveLinkAsk: (alsoDelete: LinkRef[] | null) => void;
+  /** Связать записи, сохранённые одной голосовой командой */
+  linkSaved: (refs: LinkRef[]) => void;
   /** Демо-режим без сервера */
   demoLogin: () => void;
   demoRegister: (name: string) => void;
@@ -398,6 +415,8 @@ const emptyData = () => ({
   watch: [] as WatchItem[],
   topics: [] as Topic[],
   ideas: [] as Idea[],
+  links: [] as Link[],
+  linkAsk: null as State['linkAsk'],
   trash: [] as TrashEntry[],
   ideaRevs: {} as Record<ID, string>,
   overrides: {} as Record<ID, TaskReminderOverride>,
@@ -451,7 +470,10 @@ export const useStore = create<State & Actions>()(
    * «ОТМЕНИТЬ» после действия: before — списки до него. Запоминаются только затронутые записи,
    * отмена сливает их с текущими списками по id (чужие правки, пришедшие за это время, остаются)
    */
+  // Удаление вместе со связанным — одна отмена на всё: внутренние удаления отмену не ставят
+  let muteUndo = false;
   const withUndo = (label: string, before: Partial<UndoLists>) => {
+    if (muteUndo) return;
     const after = get();
     const plan: { [K in keyof UndoLists]?: ListUndo<UndoLists[K][number]> } = {};
     if (before.tasks) plan.tasks = captureList(before.tasks, after.tasks);
@@ -517,8 +539,76 @@ export const useStore = create<State & Actions>()(
     return { ...parked, [me.id]: [...(parked[me.id] ?? []), ...outbox] };
   };
 
-  return {
+  /** Что видит человек сейчас — для решения, показывать ли связь */
+  const world = () => {
+    const s = get();
+    return { tasks: s.tasks, watch: s.watch, wishes: s.wishes, topics: s.topics, ideas: s.ideas };
+  };
+  /** Удаление записей, с которыми что-то связано, — сначала окно со связанным; иначе сразу */
+  const guard = (refs: LinkRef[], run: () => void) => {
+    // Предлагаем удалить только то, что человек может удалить сам: своё (дела, хотелки, заметки) и фильмы групп
+    const meId = get().me?.id;
+    const own = (r: LinkRef) => r.type === 'watch' || r.owner === meId;
+    const linked = refs.length ? linkedToDeleted(refs, get().links, world()).filter(own) : [];
+    if (!linked.length) return run();
+    set({ linkAsk: { refs, linked, run } });
+  };
+  /** Удалить связанную запись без своей отмены (её ставит resolveLinkAsk) */
+  const dropRef = (r: LinkRef) => {
+    const s = get();
+    const meId = s.me?.id;
+    if (r.type === 'task') set({ tasks: syncParent(s.tasks.filter((t) => t.id !== r.id && t.parentId !== r.id), s.tasks.find((t) => t.id === r.id)?.parentId) });
+    else if (r.type === 'watch') set({ watch: s.watch.filter((w) => w.id !== r.id) });
+    else if (r.type === 'wish' && r.owner === meId) set({ wishes: s.wishes.filter((w) => !(w.id === r.id && w.ownerId === meId)) });
+    else if (r.type === 'note' && r.owner === meId) set({ topics: s.topics.filter((t) => t.id !== r.id), ideas: s.ideas.filter((i) => i.id !== r.id && i.topicId !== r.id) });
+  };
+  const taskRefOf = (id: ID) => {
+    const t = get().tasks.find((x) => x.id === id);
+    return t ? [taskRef(t)] : [];
+  };
+  const watchRefOf = (id: ID) => {
+    const w = get().watch.find((x) => x.id === id);
+    return w ? [watchRef(w)] : [];
+  };
+  const wishRefOf = (id: ID) => {
+    const meId = get().me?.id;
+    const w = get().wishes.find((x) => x.id === id && x.ownerId === meId);
+    return w ? [wishRef(w)] : [];
+  };
+  const noteRefOf = (id: ID) => {
+    const n = get().topics.find((x) => x.id === id) ?? get().ideas.find((x) => x.id === id);
+    return n ? [noteRef(n)] : [];
+  };
+
+  const base: State & Actions = {
     ...initial,
+
+    linkItems: (a, b) => {
+      const me = get().me;
+      if (!me || !canLink(a, b, get().links)) return null;
+      const l: Link = { id: uid(), ownerId: me.id, a, b, createdAt: new Date().toISOString() };
+      set({ links: [...get().links, l] });
+      return l.id;
+    },
+    unlink: (id) => set({ links: get().links.filter((l) => l.id !== id) }),
+    resolveLinkAsk: (alsoDelete) => {
+      const ask = get().linkAsk;
+      set({ linkAsk: null });
+      if (!ask || alsoDelete === null) return;
+      const s0 = get();
+      const before = { tasks: s0.tasks, wishes: s0.wishes, watch: s0.watch, topics: s0.topics, ideas: s0.ideas };
+      muteUndo = true;
+      try {
+        ask.run();
+        for (const r of alsoDelete) dropRef(r);
+      } finally {
+        muteUndo = false;
+      }
+      withUndo(alsoDelete.length ? `Удалено вместе со связанными: ${alsoDelete.length}` : 'Удалено', before);
+    },
+    linkSaved: (refs) => {
+      for (const [a, b] of pairsToLink(refs)) get().linkItems(a, b);
+    },
 
     demoLogin: () => set({ ...emptyData(), authLost: false, me: M.ME, users: M.USERS, groups: M.GROUPS, currentGroupId: 'g1', tasks: M.TASKS, wishes: M.WISHES, watch: M.WATCH }),
     demoRegister: (name) => set({ ...emptyData(), authLost: false, me: { id: M.ME.id, name: name.trim() || M.ME.name }, users: [] }),
@@ -1173,6 +1263,29 @@ export const useStore = create<State & Actions>()(
       return get().users.some((u) => u.id !== me?.id && u.nick?.toLowerCase() === nick.toLowerCase()) ? 'taken' : 'free';
     },
   };
+
+  // Удаление записей, с которыми что-то связано, — через окно связанного. Один раз серии (occ) — как раньше
+  const occOf = (key: string) => {
+    const at = key.lastIndexOf('@');
+    return at > 0 && /^\d{4}-\d{2}-\d{2}$/.test(key.slice(at + 1)) ? { id: key.slice(0, at), occ: key.slice(at + 1) } : { id: key, occ: '' };
+  };
+  return {
+    ...base,
+    deleteTask: (id, occ) => {
+      const t = get().tasks.find((x) => x.id === id);
+      guard(t?.repeat && occ ? [] : taskRefOf(id), () => base.deleteTask(id, occ));
+    },
+    deleteTasksMany: (keys) => guard(keys.map(occOf).flatMap((k) => (k.occ && get().tasks.find((t) => t.id === k.id)?.repeat ? [] : taskRefOf(k.id))), () => base.deleteTasksMany(keys)),
+    deleteWish: (id) => guard(wishRefOf(id), () => base.deleteWish(id)),
+    deleteWishesMany: (ids) => guard(ids.flatMap(wishRefOf), () => base.deleteWishesMany(ids)),
+    deleteWatch: (id) => guard(watchRefOf(id), () => base.deleteWatch(id)),
+    deleteWatchMany: (ids) => guard(ids.flatMap(watchRefOf), () => base.deleteWatchMany(ids)),
+    deleteIdea: (id) => guard(noteRefOf(id), () => base.deleteIdea(id)),
+    deleteIdeas: (ids) => guard(ids.flatMap(noteRefOf), () => base.deleteIdeas(ids)),
+    // Тема удаляется с заметками внутри — их связи тоже в счёт
+    deleteTopic: (id) => guard([id, ...get().ideas.filter((i) => i.topicId === id).map((i) => i.id)].flatMap(noteRefOf), () => base.deleteTopic(id)),
+    deleteTopics: (ids) => guard([...ids, ...get().ideas.filter((i) => i.topicId && ids.includes(i.topicId)).map((i) => i.id)].flatMap(noteRefOf), () => base.deleteTopics(ids)),
+  };
   },
   {
     name: 'kstati-state',
@@ -1230,6 +1343,7 @@ export const useStore = create<State & Actions>()(
       watch: s.watch,
       topics: s.topics,
       ideas: s.ideas,
+      links: s.links,
       ideaRevs: s.ideaRevs,
       overrides: s.overrides,
       reminders: s.reminders,

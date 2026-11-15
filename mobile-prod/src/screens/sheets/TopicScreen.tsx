@@ -6,7 +6,7 @@
  * Нажатие на заметку — открыть (чужую — только читать), смахнуть влево — удалить свою.
  * Удержание — быстрые действия над поднятой строкой. Прокрутка подменяется (PullScrollView — обновление потягиванием).
  */
-import { memo, useCallback, useMemo, useRef, type ComponentType } from 'react';
+import { memo, useCallback, useMemo, useRef, type ComponentType, type ReactNode } from 'react';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from 'react-native';
 import type { NoteBlock } from '@/lib/note';
 import type { NoteCaret, NoteTool } from '@/lib/noteEdit';
@@ -83,6 +83,8 @@ export type TopicScreenProps = {
   onMore?: () => void;
   /** ГОТОВО на панели над клавиатурой — сохранить (правки темы сохраняются только так); нет — просто убрать клавиатуру */
   onDone?: () => void;
+  /** Блок «Связи» (у сохранённой темы) — под заметками */
+  links?: ReactNode;
   /** Скопировать тему целиком: название, текст и заметки внутри */
   onCopy?: () => void;
   /** Выбор заметок (удалить несколько): выбранные id; null — выбора нет */
@@ -282,6 +284,7 @@ export const TopicScreen = memo(function TopicScreen(props: TopicScreenProps) {
             </ListMotion>
           </View>
         ) : null}
+        {props.links && !typing ? <View style={styles.links}>{props.links}</View> : null}
       </Scroll>
 
       {typing && body ? (
@@ -310,6 +313,7 @@ const BAR_PAD = 16;
 const KB_GAP = 8;
 
 const styles = StyleSheet.create({
+  links: { marginTop: 12 },
   screen: { flex: 1 },
   abs: { position: 'absolute', left: space.side, right: space.side },
   title: { height: S.titleHeight, justifyContent: 'flex-end' },

@@ -2,7 +2,7 @@
  * Операции изменения данных (POST /ops) и ключ записи для очереди. Чистый модуль: без Expo и хранилища,
  * его подключают и net.ts, и тесты синхронизации.
  */
-import type { ID, PersonColor, ReminderSettings, Repeat } from './types';
+import type { ID, LinkRef, PersonColor, ReminderSettings, Repeat } from './types';
 
 type TaskOp = {
   id: string;
@@ -55,6 +55,9 @@ export type Op =
   | { op: 'topic.delete'; id: string }
   | { op: 'idea.put'; idea: { id: string; topicId: string | null; text: string } }
   | { op: 'idea.delete'; id: string }
+  /** Связь записей; убрать может связавший или участник общей с ним группы */
+  | { op: 'link.put'; link: { id: string; a: LinkRef; b: LinkRef } }
+  | { op: 'link.delete'; id: string; ownerId: ID }
   | { op: 'group.create'; group: { id: string; name: string; category: string } }
   | { op: 'group.update'; id: string; name?: string; category?: string }
   | { op: 'group.join'; code: string }
@@ -92,6 +95,10 @@ export function opKey(o: Op): string | null {
       return `idea:${o.idea.id}`;
     case 'idea.delete':
       return `idea:${o.id}`;
+    case 'link.put':
+      return `link:${o.link.id}`;
+    case 'link.delete':
+      return `link:${o.id}`;
     default:
       return null;
   }

@@ -5,7 +5,7 @@
  * Своя — правится сразу; пока пишут, над клавиатурой — панель (Aa, чек-лист, списки, ГОТОВО).
  * Чужая — только читать. Презентационный экран: текст — пропсами, правки — колбэками.
  */
-import { memo, useCallback, useRef, useState, type Ref } from 'react';
+import { memo, useCallback, useRef, useState, type Ref, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { TopBar, size as S, space, useTheme, type TopBarAction } from '@/ui';
 import { NO_FORMAT, NOTE_PANEL, NOTE_TOOL, NoteEditor, NoteToolbar, type NoteEditorHandle, type NoteFormat, type NoteTool } from './components/NoteEditor';
@@ -28,6 +28,8 @@ export type NoteScreenProps = {
   /** Скопировать текст заметки */
   onCopy?: () => void;
   onDone?: () => void;
+  /** Блок «Связи» (у сохранённой заметки) — внизу экрана, пока заметку не пишут */
+  links?: ReactNode;
 };
 
 const NO_INSETS = { top: 0, bottom: 0 };
@@ -38,7 +40,9 @@ const BAR_PAD = 12;
 const KB_GAP = 8;
 
 export const NoteScreen = memo(function NoteScreen(props: NoteScreenProps) {
-  const { caption, initial, editable, autoFocus, editor, insets = NO_INSETS, onChange, onBack, onMore, onCopy, onDone } = props;
+  const { caption, initial, editable, autoFocus, editor, insets = NO_INSETS, onChange, onBack, onMore, onCopy, onDone, links } = props;
+  // Высота блока связей внизу: на неё поднимается край текста
+  const [linksH, setLinksH] = useState(0);
   const { c } = useTheme();
   const root = useRef<View>(null);
   const overlap = useKeyboardOverlap(root);
@@ -91,7 +95,8 @@ export const NoteScreen = memo(function NoteScreen(props: NoteScreenProps) {
   const tools = editable && focused;
   const barBottom = overlap > 0 ? overlap + KB_GAP : insets.bottom + BAR_PAD;
   const barHeight = NOTE_TOOL + (stylesOpen ? NOTE_PANEL : 0);
-  const bottom = tools ? barBottom + barHeight + BAR_PAD : overlap > 0 ? overlap : 0;
+  const showLinks = !!links && !tools && overlap === 0;
+  const bottom = tools ? barBottom + barHeight + BAR_PAD : overlap > 0 ? overlap : showLinks ? linksH + insets.bottom + BAR_PAD : 0;
 
   return (
     <View ref={root} style={[styles.screen, { backgroundColor: c.bg }]}>
@@ -107,9 +112,14 @@ export const NoteScreen = memo(function NoteScreen(props: NoteScreenProps) {
           onFormat={setFormat}
           onFocus={onFocus}
           onBlur={onBlur}
-          bottomInset={tools ? 8 : insets.bottom + 24}
+          bottomInset={tools ? 8 : showLinks ? 16 : insets.bottom + 24}
         />
       </View>
+      {showLinks ? (
+        <View style={[styles.side, styles.links, { bottom: insets.bottom + BAR_PAD }]} onLayout={(e) => setLinksH(e.nativeEvent.layout.height)}>
+          {links}
+        </View>
+      ) : null}
       {tools ? (
         <>
           <View style={[styles.bar, { height: barBottom + barHeight + BAR_PAD + S.hairline, backgroundColor: c.bg, borderTopColor: c.hair }]} />
@@ -127,4 +137,5 @@ const styles = StyleSheet.create({
   side: { position: 'absolute', left: space.side, right: space.side },
   body: { position: 'absolute', left: space.side, right: space.side },
   bar: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopWidth: S.hairline },
+  links: { maxHeight: 220 },
 });

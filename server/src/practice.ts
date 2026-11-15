@@ -245,6 +245,15 @@ export const repeatLabel = (r: RepeatLike) =>
     .filter(Boolean)
     .join(' · ');
 
+const LINKED_WANT: Record<string, string> = { task: 'дела', watch: '«Смотреть»', wish: 'хотелки', note: 'заметки и списки' };
+const REF_NOUN: Record<string, string> = { task: 'дело', watch: 'фильм', wish: 'хотелка', note: 'заметка' };
+/** «дело «Ужин у родителей»» */
+function refTitle(r: { type: string; id: string }, ctx: Context): string {
+  const all = [...ctx.existing.tasks, ...ctx.existing.watch, ...ctx.existing.wishes, ...(ctx.topics ?? [])];
+  const title = all.find((x) => x.id === r.id)?.title ?? ctx.existing.ideas?.find((x) => x.id === r.id)?.text.slice(0, 60) ?? '?';
+  return `${REF_NOUN[r.type] ?? r.type} «${title}»`;
+}
+
 /** Что приложение сделало бы по команде — обычными словами, по строке на запись или правку */
 export function explainResult(r: ParseResult, ctx: Context): string {
   const nameOf = (id: string) => (id === ctx.me.id ? 'я' : (ctx.people.find((p) => p.id === id)?.name ?? '?'));
@@ -324,6 +333,10 @@ export function explainResult(r: ParseResult, ctx: Context): string {
       return r.personId === ctx.me.id ? 'Показать мои хотелки' : `Показать хотелки: ${nameOf(r.personId)}`;
     case 'queryIdeas':
       return r.topicId === null ? 'Показать список тем' : r.topicId === 'inbox' ? 'Показать заметки без темы' : `Открыть тему ${quoted(topicOf(r.topicId) ?? '?')}`;
+    case 'link':
+      return `Связать: ${refTitle(r.a, ctx)} и ${refTitle(r.b, ctx)}`;
+    case 'queryLinked':
+      return [`Показать связанное: ${refTitle(r.anchor, ctx)}`, r.want && `нужны ${LINKED_WANT[r.want]}`].filter(Boolean).join(' · ');
     case 'unknownPerson':
       return `Нет человека ${quoted(r.name)}`;
     case 'notFound':

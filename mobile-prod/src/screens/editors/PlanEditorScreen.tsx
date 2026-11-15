@@ -5,7 +5,7 @@
  * с «ПЛАН СЕТКОЙ ›» или плашка «ВНЕ ПЕРИОДА». Что показывать, решает вызывающий: в макетах при раскрытом
  * периоде описание и список подзадач свёрнуты в сводку, чтобы всё помещалось над кнопками.
  */
-import { memo, useCallback, useMemo, type RefObject } from 'react';
+import { memo, useCallback, useMemo, type ReactNode, type RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { ID, PersonColor } from '@/lib/types';
 import { useTheme } from '@/ui';
@@ -82,6 +82,8 @@ export type PlanEditorScreenProps = {
   onOpenGrid?: () => void;
   onDelete?: () => void;
   onSave?: () => void;
+  /** Блок «Связи» (у сохранённой записи) — под полями */
+  links?: ReactNode;
 };
 
 export const PlanEditorScreen = memo(function PlanEditorScreen(props: PlanEditorScreenProps) {
@@ -187,6 +189,7 @@ export const PlanEditorScreen = memo(function PlanEditorScreen(props: PlanEditor
           <LinkButton label="ПЛАН СЕТКОЙ" variant="action" onPress={props.onOpenGrid} />
         </>
       ) : null}
+      {props.links}
       {props.notice ? <Notice {...props.notice} /> : null}
     </EditorScaffold>
   );

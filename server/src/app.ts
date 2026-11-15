@@ -176,10 +176,15 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, 60)
       .map((n) => ({ id: n.id, text: n.text.length > 90 ? `${n.text.slice(0, 90)}…` : n.text, topicId: n.topicId }));
+    // Связи меня и людей из моих групп — только те, у которых оба конца есть в контексте
+    const ids = new Set<string>([...items.map((x) => x.id), ...wishes.map((w) => w.id), ...notes.map((n) => n.id)]);
+    const linkLists = await Promise.all([user.id, ...people.map((p) => p.id)].map((id) => data.linksOf(id).catch(() => [])));
+    const links = linkLists.flat().flatMap((l) => (ids.has(l.a.id) && ids.has(l.b.id) ? [{ a: { type: l.a.type, id: l.a.id }, b: { type: l.b.type, id: l.b.id } }] : []));
     return {
       today: meta.today,
       now: meta.now,
       me: { id: user.id, name: user.name },
+      ...(links.length && { links }),
       people: people.map((p) => ({ id: p.id, name: p.name })),
       groups: groups.map((g) => ({ name: g.name, category: g.category })),
       existing: {

@@ -174,6 +174,14 @@ export type Idea = {
 
 export type Note = Topic | Idea;
 
+/** Связь двух записей разных типов: фильм ↔ заметка, дело ↔ список покупок и т. п. */
+export const LINK_TYPES = ['task', 'watch', 'wish', 'note'] as const;
+export type LinkType = (typeof LINK_TYPES)[number];
+/** Конец связи. owner — где запись лежит: дело — его автор, фильм — группа, хотелка и заметка — владелец */
+export type LinkRef = { type: LinkType; id: string; owner: string };
+/** Хранится у того, кто связал (журнал «links#<ownerId>»). Обе стороны равноправны */
+export type Link = { id: string; ownerId: string; a: LinkRef; b: LinkRef; createdAt: string };
+
 /**
  * Личные настройки человека, общие для всех его телефонов: напоминания по умолчанию
  * и личные напоминания для отдельных дел (id дела → список, [] — не напоминать).

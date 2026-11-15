@@ -22,6 +22,7 @@ import { API_URL } from './config';
 import { toISODate } from './dates';
 import { mockParse, SAMPLE_PHRASES, type ParseResult } from './mockParser';
 import { answerPlans } from './plans';
+import { openRef, refById } from '@/containers/links';
 import { groupmates, useStore, type VoiceQuota } from './store';
 import type { ItemType } from './types';
 
@@ -553,6 +554,26 @@ function applyResult(transcript: string, r: ParseResult) {
       if (r.topicId) toTopic(r.topicId);
       else toTab('ideas');
       return;
+    case 'link': {
+      s.setCard(null);
+      const [a] = refById(r.a.id);
+      const [b] = refById(r.b.id);
+      if (!a || !b) return s.setCard({ source: 'voice', transcript, problem: 'notFound', query: 'запись для связи' });
+      const done = s.linkItems(a, b);
+      s.notice(done ? 'Связано' : 'Уже связаны');
+      return;
+    }
+    case 'queryLinked': {
+      s.setCard(null);
+      const [anchor] = refById(r.anchor.id);
+      if (!anchor) return s.setCard({ source: 'voice', transcript, problem: 'notFound', query: 'запись' });
+      // Один связанный список — сразу он (с галочками), иначе запись, о которой спросили, — там блок «Связи»
+      const notes = r.items.filter((x) => x.type === 'note');
+      const [one] = r.want === 'note' && notes.length === 1 ? refById(notes[0]!.id) : [];
+      if (!r.items.length) s.notice('С этим ничего не связано');
+      openRef(one ?? anchor);
+      return;
+    }
     case 'unknown':
       s.setCard({ source: 'voice', transcript, problem: 'notUnderstood' });
   }

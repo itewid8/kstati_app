@@ -33,6 +33,7 @@ import {
 } from './spoken.js';
 import { addUsage, complete, NO_USAGE, type Msg, type Usage } from './yandex.js';
 import { quickParse } from './quick.js';
+import { linkRules, normalizeLinks } from './linkVoice.js';
 import { config } from './config.js';
 import {
   GENRES,
@@ -447,6 +448,10 @@ export function normalize(input: RawAction[], ctx: Context, transcript: string):
     return { type: 'queryPlans', plans: { scope, from, to, query, ...(who && { who }) } };
   }
 
+  // Связи: «привяжи список к ужину», «что нужно купить?» (src/linkVoice.ts)
+  const linked = normalizeLinks(actions, ctx, transcript);
+  if (linked) return linked;
+
   // «Покажи идеи для подарков» — открыть тему
   const qi = actions.find((a) => a.intent === 'query_ideas');
   if (qi) {
@@ -822,6 +827,12 @@ export async function parseText(input: string, ctx: Context, model?: string, opt
   if (!input.trim() || onlyFiller(input)) return { result: { type: 'unknown' }, raw: '', usage: NO_USAGE, attempts: 0 };
   // «в 18 0 0» → «в 18:00»: время, записанное распознаванием через пробел
   const text = cleanSpeech(normalizeTimes(input)) || input.trim();
+  // Связи простыми словами («что нужно купить?», «привяжи список к ужину») — без модели: своя модель их ещё не знает
+  const byLinks = linkRules(text);
+  if (byLinks) {
+    const result = normalize(byLinks as RawAction[], ctx, text);
+    if (result.type !== 'unknown') return { result, raw: 'rules', usage: NO_USAGE, attempts: 0, path: 'rules' };
+  }
   // Простые команды («завтра в 7 йога», «хочу наушники») — без модели: бесплатно и мгновенно
   if (config.quickRules) {
     const quick = quickParse(text, ctx);

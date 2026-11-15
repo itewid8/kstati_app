@@ -18,6 +18,7 @@ import { UndoToast } from '@/components/UndoToast';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
 import { useSignedIn } from '@/containers/common/signedIn';
 import { QuickActionsHost } from '@/containers/quick/QuickActionsHost';
+import { LinkDeleteHost } from '@/containers/links';
 import { VoiceHost } from '@/containers/voice/VoiceHost';
 import { initAnalytics } from '@/lib/analytics';
 import { registerBackgroundRefresh } from '@/lib/background';
@@ -138,6 +139,8 @@ export default function RootLayout() {
           <CardSheet />
           <GroupSheet />
           <ActionMenu />
+          {/* Удаление записи со связанными — окно поверх меню, из которого удаляли */}
+          <LinkDeleteHost />
           {/* Кнопка-жучок и окно отчёта — поверх всего */}
           <ShareHost />
           <BugHost />

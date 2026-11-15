@@ -14,6 +14,8 @@ import { isBlankNote, notePlain, parseNote } from '@/lib/note';
 import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { NoteScreen } from '@/screens/lists/NoteScreen';
+import { noteRef } from '@/lib/linked';
+import { LinksContainer } from '../links';
 import { NEW_NOTE, nav, signedInOnly, useInsets } from '../common';
 import { holdIdea } from '../quick/quickStore';
 
@@ -107,6 +109,8 @@ export const NoteContainer = signedInOnly(function Note({ id: routeId, topicId: 
   }, [id, commit]);
 
   const caption = useMemo(() => `ЗАМЕТКА · ${upper(topicTitle ?? 'Без темы')}`, [topicTitle]);
+  const linkSelf = useMemo(() => (idea ? noteRef(idea) : null), [idea]);
+  const links = useMemo(() => (linkSelf ? <LinksContainer self={linkSelf} /> : null), [linkSelf]);
 
   return (
     <NoteScreen
@@ -120,6 +124,7 @@ export const NoteContainer = signedInOnly(function Note({ id: routeId, topicId: 
       onMore={idea ? onMore : undefined}
       onCopy={onCopy}
       onDone={onDone}
+      links={links}
     />
   );
 });

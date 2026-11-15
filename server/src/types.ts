@@ -87,6 +87,9 @@ export type PlansScope =
   /** Все мои группы («что я делаю…») */
   | { kind: 'me' };
 /** who — чьи дела показывать: id людей; нет — все дела выбранных групп */
+/** Запись в связях: тип и id (где лежит — приложение знает само) */
+export type RefLite = { type: 'task' | 'watch' | 'wish' | 'note'; id: string };
+
 export type PlansQuery = { scope: PlansScope; from: string; to: string; query: string; who?: string[] };
 
 export type WatchFilters = { kind: Kind[]; genre: Genre[]; origin: Origin[]; fresh: Freshness[] };
@@ -101,6 +104,13 @@ export type ParseResult =
   | { type: 'queryPlans'; plans: PlansQuery }
   /** «Покажи идеи для подарков»: тема (id), 'inbox' — «Без темы», null — список тем */
   | { type: 'queryIdeas'; topicId: string | null }
+  /** «Привяжи список продуктов к ужину»: связать две записи */
+  | { type: 'link'; a: RefLite; b: RefLite }
+  /**
+   * «Что нужно купить?», «что я покупал на свадьбу?»: anchor — запись, о которой спросили (обычно дело),
+   * items — связанное с ней (want — какого вида искали; null — любое)
+   */
+  | { type: 'queryLinked'; anchor: RefLite; items: RefLite[]; want: RefLite['type'] | null }
   | { type: 'unknown' };
 
 /** Контекст запроса. Пока нет базы — приходит от приложения; потом сервер будет собирать его сам. */
@@ -138,6 +148,8 @@ export type Context = {
   currentTopicId?: string | null;
   /** Участники текущей группы (id) — для «мы», «у нас» */
   groupMembers?: string[];
+  /** Связи записей, у которых видны оба конца (для «что нужно купить», «привяжи …») */
+  links?: { a: RefLite; b: RefLite }[];
   /** План (большое дело), открытый на экране: новое дело без названного плана становится его подзадачей */
   currentParentId?: string | null;
 };

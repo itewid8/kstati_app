@@ -197,6 +197,13 @@ export type Topic = {
   body?: string;
 };
 
+/** Связь двух записей разных типов (фильм ↔ заметка, дело ↔ список покупок). Обе стороны равноправны */
+export type LinkType = 'task' | 'watch' | 'wish' | 'note';
+/** Конец связи: owner — где запись лежит (дело — автор, фильм — группа, хотелка и заметка — владелец) */
+export type LinkRef = { type: LinkType; id: ID; owner: ID };
+/** ownerId — кто связал (у него хранится связь на сервере) */
+export type Link = { id: ID; ownerId: ID; a: LinkRef; b: LinkRef; createdAt: string };
+
 export type Idea = {
   id: ID;
   ownerId: ID;

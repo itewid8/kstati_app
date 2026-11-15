@@ -28,6 +28,8 @@ import { holdIdea } from '../quick/quickStore';
 import { preloadNote } from './noteLoader';
 import { useNoteEditor } from './useNoteEditor';
 import { useUnsavedGuard } from './useUnsavedGuard';
+import { noteRef } from '@/lib/linked';
+import { LinksContainer } from '../links';
 
 const pickTopic = (s: StoreState): TopicSnapshot & { groups: StoreState['groups'] } => ({
   me: s.me ?? NO_ME,
@@ -185,6 +187,9 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
       .then(() => useStore.getState().notice('Скопировано'))
       .catch(() => useStore.getState().notice('Не скопировалось'));
   }, [ed, data.ideas]);
+  // Связи — у сохранённой темы
+  const linkSelf = useMemo(() => (topic ? noteRef(topic) : null), [topic]);
+  const links = useMemo(() => (linkSelf ? <LinksContainer self={linkSelf} /> : null), [linkSelf]);
   // Название показываем своё (правится), пока темы нет — пустое
   const shownTitle = editable ? title : data.title;
 
@@ -228,6 +233,7 @@ export const TopicContainer = signedInOnly(function Topic({ id: routeId }: { id:
           onSelectAll={selectAll}
           allSelected={allSelected}
           onDone={editable ? done : undefined}
+          links={links}
           onCopy={data.bodyText !== null || isNew ? copy : undefined}
           onOpenIdea={open}
           onHoldIdea={hold}

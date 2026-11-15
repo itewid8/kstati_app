@@ -53,7 +53,7 @@ const q = (s: string) => `«${s.slice(0, 80)}»`;
 /** Что сделало приложение — словами, без id; названия записей берём из контекста, сам контекст не храним */
 export function describeResult(r: ParseResult, ctx: Context): string {
   const titleOf = (id: string) =>
-    [...ctx.existing.tasks, ...ctx.existing.watch, ...ctx.existing.wishes].find((x) => x.id === id)?.title ?? ctx.existing.ideas?.find((x) => x.id === id)?.text.slice(0, 40) ?? '?';
+    [...ctx.existing.tasks, ...ctx.existing.watch, ...ctx.existing.wishes, ...(ctx.topics ?? [])].find((x) => x.id === id)?.title ?? ctx.existing.ideas?.find((x) => x.id === id)?.text.slice(0, 40) ?? '?';
   switch (r.type) {
     case 'items':
       return r.items
@@ -80,6 +80,10 @@ export function describeResult(r: ParseResult, ctx: Context): string {
       return `хотелки: ${r.personId === ctx.me.id ? 'мои' : 'другого человека'}`;
     case 'queryIdeas':
       return r.topicId ? 'открыть тему' : 'список тем';
+    case 'link':
+      return `связать ${r.a.type} ${q(titleOf(r.a.id))} и ${r.b.type} ${q(titleOf(r.b.id))}`;
+    case 'queryLinked':
+      return `связанное с ${q(titleOf(r.anchor.id))}: ${r.items.map((x) => q(titleOf(x.id))).join(', ') || 'ничего'}`;
     case 'unknownPerson':
       return `нет человека ${q(r.name)}`;
     case 'notFound':

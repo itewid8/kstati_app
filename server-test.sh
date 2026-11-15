@@ -9,4 +9,4 @@ ln -sfn "$PWD/node_modules" $OUT/node_modules
 # Карточки «Обучения» читаются по пути от скомпилированного файла
 ln -sfn "$PWD/data" $OUT/data
 echo '{"type":"module"}' > $OUT/package.json
-for t in quick prompt pages subs repeat ideas lists films feedback duration v2 personal practice e2e; do echo "== $t"; node $OUT/test/$t.js; done
+for t in quick prompt links pages subs repeat ideas lists films feedback duration v2 personal practice e2e; do echo "== $t"; node $OUT/test/$t.js; done

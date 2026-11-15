@@ -17,7 +17,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, meView, requireUser } from './auth.js';
 import { lookupFilm, type FilmDeps, type FilmLookup } from './films.js';
-import { giftrev, grev, irev, migrated, PERSON_COLORS, publicUser, TASK_KINDS, trev, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type WatchItem, type Wish } from './store/index.js';
+import { giftrev, grev, irev, migrated, PERSON_COLORS, publicUser, TASK_KINDS, trev, urev, type Activity, type Group, type Idea, type Item, type Note, type Store, type Task, type Topic, type User, type WatchItem, type Wish, LINK_TYPES, type Link, type LinkRef } from './store/index.js';
 import { CATEGORIES } from './types.js';
 import { ownerPart, PERSONAL, visibleIn } from './visibility.js';
 
@@ -136,6 +136,12 @@ const IdeaIn = z.object({
   text: z.string().trim().min(1).max(20000),
 });
 
+/** Конец связи: тип, id и где запись лежит (дело — автор, фильм — группа, хотелка и заметка — владелец) */
+const LinkRefIn = z.object({ type: z.enum(LINK_TYPES), id: Id, owner: Id });
+/** Связи хранятся в журнале того, кто связал; срок — практически бессрочно */
+const LINKS = (owner: string) => `links#${owner}`;
+const LINK_KEEP_SEC = 100 * 365 * 24 * 3600;
+
 const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('task.put'), task: TaskIn }),
   z.object({ op: z.literal('watch.put'), watch: WatchIn }),
@@ -148,6 +154,9 @@ const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('topic.delete'), id: Id }),
   z.object({ op: z.literal('idea.put'), idea: IdeaIn }),
   z.object({ op: z.literal('idea.delete'), id: Id }),
+  // Связь двух записей разных типов; удалить может тот, кто связал, или участник общей с ним группы
+  z.object({ op: z.literal('link.put'), link: z.object({ id: Id, a: LinkRefIn, b: LinkRefIn }) }),
+  z.object({ op: z.literal('link.delete'), id: Id, ownerId: Id }),
   z.object({ op: z.literal('group.create'), group: z.object({ id: Id, name: z.string().trim().min(1).max(40), category: z.enum(CATEGORIES as [string, ...string[]]) }) }),
   z.object({ op: z.literal('group.update'), id: Id, name: z.string().trim().min(1).max(40).optional(), category: z.enum(CATEGORIES as [string, ...string[]]).optional() }),
   z.object({ op: z.literal('group.join'), code: z.string().trim().min(4).max(12) }),
@@ -737,6 +746,28 @@ export class Data {
         await s.incr(irev(user.id));
         return {};
       }
+      case 'link.put': {
+        const { id, a, b } = op.link;
+        if (a.type === b.type) throw new HttpError(400, 'bad_link', 'Связать можно только записи разных типов');
+        const [ea, eb] = await Promise.all([this.seen(user, a), this.seen(user, b)]);
+        if (!ea || !eb) throw new HttpError(404, 'not_found', 'Запись не найдена');
+        const mine = await this.linksOf(user.id);
+        const same = (x: LinkRef, y: LinkRef) => x.type === y.type && x.id === y.id;
+        const dup = mine.find((l) => l.id !== id && ((same(l.a, a) && same(l.b, b)) || (same(l.a, b) && same(l.b, a))));
+        if (dup) return { id: dup.id };
+        const link: Link = { id, ownerId: user.id, a, b, createdAt: mine.find((l) => l.id === id)?.createdAt ?? now };
+        await s.putLog(LINKS(user.id), id, link, LINK_KEEP_SEC);
+        if (a.type === 'note') await this.openNoteFor(user, a, eb);
+        if (b.type === 'note') await this.openNoteFor(user, b, ea);
+        await s.incr(irev(user.id));
+        return {};
+      }
+      case 'link.delete': {
+        if (op.ownerId !== user.id && !(await this.shareGroup(user.id, op.ownerId))) throw new HttpError(403, 'forbidden', 'Нет доступа');
+        await s.deleteLog(LINKS(op.ownerId), op.id);
+        await s.incr(irev(op.ownerId));
+        return {};
+      }
       case 'group.create': {
         const exists = await s.getGroup(op.group.id);
         if (exists) {
@@ -859,6 +890,55 @@ export class Data {
    * Идеи человека owner глазами user: свои — все; чужие — темы, открытые общим группам, и идеи в них.
    * common — id общих групп (для чужих)
    */
+  /** Связи, которые завёл человек */
+  async linksOf(owner: string): Promise<Link[]> {
+    return (await this.store.listLog<Link>(LINKS(owner), '', 1000)).map((x) => x.value);
+  }
+
+  /**
+   * Видна ли человеку запись — конец связи. Возвращает её (для заметки — саму заметку), иначе null.
+   * Связывать можно только то, что человек видит сам
+   */
+  private async seen(user: User, r: LinkRef): Promise<Task | WatchItem | Wish | Note | null> {
+    const s = this.store;
+    if (r.type === 'task') {
+      const t = await this.findTask(user, r.id, r.owner);
+      return t && (await this.roleFor(user, t)) ? t : null;
+    }
+    if (r.type === 'watch') {
+      const g = await s.getGroup(r.owner);
+      if (!g?.memberIds.includes(user.id)) return null;
+      const it = await s.getItem(r.owner, r.id);
+      return it?.type === 'watch' ? it : null;
+    }
+    if (r.type === 'wish') {
+      if (r.owner !== user.id && !(await this.shareGroup(user.id, r.owner))) return null;
+      return s.getWish(r.owner, r.id);
+    }
+    const n = await s.getNote(r.owner, r.id);
+    if (!n || r.owner === user.id) return n;
+    const topic = n.kind === 'topic' ? n : n.topicId ? await s.getNote(r.owner, n.topicId) : null;
+    if (topic?.kind !== 'topic') return null;
+    const mine = new Set(await s.listMemberships(user.id));
+    return topic.groupIds.some((g) => mine.has(g)) ? n : null;
+  }
+
+  /**
+   * Своя заметка связана с записью группы — заметку видит и эта группа (тема заметки открывается группе):
+   * список покупок к общему ужину нужен обоим. Чужую заметку не трогаем
+   */
+  private async openNoteFor(user: User, note: LinkRef, other: Task | WatchItem | Wish | Note) {
+    if (note.owner !== user.id) return;
+    const group = 'type' in other && other.type === 'watch' ? other.groupId : 'type' in other && other.type === 'task' ? (other.home ?? null) : null;
+    if (!group) return;
+    const s = this.store;
+    const n = await s.getNote(user.id, note.id);
+    const topic = n?.kind === 'topic' ? n : n?.kind === 'idea' && n.topicId ? await s.getNote(user.id, n.topicId) : null;
+    if (topic?.kind !== 'topic' || topic.groupIds.includes(group)) return;
+    if (!(await s.listMemberships(user.id)).includes(group)) return;
+    await s.putNote({ ...topic, groupIds: [...topic.groupIds, group], updatedAt: new Date().toISOString() });
+  }
+
   private visibleNotes(notes: Note[], own: boolean, common: Set<string>) {
     const topics = notes.filter((n): n is Topic => n.kind === 'topic' && (own || n.groupIds.some((g) => common.has(g))));
     const ids = new Set(topics.map((t) => t.id));
@@ -930,8 +1010,9 @@ export class Data {
       tasksChanged ? this.visibleTasks(user, mine) : Promise.resolve([]),
       Promise.all(changedOwners.map((id) => s.listWishes(id))),
       s.getPrefs(user.id),
-      // Идеи не должны ломать остальную синхронизацию (например, пока таблица создаётся после обновления)
-      Promise.all(changedIdeaOwners.map((id) => s.listNotes(id))).catch((e) => {
+      // Идеи не должны ломать остальную синхронизацию (например, пока таблица создаётся после обновления).
+      // Связи человека меняют его ревизию идей — приходят вместе с его заметками
+      Promise.all(changedIdeaOwners.map((id) => Promise.all([s.listNotes(id), this.linksOf(id)]))).catch((e) => {
         console.warn('Идеи:', (e as Error).message);
         return null;
       }),
@@ -949,7 +1030,7 @@ export class Data {
       prefs,
       // Идеи: ревизии (не смогли прочитать — прежние, чтобы телефон спросил ещё раз) и содержимое изменившихся
       ideaRevs: noteLists ? ideaRevs : Object.fromEntries(peopleIds.map((id) => [id, knownIdeas[id] ?? ''])),
-      notes: Object.fromEntries(ideaOwners.map((id, i) => [id, this.visibleNotes(noteLists![i], id === user.id, commonWith(id))])),
+      notes: Object.fromEntries(ideaOwners.map((id, i) => [id, { ...this.visibleNotes(noteLists![i]![0], id === user.id, commonWith(id)), links: noteLists![i]![1] }])),
     };
   }
 
@@ -962,6 +1043,7 @@ export class Data {
       else await s.removeMembership(user.id, gid);
     }
     for (const w of await s.listWishes(user.id)) await s.deleteWish(user.id, w.id);
+    for (const l of await this.linksOf(user.id)) await s.deleteLog(LINKS(user.id), l.id);
     for (const t of await s.listItems(ownerPart(user.id))) await s.deleteItem(ownerPart(user.id), t.id);
     for (const n of await s.listNotes(user.id)) await s.deleteNote(user.id, n.id);
     await s.deletePrefs(user.id);

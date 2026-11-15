@@ -22,7 +22,7 @@ import { flushOutbox } from './outbox';
 import { isEmptyPatch, mergePull, parseSync } from './remote';
 import { flushStorage } from './storage';
 import { applyRemote, DEMO, isApplyingRemote, syncHooks, undoHoldLeft, useStore } from './store';
-import type { Activity, ID, Idea, ReminderSettings, Task, TaskReminderOverride, Topic, WatchItem, Wish } from './types';
+import type { Activity, ID, Idea, Link, ReminderSettings, Task, TaskReminderOverride, Topic, WatchItem, Wish } from './types';
 import { PERSONAL } from './visibility';
 
 /** Изменения личных напоминаний → операция prefs (только то, что поменялось) */
@@ -80,6 +80,7 @@ const topicOp = (t: Topic): Op => ({
   topic: { id: t.id, title: t.title, groupIds: t.groupIds, body: t.body ?? '', ...(t.archivedAt !== undefined && { archivedAt: t.archivedAt }) },
 });
 const ideaOp = (i: Idea): Op => ({ op: 'idea.put', idea: { id: i.id, topicId: i.topicId, text: i.text } });
+const linkOp = (l: Link): Op => ({ op: 'link.put', link: { id: l.id, a: l.a, b: l.b } });
 
 function diff<T extends { id: string }>(before: T[], after: T[], put: (x: T) => Op, del: (x: T) => Op): Op[] {
   if (before === after) return [];
@@ -119,6 +120,8 @@ useStore.subscribe((s, p) => {
       ideaOp,
       (i) => ({ op: 'idea.delete', id: i.id }),
     ),
+    // Связи — последними: записи, которые они связывают, должны уже быть на сервере
+    ...diff(p.links, s.links, linkOp, (l) => ({ op: 'link.delete', id: l.id, ownerId: l.ownerId })),
   ];
   const prefs = prefsOp(p, s);
   if (prefs) ops.push(prefs);

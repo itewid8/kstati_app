@@ -273,7 +273,7 @@ async function scenario(name: string, store: Store) {
   assert.deepEqual(n1.notes[sasha.me.id].topics.map((t: any) => t.id).sort(), ['tp1', 'tp2']);
   assert.deepEqual(n1.notes[sasha.me.id].ideas.map((i: any) => i.id).sort(), ['i1', 'i2', 'i3']);
   const n2 = await ok('POST', '/sync', { ideas: {} }, T2);
-  assert.deepEqual(n2.notes[sasha.me.id], { topics: [], ideas: [] }, 'личные идеи Саши Маше не видны');
+  assert.deepEqual(n2.notes[sasha.me.id], { topics: [], ideas: [], links: [] }, 'личные идеи Саши Маше не видны');
   // Саша открывает тему группе (чужую группу добавить нельзя — молча отбрасывается)
   await ops(T1, { op: 'topic.put', topic: { id: 'tp1', title: 'Идеи для приложения', groupIds: ['g1', 'чужая'] } });
   const n3 = await ok('POST', '/sync', { ideas: n2.ideaRevs }, T2);
@@ -295,6 +295,22 @@ async function scenario(name: string, store: Store) {
   await ops(T1, { op: 'topic.delete', id: 'tp2' });
   const n5 = (await ok('POST', '/sync', { ideas: {} }, T1)).notes[sasha.me.id];
   assert.deepEqual(n5.ideas.map((i: any) => i.id).sort(), ['i1', 'i3']);
+  // Связи: список покупок Саши ↔ фильм группы. Список открывается группе, Маша видит и его, и связь
+  const SID = sasha.me.id as string;
+  await ops(T1, { op: 'topic.put', topic: { id: 'tp3', title: 'Продукты к просмотру', groupIds: [], body: '- [ ] Попкорн' } });
+  const lk = await ops(T1, { op: 'link.put', link: { id: 'l1', a: { type: 'note', id: 'tp3', owner: SID }, b: { type: 'watch', id: 'm1', owner: 'g1' } } });
+  assert.equal(lk[0].ok, true);
+  const nl = await ok('POST', '/sync', { ideas: {} }, T2);
+  assert.deepEqual(nl.notes[SID].links.map((l: any) => [l.id, l.a.id, l.b.id]), [['l1', 'tp3', 'm1']]);
+  assert.ok(nl.notes[SID].topics.some((t: any) => t.id === 'tp3'), 'заметка, связанная с фильмом группы, видна группе');
+  // Та же пара ещё раз — прежняя связь; одинаковые типы и невидимые записи — нельзя
+  assert.equal((await ops(T1, { op: 'link.put', link: { id: 'l2', a: { type: 'watch', id: 'm1', owner: 'g1' }, b: { type: 'note', id: 'tp3', owner: SID } } }))[0].id, 'l1');
+  assert.equal((await ops(T1, { op: 'link.put', link: { id: 'l3', a: { type: 'note', id: 'tp3', owner: SID }, b: { type: 'note', id: 'tp1', owner: SID } } }))[0].error, 'bad_link');
+  assert.equal((await ops(T2, { op: 'link.put', link: { id: 'l4', a: { type: 'note', id: 'i3', owner: SID }, b: { type: 'watch', id: 'm1', owner: 'g1' } } }))[0].error, 'not_found', 'чужую личную заметку не связать');
+  // Маша — участник общей группы — может убрать связь Саши
+  assert.equal((await ops(T2, { op: 'link.delete', id: 'l1', ownerId: SID }))[0].ok, true);
+  assert.deepEqual((await ok('POST', '/sync', { ideas: {} }, T1)).notes[SID].links, []);
+  await ops(T1, { op: 'topic.delete', id: 'tp3' });
   // Голос знает мои темы и открытую тему
   const before = parsed.length;
   await ok('POST', '/voice/text', { groupId: 'g1', today: '2026-09-26', now: '12:00', text: 'запиши идею', topicId: 'tp1' }, T1);

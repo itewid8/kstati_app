@@ -6,7 +6,7 @@
  * Над строками — тип дела (KindPicker). Строки: КОГДА, КОНЕЦ, ПОВТОР, КТО, ВИДНО (своё дело), НАПОМНИТЬ, ОПИСАНИЕ, ПОДЗАДАЧИ. Строку подзадач вызывающий
  * не передаёт у повторяющегося дела (subtasks undefined) — у серии нет плана.
  */
-import { memo, useCallback, useMemo, type RefObject } from 'react';
+import { memo, useCallback, useMemo, type ReactNode, type RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { PersonColor, TaskKind } from '@/lib/types';
 import { useTheme } from '@/ui';
@@ -101,6 +101,8 @@ export type TaskEditorScreenProps = {
   onCelebrantPick?: (id: string, name: string) => void;
   onDelete?: () => void;
   onSave?: () => void;
+  /** Блок «Связи» (у сохранённой записи) — под полями */
+  links?: ReactNode;
 };
 
 export const TaskEditorScreen = memo(function TaskEditorScreen(props: TaskEditorScreenProps) {
@@ -207,6 +209,7 @@ export const TaskEditorScreen = memo(function TaskEditorScreen(props: TaskEditor
           </FieldRow>
         ) : null}
       </FieldTable>
+      {props.links}
       {props.notice ? <Notice {...props.notice} /> : null}
     </EditorScaffold>
   );

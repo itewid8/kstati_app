@@ -9,6 +9,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, StyleSheet, View, type TextInput } from 'react-native';
 import { canSaveDraft, draftFromTask, initialUi, type EditorState } from '@/adapters/editors/draft';
 import { planEditorProps } from '@/adapters/editors/planEditor';
+import { LinksContainer } from '../links';
+import { taskRef } from '@/lib/linked';
 import { useStore } from '@/lib/store';
 import type { ID } from '@/lib/types';
 import { PlanEditorScreen, type PlanEditorScreenProps, type PlanField } from '@/screens/editors/PlanEditorScreen';
@@ -124,6 +126,9 @@ function PlanEditor({ start, openNote }: { start: EditorState; openNote: boolean
   const onChangeNote = useCallback((note: string) => dispatch({ type: 'note', note }), [dispatch]);
 
   const data = useMemo(() => planEditorProps(state.draft, state.ui, s, clock), [state, s, clock]);
+  const plan = state.draft.id ? s.tasks.find((t) => t.id === state.draft.id) : undefined;
+  const linkSelf = useMemo(() => (plan ? taskRef(plan) : null), [plan]);
+  const links = useMemo(() => (linkSelf ? <LinksContainer self={linkSelf} /> : null), [linkSelf]);
   const screen = useMemo<PlanEditorScreenProps>(
     () => ({
       ...data,
@@ -145,8 +150,9 @@ function PlanEditor({ start, openNote }: { start: EditorState; openNote: boolean
       onOpenGrid,
       onDelete,
       onSave,
+      links,
     }),
-    [data, handlers, insets, onMore, onChangeTitle, onChangeNote, onField, onToggleSubtask, onOpenSubtask, onAddSubtask, onOpenGrid, onDelete, onSave],
+    [data, handlers, insets, onMore, onChangeTitle, onChangeNote, onField, onToggleSubtask, onOpenSubtask, onAddSubtask, onOpenGrid, onDelete, onSave, links],
   );
 
   return (

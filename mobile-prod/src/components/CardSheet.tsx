@@ -25,6 +25,9 @@ import { ChangeBlock, Phrase, SheetButtons, type DraftDuplicate, type SheetButto
 import { CardTaskEditor } from './CardTaskEditor';
 import { DraftItemView } from './editors';
 import { Sheet } from './Sheet';
+import { LinksContainer, refById } from '@/containers/links';
+import { watchRef, wishRef } from '@/lib/linked';
+import type { LinkRef } from '@/lib/types';
 
 type ItemsCard = Extract<Card, { items: DraftItem[] }>;
 type ChangesCard = Extract<Card, { changes: ChangeDraft[] }>;
@@ -99,6 +102,8 @@ const ItemsSheet = ({ visible, card, snapshot, taskKey, onTask }: ItemsProps) =>
     const missed = created.length < toSave.length;
     if (missed) useStore.getState().notice(created.length ? 'Сохранено не всё: нет группы' : 'Нет группы');
     if (!created.length) return;
+    // Записи одной голосовой команды («ужин завтра и список продуктов») связываются между собой
+    if (card.source === 'voice' && created.length > 1) useStore.getState().linkSaved([...created].flatMap(refById));
     for (const i of toSave) track('save', { type: i.type, source: card.source });
     success();
     const first = toSave[0];
@@ -135,6 +140,20 @@ const ItemsSheet = ({ visible, card, snapshot, taskKey, onTask }: ItemsProps) =>
   }, [card.items, taskKey, update, onTask]);
   const closeTask = useCallback(() => onTask(null), [onTask]);
   const openTask = useCallback((item: DraftItem) => onTask(item.key), [onTask]);
+  // Связи — у одной уже сохранённой записи «Смотреть» или своей хотелки (окно правки)
+  const only = card.items.length === 1 ? card.items[0] : undefined;
+  const linkSelf = useMemo<LinkRef | null>(() => {
+    if (!only?.id) return null;
+    if (only.type === 'watch') {
+      const w = snapshot.watch.find((x) => x.id === only.id);
+      return w ? watchRef(w) : null;
+    }
+    if (only.type === 'wish') {
+      const w = snapshot.wishes.find((x) => x.id === only.id && x.ownerId === snapshot.me.id);
+      return w ? wishRef(w) : null;
+    }
+    return null;
+  }, [only, snapshot.watch, snapshot.wishes, snapshot.me.id]);
 
   return (
     <Sheet visible={visible} onClose={close} inset locked={!!task} footer={<SheetButtons buttons={buttons} />}>
@@ -158,6 +177,7 @@ const ItemsSheet = ({ visible, card, snapshot, taskKey, onTask }: ItemsProps) =>
           />
         );
       })}
+      {linkSelf ? <LinksContainer self={linkSelf} /> : null}
       <CardTaskEditor item={task} onSave={saveTask} onRemove={removeTask} onClose={closeTask} />
     </Sheet>
   );

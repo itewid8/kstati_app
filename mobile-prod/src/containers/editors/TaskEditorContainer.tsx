@@ -23,6 +23,8 @@ import { canEditTask } from '@/lib/visibility';
 import type { CustomReminder } from '@/screens/editors/panels/RemindPanel';
 import { TaskEditorScreen, type TaskEditorScreenProps, type TaskField } from '@/screens/editors/TaskEditorScreen';
 import { openPlanEditor } from '../common/go';
+import { LinksContainer } from '../links';
+import { taskRef } from '@/lib/linked';
 import { nav, type TaskEditorField } from '../common/nav';
 import { signedInOnly } from '../common/signedIn';
 import { useClock } from '../common/useClock';
@@ -276,6 +278,10 @@ function TaskEditor({ start }: { start: EditorState }) {
     return !task || canEditTask(task, s.groups, s.me.id);
   }, [state.draft.id, s]);
   const remindOnly = useCallback((field: TaskField) => (field === 'remind' ? onField(field) : undefined), [onField]);
+  // Связи — у сохранённого дела (у нового ещё нечего связывать)
+  const saved = state.draft.id ? s.tasks.find((t) => t.id === state.draft.id) : undefined;
+  const linkSelf = useMemo(() => (saved ? taskRef(saved) : null), [saved]);
+  const links = useMemo(() => (linkSelf ? <LinksContainer self={linkSelf} /> : null), [linkSelf]);
   const screen = useMemo<TaskEditorScreenProps>(
     () => ({
       ...data,
@@ -299,6 +305,7 @@ function TaskEditor({ start }: { start: EditorState }) {
       onCelebrantPick,
       onDelete,
       onSave,
+      links,
       ...(!editable && {
         onChangeTitle: undefined,
         onChangeNote: undefined,
@@ -311,7 +318,7 @@ function TaskEditor({ start }: { start: EditorState }) {
         onCelebrantPick: undefined,
       }),
     }),
-    [data, handlers, insets, onMore, onChangeTitle, onChangeNote, onField, onClearEnd, onKind, onCelebrantName, onCelebrantPick, onDelete, onSave, editable, remindOnly],
+    [data, handlers, insets, onMore, onChangeTitle, onChangeNote, onField, onClearEnd, onKind, onCelebrantName, onCelebrantPick, onDelete, onSave, editable, remindOnly, links],
   );
 
   const color = colorOf(colors, draft.people[0] ?? draft.createdBy);

@@ -15,6 +15,7 @@ const local = (patch: Partial<LocalData> = {}): LocalData => ({
   wishes: [],
   topics: [],
   ideas: [],
+  links: [],
   revs: { groups: { g1: 5, g2: 2 }, owners: { s: 1, k: 1 } },
   ideaRevs: { s: '1', k: '0|g1' },
   reminders: { enabled: true, timed: ['m60'], allDay: ['d1@20:00'] },
@@ -75,6 +76,25 @@ describe('mergePull', () => {
     const { patch } = mergePull(s, parseSync(raw));
     assert.equal(patch.tasks, undefined);
     assert.equal(patch.revs, undefined);
+  });
+});
+
+describe('связи', () => {
+  const link = { id: 'l1', ownerId: 'k', a: { type: 'task', id: 't1', owner: 'k' }, b: { type: 'note', id: 'n1', owner: 'k' }, createdAt: '' };
+  test('приходят с заметками того, кто связал; одинаковые типы отбрасываются', () => {
+    const s = local();
+    const raw = quiet(s) as { ideaRevs: Record<string, string>; notes: Record<string, unknown> };
+    raw.ideaRevs.k = '1|g1';
+    raw.notes.k = { topics: [], ideas: [], links: [link, { ...link, id: 'l2', b: { type: 'task', id: 't2', owner: 'k' } }] };
+    const { patch } = mergePull(s, parseSync(raw));
+    assert.deepEqual(patch.links?.map((l) => l.id), ['l1']);
+  });
+  test('неотправленное удаление чужой связи: связи этого человека с сервера не берём', () => {
+    const s = local({ outbox: [{ op: 'link.delete', id: 'l1', ownerId: 'k' }] });
+    const raw = quiet(s) as { ideaRevs: Record<string, string>; notes: Record<string, unknown> };
+    raw.ideaRevs.k = '1|g1';
+    raw.notes.k = { topics: [], ideas: [], links: [link] };
+    assert.equal(mergePull(s, parseSync(raw)).patch.links, undefined);
   });
 });
 

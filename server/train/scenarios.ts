@@ -300,6 +300,65 @@ const MAKE: Record<string, Make> = {
   Q08: (w) => { const t = w.tasks[1]!; return { goal: [`Спросить, записано ли у вас дело ${q(t.title)}`, `На какие дни: ${pick(['на этой неделе', 'в ближайшие дни', 'на выходных', 'в этом месяце'])}`, 'Нужен ответ «да» или «нет»'] }; },
   Q09: (w) => ({ goal: [`Спросить, есть ли в списке ${q(w.list.title)} пункт: ${rnd() < 0.5 ? w.list.items[0] : pick(w.V.NEW_ITEMS)[0]}`, 'Нужен ответ «да» или «нет»'] }),
 
+  /* ----- связи записей ----- */
+  S01: (w) => {
+    const t = fresh(w);
+    const d = future(w, 1, 14);
+    const items = some(w.V.NEW_ITEMS, 3).map(([n]) => n);
+    return {
+      ref: `${cap(t.add)} ${dayP(d)}, купить: ${items.map(low).join(', ')}`,
+      actions: [add(t.title, { date: d }), { intent: 'add', type: 'idea', title: 'Купить', items, topic: null }],
+      ok: (r) => r.type === 'items' && r.items.length === 2 && r.items.some((i) => i.type === 'task') && r.items.some((i) => i.type === 'topic'),
+      hint: ['Одной фразой — и дело, и что купить к нему'],
+    };
+  },
+  S02: (w) => {
+    const { t, word } = target(w);
+    return { ref: `Привяжи ${low(w.list.title)} к ${word.acc}`, actions: [{ intent: 'link', a: w.list.title, b: t.title }], ok: (r) => r.type === 'link' && [r.a.id, r.b.id].sort().join() === [t.id, w.list.id].sort().join() };
+  },
+  S03: (w) => {
+    const { t } = target(w);
+    w.ctx.links = [{ a: { type: 'task', id: t.id }, b: { type: 'note', id: w.list.id } }];
+    return {
+      ref: 'Что нужно купить',
+      actions: [{ intent: 'query_linked', about: '', want: 'note' }],
+      ok: (r) => r.type === 'queryLinked' && r.anchor.id === t.id,
+      hint: [`Список ${q(w.list.title)} привязан к делу ${q(t.title)}`, 'Дело не называйте'],
+    };
+  },
+  S04: (w) => {
+    const [a, b] = w.ctx.existing.tasks as [Task, Task];
+    w.ctx.links = [
+      { a: { type: 'task', id: a.id }, b: { type: 'note', id: w.list.id } },
+      { a: { type: 'task', id: b.id }, b: { type: 'note', id: 'i1' } },
+    ];
+    return {
+      ref: `Что купить для дела ${low(b.title)}`,
+      actions: [{ intent: 'query_linked', about: low(b.title), want: 'note' }],
+      ok: (r) => r.type === 'queryLinked' && r.anchor.id === b.id,
+      hint: [`К делу ${q(a.title)} привязан список ${q(w.list.title)}, к делу ${q(b.title)} — заметка`],
+    };
+  },
+  S05: (w) => {
+    const t = w.ctx.existing.tasks[2]!;
+    t.date = addDays(w.ctx.today, -int(5, 120));
+    w.ctx.links = [{ a: { type: 'note', id: w.list.id }, b: { type: 'task', id: t.id } }];
+    return {
+      ref: `Что я покупал для дела ${low(t.title)}`,
+      actions: [{ intent: 'query_linked', about: low(t.title), want: 'note' }],
+      ok: (r) => r.type === 'queryLinked' && r.anchor.id === t.id,
+      hint: [`Дело ${q(t.title)} уже прошло, к нему привязан список ${q(w.list.title)}`],
+    };
+  },
+  S06: (w) => {
+    const m = w.ctx.existing.watch[0]!;
+    const f = w.films[0]!;
+    w.ctx.links = [{ a: { type: 'watch', id: m.id }, b: { type: 'note', id: 'i1' } }];
+    return { ref: `Что связано с ${f.acc}`, actions: [{ intent: 'query_linked', about: f.title, want: null }], ok: (r) => r.type === 'queryLinked' && r.anchor.id === m.id, hint: ['К фильму привязана заметка'] };
+  },
+  S07: (w) => ({ goal: [`Удалить дело ${q(w.ctx.existing.tasks[0]!.title)} вместе с привязанным списком ${q(w.list.title)}`] }),
+  S08: (w) => ({ goal: [`Отвязать список ${q(w.list.title)} от дела ${q(w.ctx.existing.tasks[0]!.title)}`, 'Сам список и дело оставить'] }),
+
   /* ----- не команда ----- */
   X01: () => ({ ref: 'Какая погода завтра', actions: [{ intent: 'unknown' }], ok: (r) => r.type === 'unknown', goal: ['Задайте вопрос не про дела, списки и заметки', `Например, ${pick(OFF_TOPIC)}`, 'Приложение должно ответить: не понял команду'] }),
   X02: () => ({ ref: 'Включи музыку', actions: [{ intent: 'unknown' }], ok: (r) => r.type === 'unknown', goal: ['Попросите то, что делает другой помощник', `Например, ${pick(OTHER_HELPER)}`, 'Приложение должно ответить: не понял команду'] }),

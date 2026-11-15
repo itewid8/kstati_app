@@ -21,6 +21,9 @@ import {
   type ID,
   type Idea,
   type Kind,
+  type Link,
+  type LinkRef,
+  type LinkType,
   type Me,
   type Origin,
   type PersonColor,
@@ -198,6 +201,23 @@ export function toTopic(v: unknown, ownerId: ID): Topic | null {
   };
 }
 
+const LINK_TYPES: readonly LinkType[] = ['task', 'watch', 'wish', 'note'];
+function toLinkRef(v: unknown): LinkRef | null {
+  const r = obj(v);
+  const type = LINK_TYPES.find((t) => t === r.type);
+  const id = strOrNull(r.id);
+  const owner = strOrNull(r.owner);
+  return type && id && owner ? { type, id, owner } : null;
+}
+export function toLink(v: unknown, ownerId: ID): Link | null {
+  const r = obj(v);
+  const id = strOrNull(r.id);
+  const a = toLinkRef(r.a);
+  const b = toLinkRef(r.b);
+  if (!id || !a || !b || a.type === b.type) return null;
+  return { id, ownerId: str(r.ownerId, ownerId), a, b, createdAt: str(r.createdAt) };
+}
+
 export function toIdea(v: unknown, ownerId: ID): Idea | null {
   const r = obj(v);
   const id = strOrNull(r.id);
@@ -294,7 +314,8 @@ export type SyncResponse = {
   prefs: { reminders: ReminderSettings | null; overrides: Record<ID, TaskReminderOverride> } | null;
   /** Нет — сервер не знает про идеи (старая версия) */
   ideaRevs?: Record<ID, string>;
-  notes: Record<ID, { topics: Topic[]; ideas: Idea[] }>;
+  /** Заметки и связи людей (связи хранятся у того, кто связал) */
+  notes: Record<ID, { topics: Topic[]; ideas: Idea[]; links: Link[] }>;
 };
 
 const revNum = (x: unknown) => numOrNull(x);
@@ -315,7 +336,7 @@ export function parseSync(v: unknown): SyncResponse {
   const notes: SyncResponse['notes'] = {};
   for (const [owner, raw] of Object.entries(obj(r.notes))) {
     const n = obj(raw);
-    notes[owner] = { topics: mapList(n.topics, owner, toTopic), ideas: mapList(n.ideas, owner, toIdea) };
+    notes[owner] = { topics: mapList(n.topics, owner, toTopic), ideas: mapList(n.ideas, owner, toIdea), links: mapList(n.links, owner, toLink) };
   }
   const p = r.prefs === null || r.prefs === undefined ? null : obj(r.prefs);
   return {
@@ -360,9 +381,19 @@ export function pendingScopes(outbox: readonly Op[], meId: string | undefined) {
   const groups = new Set<ID>();
   const owners = new Set<ID>();
   let ideas = false;
+  const linkOwners = new Set<ID>();
   for (const o of outbox) {
     if (o.op.startsWith('topic.') || o.op.startsWith('idea.')) {
       ideas = true;
+      continue;
+    }
+    // Связи приходят с заметками того, кто связал
+    if (o.op === 'link.put') {
+      ideas = true;
+      continue;
+    }
+    if (o.op === 'link.delete') {
+      linkOwners.add(o.ownerId);
       continue;
     }
     if (o.op === 'task.put') groups.add(o.task.groupId);
@@ -375,7 +406,9 @@ export function pendingScopes(outbox: readonly Op[], meId: string | undefined) {
     else if (o.op === 'wish.gift') owners.add(o.ownerId);
     else if ('id' in o && typeof o.id === 'string') groups.add(o.id);
   }
-  return { groups, owners, ideaOwners: ideas && meId ? new Set([meId]) : new Set<ID>() };
+  const ideaOwners = new Set<ID>(linkOwners);
+  if (ideas && meId) ideaOwners.add(meId);
+  return { groups, owners, ideaOwners };
 }
 
 /** Что из хранилища нужно для слияния */
@@ -389,6 +422,7 @@ export type LocalData = {
   wishes: Wish[];
   topics: Topic[];
   ideas: Idea[];
+  links: Link[];
   revs: Revs;
   ideaRevs: Record<ID, string>;
   reminders: ReminderSettings;
@@ -471,6 +505,7 @@ export function mergePull(s: LocalData, res: SyncResponse): { patch: PullPatch; 
     const keepNote = (ownerId: ID) => ownerId in ideaRevsIn && !notesReplaced.has(ownerId);
     merged.topics = reuseList(s.topics, [...s.topics.filter((t) => keepNote(t.ownerId)), ...notesIn.flatMap(([, n]) => n.topics)]);
     merged.ideas = reuseList(s.ideas, [...s.ideas.filter((i) => keepNote(i.ownerId)), ...notesIn.flatMap(([, n]) => n.ideas)]);
+    merged.links = reuseList(s.links, [...s.links.filter((l) => keepNote(l.ownerId)), ...notesIn.flatMap(([, n]) => n.links)]);
     const ideaRevs = Object.fromEntries(
       Object.entries(ideaRevsIn).map(([o, r]) => [o, pending.ideaOwners.has(o) ? (s.ideaRevs[o] ?? '') : r]),
     );

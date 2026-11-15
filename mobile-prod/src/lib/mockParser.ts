@@ -21,6 +21,7 @@ import {
   type Genre,
   type ID,
   type Kind,
+  type LinkType,
   type Origin,
   type User,
   type WatchDraft,
@@ -37,7 +38,14 @@ export type ParseResult =
   | { type: 'queryPlans'; plans: PlansQuery }
   /** «Покажи идеи для подарков»: тема (id), 'inbox' — «Без темы», null — список тем */
   | { type: 'queryIdeas'; topicId: ID | null }
+  /** «Привяжи список продуктов к ужину» */
+  | { type: 'link'; a: RefLite; b: RefLite }
+  /** «Что нужно купить?»: запись, о которой спросили, и связанное с ней (want — что искали) */
+  | { type: 'queryLinked'; anchor: RefLite; items: RefLite[]; want: LinkType | null }
   | { type: 'unknown' };
+
+/** Запись из ответа сервера: тип и id (где лежит — знаем сами) */
+export type RefLite = { type: LinkType; id: ID };
 
 /** Записи, среди которых ищем цель для «перенеси / отметь / удали» */
 export type Existing = { tasks: Task[]; wishes: Wish[]; watch: WatchItem[] };
