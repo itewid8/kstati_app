@@ -221,37 +221,57 @@ const GENRE: Record<string, string> = { comedy: 'комедии', drama: 'дра
 const ORIGIN: Record<string, string> = { ru: 'наши', foreign: 'зарубежные' };
 const FRESH: Record<string, string> = { new: 'новые', old: 'старые' };
 const TASK_KIND: Record<string, string> = { birthday: 'день рождения', important: 'важный день', trip: 'путешествие' };
-const NOUN: Record<string, string> = { task: 'дело', wish: 'хотелку', watch: 'запись в «Смотреть»', idea: 'заметку' };
-const MARKED: Record<string, string> = { task: 'сделанным', wish: 'полученным', watch: 'просмотренным', idea: 'сделанным' };
+// Запись в нужном падеже: «перенести дело», «у дела», «с дела»
+const NOUN: Record<string, string> = { task: 'дело', wish: 'хотелку', watch: 'фильм', idea: 'заметку' };
+const NOUN_GEN: Record<string, string> = { task: 'дела', wish: 'хотелки', watch: 'фильма', idea: 'заметки' };
+const MARKED: Record<string, string> = { task: 'сделанным', wish: 'полученной', watch: 'просмотренным', idea: 'сделанной' };
 const GROUP_KIND: Record<string, string> = { couple: 'пара', family: 'семья', parents: 'родители', friends: 'друзья', other: 'другие группы' };
-/** Правка списка словами: «✓ Сыр» → «отмечено: Сыр» */
-const listChange = (c: string) =>
-  c.startsWith('✓ ') ? `отмечено: ${c.slice(2)}` : c.startsWith('○ ') ? `снята отметка: ${c.slice(2)}` : c.startsWith('+ ') ? `добавлено: ${c.slice(2)}` : c.startsWith('− ') ? `убрано: ${c.slice(2)}` : c.includes(' → ') ? `заменено: ${c.replace(' → ', ' на ')}` : c;
 const quoted = (s: string) => `«${s}»`;
-const WD_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const andJoin = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} и ${xs[xs.length - 1]}` : (xs[0] ?? ''));
+/** Правка списка — что сделать с пунктом: «✓ Сыр» → «отметить «Сыр»» */
+const listChange = (c: string): [string, string] =>
+  c.startsWith('✓ ') ? ['отметить', quoted(c.slice(2))] : c.startsWith('○ ') ? ['снять отметку с', quoted(c.slice(2))] : c.startsWith('+ ') ? ['добавить', quoted(c.slice(2))] : c.startsWith('− ') ? ['убрать', quoted(c.slice(2))] : c.includes(' → ') ? ['заменить', c.split(' → ').map(quoted).join(' на ')] : ['', c];
+/** «добавить «Сыр» и «Мыло», отметить «Мазь»» — одинаковые действия вместе */
+const listChanges = (cs: string[]) => {
+  const groups: [string, string[]][] = [];
+  for (const [verb, what] of cs.map(listChange)) {
+    const g = groups.find(([v]) => v === verb);
+    if (g && verb !== 'заменить') g[1].push(what);
+    else groups.push([verb, [what]]);
+  }
+  return groups.map(([v, xs]) => [v, andJoin(xs)].filter(Boolean).join(' ')).join(', ');
+};
 const MONTH_NAMES = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
-const EVERY: Record<string, [string, string]> = { day: ['каждый день', 'дн.'], week: ['каждую неделю', 'нед.'], month: ['каждый месяц', 'мес.'], year: ['каждый год', 'г.'] };
+const EVERY: Record<string, [string, string, string]> = { day: ['каждый день', 'дня', 'дней'], week: ['каждую неделю', 'недели', 'недель'], month: ['каждый месяц', 'месяца', 'месяцев'], year: ['каждый год', 'года', 'лет'] };
+const WD_DAT = ['воскресеньям', 'понедельникам', 'вторникам', 'средам', 'четвергам', 'пятницам', 'субботам'];
+const weekdaysLabel = (ds: number[]) => {
+  const set = [...new Set(ds.map((d) => d % 7))].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+  if (set.join() === '1,2,3,4,5') return 'по будням';
+  if (set.join() === '6,0') return 'по выходным';
+  return `по ${andJoin(set.map((d) => WD_DAT[d]!))}`;
+};
 type RepeatLike = { freq: string; every: number; weekdays?: number[]; monthDays?: number[]; months?: number[]; until?: string | null; count?: number | null };
-/** «каждую неделю: пн, ср · до 30 ноября» */
+/** «каждую неделю по понедельникам и средам, до 30 ноября» */
 export const repeatLabel = (r: RepeatLike) =>
   [
-    (r.every > 1 ? `раз в ${r.every} ${EVERY[r.freq]?.[1] ?? r.freq}` : (EVERY[r.freq]?.[0] ?? r.freq)) +
-      (r.weekdays?.length ? `: ${r.weekdays.map((d) => WD_SHORT[d % 7]).join(', ')}` : '') +
-      (r.monthDays?.length ? `: ${r.monthDays.join(', ')}-го` : '') +
+    (r.every > 1 ? `раз в ${r.every} ${(r.every % 10 >= 2 && r.every % 10 <= 4 && (r.every % 100 < 12 || r.every % 100 > 14) ? EVERY[r.freq]?.[1] : EVERY[r.freq]?.[2]) ?? r.freq}` : (EVERY[r.freq]?.[0] ?? r.freq)) +
+      (r.weekdays?.length ? ` ${weekdaysLabel(r.weekdays)}` : '') +
+      (r.monthDays?.length ? ` ${andJoin(r.monthDays.map((d) => `${d}-го`))} числа` : '') +
       (r.months?.length ? ` (${r.months.map((m) => MONTH_NAMES[m - 1] ?? m).join(', ')})` : ''),
     r.until && `до ${dayLabel(r.until)}`,
-    r.count && `${r.count} раз`,
+    r.count && `всего ${r.count} раз`,
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(', ');
 
 const LINKED_WANT: Record<string, string> = { task: 'дела', watch: '«Смотреть»', wish: 'хотелки', note: 'заметки и списки' };
 const REF_NOUN: Record<string, string> = { task: 'дело', watch: 'фильм', wish: 'хотелка', note: 'заметка' };
+const REF_INS: Record<string, string> = { task: 'делом', watch: 'фильмом', wish: 'хотелкой', note: 'заметкой' };
 /** «дело «Ужин у родителей»» */
-function refTitle(r: { type: string; id: string }, ctx: Context): string {
+function refTitle(r: { type: string; id: string }, ctx: Context, nouns: Record<string, string> = REF_NOUN): string {
   const all = [...ctx.existing.tasks, ...ctx.existing.watch, ...ctx.existing.wishes, ...(ctx.topics ?? [])];
   const title = all.find((x) => x.id === r.id)?.title ?? ctx.existing.ideas?.find((x) => x.id === r.id)?.text.slice(0, 60) ?? '?';
-  return `${REF_NOUN[r.type] ?? r.type} «${title}»`;
+  return `${nouns[r.type] ?? r.type} «${title}»`;
 }
 
 /** Что приложение сделало бы по команде — обычными словами, по строке на запись или правку */
@@ -274,69 +294,93 @@ export function explainResult(r: ParseResult, ctx: Context): string {
           if (i.type === 'task') {
             const d = i.data;
             const extra = [
-              d.kind && TASK_KIND[d.kind],
+              d.kind && `это ${TASK_KIND[d.kind]}`,
               d.repeat && `повтор: ${repeatLabel(d.repeat)}`,
               d.people?.length && `участники: ${d.people.map(nameOf).join(', ')}`,
-              d.parentId && `внутри плана ${quoted(titleOf(d.parentId))}`,
-              d.note && `заметка: ${d.note}`,
+              d.parentId && `внутри дела ${quoted(titleOf(d.parentId))}`,
+              d.note && `с примечанием: ${d.note}`,
             ].filter(Boolean);
-            return [`Дело ${quoted(d.title)}`, whenOf(d.date, d.time, d.endDate, d.endTime), ...extra].join(' · ');
+            return [`Добавить дело ${quoted(d.title)}`, whenOf(d.date, d.time, d.endDate, d.endTime), ...extra].join(' · ');
           }
-          if (i.type === 'wish') return [`В «Хочу»: ${quoted(i.data.title)}`, i.data.note && `заметка: ${i.data.note}`, i.data.link && `ссылка: ${i.data.link}`].filter(Boolean).join(' · ');
-          if (i.type === 'watch') return [`В «Смотреть»: ${quoted(i.data.title)}`, i.data.kind && WATCH_ONE[i.data.kind], ...i.data.genres.map((g) => GENRE[g] ?? g), i.data.origin && ORIGIN[i.data.origin], i.data.year && String(i.data.year)].filter(Boolean).join(' · ');
+          if (i.type === 'wish') return [`Добавить в «Хочу»: ${quoted(i.data.title)}`, i.data.note && `с примечанием: ${i.data.note}`, i.data.link && `ссылка: ${i.data.link}`].filter(Boolean).join(' · ');
+          if (i.type === 'watch') return [`Добавить в «Смотреть»: ${quoted(i.data.title)}${i.data.kind ? ` (${WATCH_ONE[i.data.kind]})` : ''}`, i.data.genres.length && `жанр: ${i.data.genres.map((g) => GENRE[g] ?? g).join(', ')}`, i.data.origin && ORIGIN[i.data.origin], i.data.year && `${i.data.year} год`].filter(Boolean).join(' · ');
           if (i.type === 'idea') {
             const topic = i.data.newTopic ? `в новую тему ${quoted(i.data.newTopic)}` : topicOf(i.data.topicId) ? `в тему ${quoted(topicOf(i.data.topicId)!)}` : '';
-            return [`Заметка ${quoted(i.data.title)}`, topic].filter(Boolean).join(' · ');
+            return [`Записать заметку ${quoted(i.data.title)}`, topic].filter(Boolean).join(' · ');
           }
           const lines = (i.data.body ?? '').split('\n').map((l) => l.replace(/^- \[[ x]\] /, '').trim()).filter(Boolean);
           // Правка списка — что поменялось («✓ Цемент», «+ Сыр»); новый — пункты целиком; без пунктов — тема
-          if (i.id) return `Список ${quoted(i.data.title)}: ${i.data.changes?.map(listChange).join(', ') || lines.join(', ') || 'без изменений'}`;
-          return lines.length ? `Новый список ${quoted(i.data.title)}: ${lines.join(', ')}` : `Новая тема ${quoted(i.data.title)}`;
+          if (i.id) return `В списке ${quoted(i.data.title)} ${(i.data.changes?.length && listChanges(i.data.changes)) || (lines.length ? `оставить: ${lines.join(', ')}` : 'ничего не менять')}`;
+          return lines.length ? `Создать список ${quoted(i.data.title)}: ${lines.join(', ')}` : `Создать тему ${quoted(i.data.title)}`;
         })
         .join('\n');
     case 'changes':
       return r.changes
-        .map((c) => {
-          const what = `${NOUN[c.type] ?? c.type} ${quoted(titleOf(c.chosen))}${c.occ ? ` (${dayLabel(c.occ)})` : ''}`;
-          if (c.action === 'delete') return `Удалить ${what}`;
-          if (c.action === 'mark') return `Отметить ${MARKED[c.type]}: ${what}`;
-          if (c.action === 'unmark') return `Снять отметку: ${what}`;
-          const p = c.patch ?? {};
-          const parts = [
-            p.title !== undefined && `название — ${quoted(p.title)}`,
-            p.date !== undefined && `день — ${p.date ? dayLabel(p.date) : 'без даты'}`,
-            p.time !== undefined && `время — ${p.time ?? 'без времени'}`,
-            p.endDate != null && `последний день — ${dayLabel(p.endDate)}`,
-            p.endTime !== undefined && `окончание — ${p.endTime ?? 'не задано'}`,
-            p.repeat !== undefined && (p.repeat ? `повтор — ${repeatLabel(p.repeat)}` : 'повтор снят'),
-            p.people !== undefined && `участники — ${p.people.map(nameOf).join(', ') || 'никто'}`,
-            p.topicId !== undefined && `тема — ${topicOf(p.topicId) ? quoted(topicOf(p.topicId)!) : 'без темы'}`,
-            p.newTopic != null && `новая тема — ${quoted(p.newTopic)}`,
-          ].filter(Boolean);
-          return `Изменить ${what}: ${parts.join(', ') || 'без изменений'}`;
+        .flatMap((c) => {
+          const name = quoted(titleOf(c.chosen));
+          // Один раз повторяющегося дела: остальные повторы не трогаем
+          const once = c.occ ? ` — только ${dayLabel(c.occ)}, остальные повторы не трогать` : '';
+          const acc = `${NOUN[c.type] ?? c.type} ${name}`;
+          const gen = `${NOUN_GEN[c.type] ?? c.type} ${name}`;
+          if (c.action === 'delete') return [`Удалить ${acc}${once}`];
+          if (c.action === 'mark') return [`Отметить ${acc} ${MARKED[c.type] ?? 'отмеченным'}${once}`];
+          if (c.action === 'unmark') return [`Снять отметку с ${gen}${once}`];
+          let p = c.patch ?? {};
+          // Заметку голосом можно только переложить в другую тему
+          if (c.type === 'idea' && (p.topicId !== undefined || p.newTopic != null)) {
+            const into = p.newTopic != null ? `новую тему ${quoted(p.newTopic)}` : topicOf(p.topicId) ? `тему ${quoted(topicOf(p.topicId)!)}` : null;
+            return [into ? `Перенести ${acc} в ${into}` : `Убрать ${acc} из темы`];
+          }
+          const out: string[] = [];
+          if (c.occ && p.date) {
+            out.push(`Перенести ${acc} с ${dayLabel(c.occ)} на ${[dayLabel(p.date), p.time].filter(Boolean).join(', ')} — только этот раз, остальные повторы не трогать`);
+            p = { ...p, date: undefined, time: undefined };
+          }
+          if (p.title !== undefined) out.push(`Переименовать ${acc} в ${quoted(p.title)}`);
+          // День и время — одним «перенести на …»; убрать — отдельно
+          const day = p.date !== undefined && p.date ? dayLabel(p.date) : null;
+          const at = p.time !== undefined && p.time ? `${p.time}` : null;
+          if (day || at) out.push(`Перенести ${acc} на ${[day, at].filter(Boolean).join(', ')}`);
+          if (p.date === null) out.push(`Убрать дату у ${gen}`);
+          if (p.time === null) out.push(`Убрать время у ${gen}`);
+          if (p.endDate != null) out.push(`Продлить ${acc} до ${dayLabel(p.endDate)} включительно`);
+          if (p.endTime !== undefined) out.push(p.endTime ? `Пусть ${acc} заканчивается в ${p.endTime}` : `Убрать время окончания у ${gen}`);
+          if (p.repeat !== undefined) out.push(p.repeat ? `Сделать ${acc} повторяющимся: ${repeatLabel(p.repeat)}` : `Отменить повтор у ${gen}`);
+          if (p.people !== undefined) out.push(p.people.length ? `Поменять участников ${gen} на: ${p.people.map(nameOf).join(', ')}` : `Убрать всех участников у ${gen}`);
+          return (out.length ? out : [`Ничего не менять у ${gen}`]).map((l) => (c.occ && !l.includes('этот раз') ? l + once : l));
         })
         .join('\n');
     case 'queryPlans': {
       const s = r.plans.scope;
-      const whose =
-        s.kind === 'me' ? 'мои' : s.kind === 'us' || s.kind === 'current' ? 'наши' : s.kind === 'category' ? GROUP_KIND[s.category] : s.names.join(', ');
-      const period = r.plans.from === r.plans.to ? dayLabel(r.plans.from) : `${dayLabel(r.plans.from)} — ${dayLabel(r.plans.to)}`;
+      const [whose, where] =
+        s.kind === 'me'
+          ? ['мои планы', 'в моих планах']
+          : s.kind === 'us' || s.kind === 'current'
+            ? ['наши планы', 'в наших планах']
+            : s.kind === 'category'
+              ? [`планы группы «${GROUP_KIND[s.category]}»`, `в планах группы «${GROUP_KIND[s.category]}»`]
+              : s.kind === 'groups'
+                ? [`планы группы ${s.names.map(quoted).join(', ')}`, `в планах группы ${s.names.map(quoted).join(', ')}`]
+                : ['планы', `в общих планах с: ${s.names.join(', ')}`];
+      const withWhom = s.kind === 'people' ? `общие с: ${s.names.join(', ')}` : null;
+      const period = r.plans.from === r.plans.to ? `на ${dayLabel(r.plans.from)}` : `с ${dayLabel(r.plans.from)} по ${dayLabel(r.plans.to)}`;
       // «Когда у нас баня» — поиск по названию на год вперёд: период не показываем
-      if (r.plans.query) return `Найти в планах (${whose}): когда ${quoted(r.plans.query)}`;
-      return [`Показать планы: ${whose}`, period, r.plans.who?.length && `чьи: ${r.plans.who.map(nameOf).join(', ')}`].filter(Boolean).join(' · ');
+      if (r.plans.query) return `Спросить, когда будет ${quoted(r.plans.query)} ${where}`;
+      const onlyMe = s.kind === 'me' && r.plans.who?.length === 1 && r.plans.who[0] === ctx.me.id;
+      return [`Показать ${whose} ${period}`, withWhom, !onlyMe && r.plans.who?.length && `только дела, где участвует: ${r.plans.who.map(nameOf).join(', ')}`].filter(Boolean).join(' · ');
     }
     case 'queryWatch': {
       const f = [...r.filters.kind.map((k) => WATCH_KIND[k] ?? k), ...r.filters.genre.map((g) => GENRE[g] ?? g), ...r.filters.origin.map((o) => ORIGIN[o] ?? o), ...r.filters.fresh.map((x) => FRESH[x] ?? x)];
-      return `Что посмотреть: ${f.join(', ') || 'всё'}`;
+      return f.length ? `Подобрать, что посмотреть: ${f.join(', ')}` : 'Спросить, что посмотреть (без условий)';
     }
     case 'queryWish':
-      return r.personId === ctx.me.id ? 'Показать мои хотелки' : `Показать хотелки: ${nameOf(r.personId)}`;
+      return r.personId === ctx.me.id ? 'Показать мои хотелки' : `Показать, что хочет ${nameOf(r.personId)}`;
     case 'queryIdeas':
       return r.topicId === null ? 'Показать список тем' : r.topicId === 'inbox' ? 'Показать заметки без темы' : `Открыть тему ${quoted(topicOf(r.topicId) ?? '?')}`;
     case 'link':
-      return `Связать: ${refTitle(r.a, ctx)} и ${refTitle(r.b, ctx)}`;
+      return `Связать между собой: ${refTitle(r.a, ctx)} и ${refTitle(r.b, ctx)}`;
     case 'queryLinked':
-      return [`Показать связанное: ${refTitle(r.anchor, ctx)}`, r.want && `нужны ${LINKED_WANT[r.want]}`].filter(Boolean).join(' · ');
+      return [`Показать, что связано с ${refTitle(r.anchor, ctx, REF_INS)}`, r.want && `только ${LINKED_WANT[r.want]}`].filter(Boolean).join(' · ');
     case 'unknownPerson':
       return `Нет человека ${quoted(r.name)}`;
     case 'notFound':

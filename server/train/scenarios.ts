@@ -210,10 +210,10 @@ const MAKE: Record<string, Make> = {
   T35: (w) => { const { t, word } = target(w); const { next } = repeating(w, t); const to = addDays(next, int(1, 3)); return { ref: `Перенеси ${word.acc} ${dayP(next)} на ${dayP(to)}`, actions: [{ intent: 'update', target: [t.id], query: word.acc, date: to }], ok: (r) => { const c = chg(r, 'update', 'task', t.id); return c?.occ === next && c.patch?.date === to; }, goal: [`Перенести один раз повторяющегося дела ${q(t.title)}`, `Раз: ${dayLabel(next)} → ${dayLabel(to)}`, 'Остальные разы не трогать'] }; },
   T36: (w) => { const m = pick(w.V.MISSING); const intent = pick(['delete', 'mark', 'update']); return { ref: `${{ delete: 'Удали', mark: 'Отметь', update: 'Перенеси на завтра' }[intent]} ${m}`, actions: [{ intent, target: [], query: m }], ok: (r) => r.type === 'notFound' }; },
   T37: (w) => { const { t, word } = target(w); const d = future(w, 21, 45); const p = w.others[0]!; return { ref: `Перенеси ${word.acc} на ${dayP(d)} и добавь ${p.nom}`, actions: [{ intent: 'update', target: [t.id], query: word.acc, date: d, people: [p.nom] }], ok: (r) => { const x = patchOf(r, t.id); return x?.date === d && Array.isArray(x.people); } }; },
-  T38: (w) => { const { t } = target(w); return { goal: [rnd() < 0.5 ? `Убрать время у дела ${q(t.title)}` : `Убрать дату у дела ${q(t.title)}: когда-нибудь`] }; },
+  T38: (w) => { const { t } = target(w); return { goal: rnd() < 0.5 ? [`Убрать время у дела ${q(t.title)}`, 'День оставить'] : [`Убрать дату у дела ${q(t.title)}`, 'Пусть будет «когда-нибудь», без дня'] }; },
   T39: (w) => { const a = plan(w); const sub = pick(w.V.SUBS); w.ctx.existing.tasks.push({ id: 't10', title: sub, date: a.date, time: time(), parentId: a.id }); const [, b] = pick(w.V.TRIPS.filter(([, x]) => x !== a.title)); w.ctx.existing.tasks.push({ id: 't11', title: b, date: addDays(a.date!, 20), time: null }); return { goal: rnd() < 0.6 ? [`Перенести ${q(sub)} из плана ${q(a.title)}`, `В план ${q(b)}`] : [`Вынуть ${q(sub)} из плана ${q(a.title)}`, 'Сделать обычным делом'] }; },
   T40: (w) => { const { t } = target(w); return { goal: [`Дописать заметку к делу ${q(t.title)}`, `Текст: ${pick(w.V.NOTES)}`] }; },
-  T41: (w) => { const { t } = target(w); return { goal: [`Изменить тип дела ${q(t.title)}: ${pick(['важный день', 'путешествие', 'обычное дело'])}`] }; },
+  T41: (w) => { const { t } = target(w); return { goal: [pick([`Пометить дело ${q(t.title)} как важный день`, `Пометить дело ${q(t.title)} как путешествие`, `Сделать ${q(t.title)} обычным делом`])] }; },
   T42: (w) => { const { t } = target(w); return { goal: [`Поставить себе напоминание о деле ${q(t.title)}`, `Когда: ${pick(REMIND)}`] }; },
   T43: (w) => { const { t } = target(w); return { goal: rnd() < 0.5 ? [`Отключить напоминание о деле ${q(t.title)}`] : [`Изменить напоминание о деле ${q(t.title)}`, `Теперь: ${pick(REMIND)}`] }; },
   T44: (w) => { const { t } = target(w); return { goal: [`Сделать дело ${q(t.title)} видимым только вам`] }; },
@@ -253,7 +253,7 @@ const MAKE: Record<string, Make> = {
   F12: () => { const o = pick(['ru', 'foreign']); return { ref: `Что посмотреть из ${o === 'ru' ? 'нашего' : 'зарубежного'}`, actions: [{ intent: 'query_watch', origin: [o] }], ok: (r) => r.type === 'queryWatch' && r.filters.origin[0] === o && !r.filters.genre.length && !r.filters.fresh.length }; },
   F13: () => { const f = pick(['new', 'old']); return { ref: `Что посмотреть из ${f === 'new' ? 'новинок' : 'старого'}`, actions: [{ intent: 'query_watch', fresh: [f] }], ok: (r) => r.type === 'queryWatch' && r.filters.fresh[0] === f && !r.filters.origin.length }; },
   F14: () => { const k = pick(Object.keys(KIND_W).slice(0, 3)); const g = pick(Object.keys(GENRE_W).slice(0, 9)); const o = pick(['ru', 'foreign', null]); const f = pick(['new', 'old', null]); if (!o && !f) return null; return { ref: `Какой ${KIND_W[k]} посмотреть, ${GENRE_W[g]}${o ? `, ${o === 'ru' ? 'наше' : 'зарубежное'}` : ''}${f ? `, из ${f === 'new' ? 'новинок' : 'старого'}` : ''}`, actions: [{ intent: 'query_watch', kind: [k], genre: [g], ...(o && { origin: [o] }), ...(f && { fresh: [f] }) }], ok: (r) => r.type === 'queryWatch' && r.filters.kind[0] === k && r.filters.genre[0] === g && (!o || r.filters.origin[0] === o) && (!f || r.filters.fresh[0] === f) }; },
-  F15: (w) => { const f = w.films[0]!; return { goal: [`Исправить у записи ${q(f.title)} в «Смотреть»`, pick([`Вид: ${KIND_W[pick(Object.keys(KIND_W).filter((k) => k !== f.kind))]}`, `Жанр: ${GENRE_W[pick(Object.keys(GENRE_W))]}`])] }; },
+  F15: (w) => { const f = w.films[0]!; return { goal: pick([[`Исправить ${q(f.title)} в «Смотреть»`, `Это ${KIND_W[pick(Object.keys(KIND_W).filter((k) => k !== f.kind))]}, а записано как ${KIND_W[f.kind] ?? 'другое'}`], [`Поменять жанр у ${q(f.title)} в «Смотреть»`, `Новый жанр: ${GENRE_W[pick(Object.keys(GENRE_W))]}`]]) }; },
   F16: (w) => ({ goal: [`Вернуть удалённую запись ${q(freshFilm(w).title)} в «Смотреть»`, 'Вы удалили её раньше'] }),
 
   /* ----- заметки ----- */
@@ -286,8 +286,8 @@ const MAKE: Record<string, Make> = {
   P05: (w) => ({ goal: [`Переименовать тему ${q(w.topic.title)}`, `Новое название: ${pick((w.V.TOPICS as BASE.TopicWord[]).filter((x) => x.title !== w.topic.title)).title}`] }),
   P06: (w) => ({ goal: [`Удалить тему ${q(w.topic.title)} вместе с заметками`] }),
   P07: (w) => ({ goal: [rnd() < 0.6 ? `Убрать тему ${q(w.topic.title)} в архив` : `Вернуть тему ${q(w.topic.title)} из архива`] }),
-  P08: (w) => ({ goal: [`Открыть ${rnd() < 0.5 ? `список ${q(w.list.title)}` : `тему ${q(w.topic.title)}`} группе ${q(w.ctx.groups![0]!.name)}`] }),
-  P09: (w) => ({ goal: [`Закрыть тему ${q(w.topic.title)} от группы ${q(w.ctx.groups![0]!.name)}`, 'Сейчас группа её видит'] }),
+  P08: (w) => ({ goal: [`Дать группе ${q(w.ctx.groups![0]!.name)} доступ к ${rnd() < 0.5 ? `списку ${q(w.list.title)}` : `теме ${q(w.topic.title)}`}`, 'Сейчас группа его не видит'] }),
+  P09: (w) => ({ goal: [`Скрыть тему ${q(w.topic.title)} от группы ${q(w.ctx.groups![0]!.name)}`, 'Сейчас группа её видит'] }),
 
   /* ----- вопросы о планах ----- */
   Q01: (w) => { const d = future(w, 1, 14); return { ref: `Что я делаю ${dayP(d)}`, actions: [{ intent: 'query_plans', scope: 'me', from: d, to: d, query: '' }], ok: (r) => r.type === 'queryPlans' && r.plans.scope.kind === 'me' && r.plans.from === d && r.plans.to === d && !r.plans.query }; },

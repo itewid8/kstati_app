@@ -121,8 +121,19 @@ const codes = new Set(cards.map((c) => c.variant));
 assert.ok(codes.size >= 110 && new Set(cards.filter((c) => !c.collect).map((c) => c.variant)).size >= 85, `кодов ${codes.size}`);
 
 // Итог словами
-assert.equal(explainResult({ type: 'queryWatch', filters: { kind: ['cartoon'], genre: [], origin: [], fresh: [] } }, card.ctx), 'Что посмотреть: мультфильмы');
-assert.equal(explainResult(item('Баня', '2026-11-20'), card.ctx), 'Дело «Баня» · 20 ноября, пятница');
+assert.equal(explainResult({ type: 'queryWatch', filters: { kind: ['cartoon'], genre: [], origin: [], fresh: [] } }, card.ctx), 'Подобрать, что посмотреть: мультфильмы');
+assert.equal(explainResult(item('Баня', '2026-11-20'), card.ctx), 'Добавить дело «Баня» · 20 ноября, пятница');
+// Правки — словами задания, по строке на изменение
+{
+  const ctx = { ...card.ctx, topics: [{ id: 'p2', title: 'Тосты' }], existing: { tasks: [{ id: 't9', title: 'Йога', date: '2026-11-20', time: '18:00' }], watch: [], wishes: [{ id: 'w9', title: 'Лампа' }], ideas: [{ id: 'i9', text: 'Купить семена', topicId: null }] } } as never;
+  const ch = (type: string, id: string, action: string, patch?: object) => ({ type: 'changes', changes: [{ key: 'k', type, candidates: [id], chosen: id, action, patch }] }) as never;
+  assert.equal(explainResult(ch('task', 't9', 'update', { time: '19:00' }), ctx), 'Перенести дело «Йога» на 19:00');
+  assert.equal(explainResult(ch('task', 't9', 'update', { date: '2026-11-21', time: '19:00', title: 'Пилатес' }), ctx), 'Переименовать дело «Йога» в «Пилатес»\nПеренести дело «Йога» на 21 ноября, суббота, 19:00');
+  assert.equal(explainResult(ch('task', 't9', 'update', { repeat: null }), ctx), 'Отменить повтор у дела «Йога»');
+  assert.equal(explainResult(ch('wish', 'w9', 'mark'), ctx), 'Отметить хотелку «Лампа» полученной');
+  assert.equal(explainResult(ch('wish', 'w9', 'unmark'), ctx), 'Снять отметку с хотелки «Лампа»');
+  assert.equal(explainResult(ch('idea', 'i9', 'update', { topicId: 'p2' }), ctx), 'Перенести заметку «Купить семена» в тему «Тосты»');
+}
 
 await deletePracticeOf(store, 'u1');
 assert.equal((await store.listLog('practice', '', 10)).length + (await store.listLog('practice-audio', '', 10)).length, 0, 'с аккаунтом стирается всё');
