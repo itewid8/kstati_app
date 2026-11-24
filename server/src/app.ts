@@ -86,7 +86,7 @@ export async function buildApp(deps: Deps): Promise<FastifyInstance> {
   const allowedOrigin = (o: string | undefined) =>
     !!o && (config.webOrigins.includes(o) || (!config.isProd && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o)));
   // Своя модель живёт в отдельном контейнере и засыпает без запросов — будим её, как только приложение вышло на связь
-  app.addHook('onRequest', async () => warmOwnModel());
+  app.addHook('onRequest', async (req) => warmOwnModel(Date.now(), req.url.startsWith('/practice')));
   app.addHook('onRequest', async (req, reply) => {
     const origin = req.headers.origin;
     if (!allowedOrigin(origin)) return;

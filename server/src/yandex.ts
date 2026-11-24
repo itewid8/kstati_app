@@ -103,11 +103,12 @@ async function completeOwn(messages: Msg[]): Promise<{ text: string; usage: Usag
 
 let warmedAt = 0;
 /**
- * Разбудить контейнер своей модели заранее: после простоя он запускается несколько секунд. Зовётся на любой
- * запрос приложения (не чаще раза в минуту) — к моменту голосовой команды модель уже загружена
+ * Разбудить контейнер своей модели заранее: после простоя он запускается несколько секунд. Зовётся на запрос
+ * приложения (не чаще раза в минуту) — к моменту команды модель уже загружена. Команды разбирает своя модель
+ * (PROMPT_MODE=tuned) — на любой запрос; иначе она нужна только «Обучению» — на запросы /practice
  */
-export function warmOwnModel(now = Date.now()): void {
-  if (config.promptMode !== 'tuned' || !config.ownLlmUrl || now - warmedAt < 60_000) return;
+export function warmOwnModel(now = Date.now(), practice = false): void {
+  if ((config.promptMode !== 'tuned' && !practice) || !config.ownLlmUrl || now - warmedAt < 60_000) return;
   warmedAt = now;
   fetch(`${config.ownLlmUrl}/health`, { signal: AbortSignal.timeout(20_000) }).catch(() => undefined);
 }
